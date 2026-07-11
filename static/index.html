@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Tailor a protected LaTeX resume to a job description and review every suggested change.">
+    <meta name="theme-color" content="#17201e">
+    <title>Resume Tailor</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+
+    <div class="site-shell">
+      <header class="site-header" aria-label="Application header">
+        <a class="brand" href="/" aria-label="Resume Tailor home">
+          <span class="brand-mark" aria-hidden="true"><span>R</span></span>
+          <span class="brand-copy">
+            <strong>Resume Tailor</strong>
+            <small>AI + LaTeX</small>
+          </span>
+        </a>
+
+        <div class="template-status" title="AI suggestions are merged into editable fields only">
+          <span class="status-dot" aria-hidden="true"></span>
+          Protected template
+        </div>
+      </header>
+
+      <main id="main-content">
+        <section class="hero" aria-labelledby="hero-title">
+          <p class="eyebrow">Your experience, precisely positioned</p>
+          <h1 id="hero-title">Match the role.<br><em>Keep your story.</em></h1>
+          <p class="hero-copy">
+            Paste a job description and get a focused version of your existing resume.
+            Your layout stays locked; you review every content change.
+          </p>
+
+          <ol class="process" aria-label="How it works">
+            <li><span>01</span>Paste the role</li>
+            <li><span>02</span>Review the edits</li>
+            <li><span>03</span>Download the PDF</li>
+          </ol>
+        </section>
+
+        <section class="composer-card" aria-labelledby="composer-title">
+          <div class="section-heading">
+            <div>
+              <p class="step-label">Step 01 · The role</p>
+              <h2 id="composer-title">Paste the job description</h2>
+            </div>
+            <p class="section-note">Use the complete posting for a more accurate result.</p>
+          </div>
+
+          <form id="tailor-form" novalidate>
+            <label class="sr-only" for="job-description">Job description</label>
+            <div class="textarea-wrap">
+              <textarea
+                id="job-description"
+                name="job_description"
+                minlength="50"
+                maxlength="20000"
+                required
+                spellcheck="true"
+                aria-describedby="job-description-help character-count"
+                placeholder="Paste the responsibilities, requirements, and preferred qualifications here…"
+              ></textarea>
+              <div class="textarea-meta">
+                <p id="job-description-help">Minimum 50 characters</p>
+                <output id="character-count" for="job-description" aria-label="Character count">0 / 20,000</output>
+              </div>
+            </div>
+
+            <section id="error-panel" class="notice notice--error" role="alert" tabindex="-1" hidden>
+              <span class="notice-icon" aria-hidden="true">!</span>
+              <div>
+                <h3>We couldn’t tailor your resume</h3>
+                <p id="error-message"></p>
+              </div>
+            </section>
+
+            <div class="form-footer">
+              <p class="privacy-note">
+                <span aria-hidden="true">✓</span>
+                Contact details remain in your locked template.
+              </p>
+              <div class="form-actions">
+                <button id="reset-button" class="button button--quiet" type="button">Clear</button>
+                <button id="submit-button" class="button button--primary" type="submit">
+                  <span class="button-label">Tailor my resume</span>
+                  <span class="button-arrow" aria-hidden="true">↗</span>
+                  <span class="button-spinner" aria-hidden="true"></span>
+                </button>
+              </div>
+            </div>
+          </form>
+        </section>
+
+        <section id="loading-panel" class="loading-card" aria-live="polite" aria-busy="true" hidden>
+          <div class="loading-visual" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </div>
+          <div>
+            <p class="step-label">Building your tailored resume</p>
+            <h2 id="loading-message">Reading the role and your experience…</h2>
+            <p>This can take a minute or two while the server validates and compiles your resume.</p>
+          </div>
+        </section>
+
+        <section id="results" class="results" aria-labelledby="results-title" tabindex="-1" hidden>
+          <div class="results-header">
+            <div>
+              <p class="success-label"><span aria-hidden="true">✓</span> Ready for review</p>
+              <h2 id="results-title">Your tailored resume</h2>
+              <div class="result-meta" aria-label="Generation details">
+                <span id="provider-meta">AI model</span>
+                <span aria-hidden="true">·</span>
+                <span id="page-meta">PDF ready</span>
+              </div>
+            </div>
+            <div class="result-actions">
+              <a id="pdf-download" class="button button--primary" href="#" download="tailored-resume.pdf">
+                Download PDF
+                <span aria-hidden="true">↓</span>
+              </a>
+              <a id="tex-download" class="button button--secondary" href="#" download="tailored-resume.tex" hidden>
+                Download .tex
+              </a>
+              <button id="start-over-button" class="button button--quiet" type="button">Start over</button>
+            </div>
+          </div>
+
+          <section id="warnings-panel" class="notice notice--warning" aria-labelledby="warnings-title" hidden>
+            <span class="notice-icon" aria-hidden="true">!</span>
+            <div>
+              <h3 id="warnings-title">A few things to check</h3>
+              <ul id="warnings-list"></ul>
+            </div>
+          </section>
+
+          <div class="review-grid">
+            <section class="review-panel diff-panel" aria-labelledby="changes-title">
+              <div class="panel-header">
+                <div>
+                  <p class="step-label">Step 02 · Review</p>
+                  <h3 id="changes-title">Suggested changes</h3>
+                </div>
+                <span id="change-count" class="count-badge">0 changes</span>
+              </div>
+              <p class="panel-intro">Check the wording carefully. The AI should clarify and reorder facts, never invent them.</p>
+              <div id="changes-list" class="changes-list"></div>
+            </section>
+
+            <section class="review-panel preview-panel" aria-labelledby="preview-title">
+              <div class="panel-header preview-header">
+                <div>
+                  <p class="step-label">Step 03 · Preview</p>
+                  <h3 id="preview-title">Compiled PDF</h3>
+                </div>
+                <span id="preview-filename" class="file-chip">tailored-resume.pdf</span>
+              </div>
+              <div class="pdf-frame-wrap">
+                <iframe id="pdf-preview" title="Tailored resume PDF preview" referrerpolicy="no-referrer"></iframe>
+                <div id="preview-empty" class="preview-empty" hidden>
+                  <span aria-hidden="true">PDF</span>
+                  <h4>Preview unavailable</h4>
+                  <p>The source is ready, but no compiled PDF was returned.</p>
+                </div>
+              </div>
+              <p class="preview-help">If your browser cannot display the preview, use Download PDF above.</p>
+            </section>
+          </div>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <p>Built for focused, truthful tailoring.</p>
+        <p>No API keys are stored in this browser.</p>
+      </footer>
+    </div>
+  </body>
+</html>

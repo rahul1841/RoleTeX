@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# Test and analysis caches
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+.claude/settings.local.json
+
+# LaTeX and generated output
+*.aux
+*.log
+*.out
+*.pdf
+*.synctex.gz
+*.xdv
+output/
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,239 @@
+{
+  "identity": {
+    "name": "Rahul Kumar",
+    "email": "rahul2004kumar14@gmail.com",
+    "phone": "+91 6005435690",
+    "location": "Bengaluru",
+    "links": [
+      {
+        "label": "Codeforces",
+        "url": "https://codeforces.com/profile/Kalu---"
+      },
+      {
+        "label": "LeetCode",
+        "url": "https://leetcode.com/u/Corporate_Majdoor__/"
+      },
+      {
+        "label": "LinkedIn",
+        "url": "https://www.linkedin.com/in/rahul-kumar-716045207/"
+      },
+      {
+        "label": "GitHub",
+        "url": "https://github.com/rahul1841"
+      },
+      {
+        "label": "Portfolio",
+        "url": "https://rahul-s-terminal-portfolio.vercel.app/"
+      }
+    ]
+  },
+  "summary": "Software Engineer | AI Systems",
+  "experience": [
+    {
+      "id": "exp_juspay",
+      "company": "Juspay",
+      "role": "Associate Software Development Engineer",
+      "location": "Bengaluru",
+      "start": "May 2025",
+      "end": "Present",
+      "bullets": [
+        {
+          "id": "exp_juspay_b1_xyne_claw",
+          "text": "Architected & built Xyne Claw, a multi-tenant AI agent platform for Xyne Spaces, enabling async agent orchestration, scheduled workflows, and production agent execution integrated with chat & workspaces."
+        },
+        {
+          "id": "exp_juspay_b2_execution_runtime",
+          "text": "Built the execution runtime on the Pi coding-agent SDK with multi-LLM routing, sandboxed execution, subagents, & a secure MCP layer (credential vault + proxied tools) supporting 100+ MCP connectors."
+        },
+        {
+          "id": "exp_juspay_b3_attachment_pipeline",
+          "text": "Engineered an end-to-end attachment processing pipeline in Xyne Spaces, handling uploads, chunking, indexing in Vespa, and efficient retrieval at scale."
+        },
+        {
+          "id": "exp_juspay_b4_document_viewer",
+          "text": "Developed a high-performance, virtualized multi-format document viewing system (10+ formats) with superior preview capabilities over Slack, improving content accessibility and overall user experience."
+        }
+      ]
+    },
+    {
+      "id": "exp_bombay_shaving_company",
+      "company": "Bombay Shaving Company",
+      "role": "SDE Intern",
+      "location": "Gurgaon",
+      "start": "July 2024",
+      "end": "September 2024",
+      "bullets": [
+        {
+          "id": "exp_bombay_shaving_company_b1_review_pipeline",
+          "text": "Built an automated data pipeline to scrape, clean, and process customer review data at scale."
+        },
+        {
+          "id": "exp_bombay_shaving_company_b2_sentiment_system",
+          "text": "Developed a scalable system using the MERN stack, integrating BeautifulSoup for data extraction and the Gemini API for sentiment analysis, producing structured insights with exportable reports."
+        }
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "id": "project_eduglow",
+      "name": "EduGlow",
+      "url": "https://edu-glow.vercel.app/",
+      "technologies": [
+        "Node.js",
+        "Express.js",
+        "React.js",
+        "MongoDB"
+      ],
+      "bullets": [
+        {
+          "id": "project_eduglow_b1_platform",
+          "text": "EduGlow is a comprehensive ed-tech platform that enables users to create, consume, and rate educational content. Students can also give ratings ranging from 0 to 5 stars."
+        },
+        {
+          "id": "project_eduglow_b2_courses_sales",
+          "text": "It is constructed using the MERN stack and Instructors can also utilize the platform to sell courses and see sales percentage (1 - 100)."
+        }
+      ]
+    },
+    {
+      "id": "project_vaultx",
+      "name": "VaultX",
+      "url": "https://vault-x-brown.vercel.app/",
+      "technologies": [
+        "React.js",
+        "Tailwind CSS",
+        "Javascript",
+        "Solana",
+        "Web3"
+      ],
+      "bullets": [
+        {
+          "id": "project_vaultx_b1_wallets",
+          "text": "Developed a blockchain-based web wallet (Web3) to create different Solana and Ethereum wallets using a mnemonic phrase."
+        },
+        {
+          "id": "project_vaultx_b2_stack",
+          "text": "The project utilizes React.js, CSS, the BIP39 library, JavaScript, Solana, and Ethereum to create wallets."
+        }
+      ]
+    },
+    {
+      "id": "project_sharexylab",
+      "name": "ShareXYLab",
+      "url": "https://share.xylab.in/",
+      "technologies": [
+        "Next.js",
+        "ShadCN",
+        "MongoDB",
+        "Redis"
+      ],
+      "bullets": [
+        {
+          "id": "project_sharexylab_b1_sharing_cache",
+          "text": "Built a full-stack web app with Next.js, ShadCN, and MongoDB for seamless link and code sharing and implemented Redis caching to enhance performance."
+        },
+        {
+          "id": "project_sharexylab_b2_rate_limiting",
+          "text": "Implemented rate limiting on API routes to prevent abuse and ensure service reliability."
+        },
+        {
+          "id": "project_sharexylab_b3_cicd",
+          "text": "Set up CI/CD pipelines with Cloud Build triggers for automated testing & deployment on Cloud Run."
+        }
+      ]
+    }
+  ],
+  "education": [
+    {
+      "id": "education_gl_bajaj_it",
+      "institution": "GL Bajaj Institute Of Technology And Management",
+      "degree": "B.Tech (Information Technology)",
+      "location": "Greater Noida",
+      "start": "2021",
+      "end": "2025",
+      "details": [
+        "CGPA: 8.0"
+      ]
+    }
+  ],
+  "skills": [
+    {
+      "category": "AI / GenAI",
+      "items": [
+        "Multi-Agent Systems",
+        "Agent Orchestration",
+        "MCP",
+        "RAG",
+        "Prompt Engineering",
+        "Vespa"
+      ]
+    },
+    {
+      "category": "Programming Languages",
+      "items": [
+        "C/C++",
+        "JavaScript",
+        "Python"
+      ]
+    },
+    {
+      "category": "Libraries/Frameworks",
+      "items": [
+        "React.js",
+        "Node.js",
+        "Express.js",
+        "Tailwind CSS",
+        "TypeScript",
+        "Prisma",
+        "Mongoose",
+        "Next.js",
+        "Redis",
+        "Fastify",
+        "Kafka"
+      ]
+    },
+    {
+      "category": "Tools / Platforms",
+      "items": [
+        "GitHub",
+        "Docker",
+        "Git",
+        "Postman",
+        "Netlify",
+        "Kubernetes",
+        "AWS"
+      ]
+    },
+    {
+      "category": "Databases",
+      "items": [
+        "MySQL",
+        "MongoDB",
+        "PostgreSQL"
+      ]
+    }
+  ],
+  "achievements": [
+    {
+      "id": "achievement_coding_ratings",
+      "text": "Achieved 1850+ rating on LeetCode and 1470+ rating on Codeforces"
+    },
+    {
+      "id": "achievement_dsa_problems",
+      "text": "Solved 800+ DSA problems across multiple platforms"
+    },
+    {
+      "id": "achievement_leetcode_rankings",
+      "text": "Ranked 249/30,708 and 434/37,342 in LeetCode Weekly 470 and Biweekly 178 contests, respectively"
+    },
+    {
+      "id": "achievement_neuro_nest_winner",
+      "text": "Won 1st place in Neuro Nest Hackathon",
+      "link": {
+        "label": "GL Bajaj Institute of Technology and Management",
+        "url": "https://drive.google.com/file/d/1XkO_gSIDdYulrDEsYwnQ3lQfy07AEG0K/view?usp=drive_link"
+      }
+    }
+  ]
+}

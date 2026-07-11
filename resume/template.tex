@@ -1,0 +1,110 @@
+% This template is immutable application code. The backend replaces each
+% named placeholder exactly once with LaTeX generated from validated data.
+% It preserves the structure and spacing of Rahul Kumar's supplied A4 resume.
+% PROTECTED_PREAMBLE_START
+\documentclass[a4paper]{article}
+
+\usepackage{fullpage}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{textcomp}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[utf8]{inputenc}
+\fi
+\usepackage[T1]{fontenc}
+\usepackage[hidelinks]{hyperref}
+\usepackage[left=2cm,right=2cm,top=2cm]{geometry}
+\usepackage{longtable}
+
+\textheight=10in
+\pagestyle{empty}
+\raggedright
+\ifdefined\XeTeXgenerateactualtext
+  \XeTeXgenerateactualtext=1
+\fi
+
+\newcommand{\lineunder}{%
+  \vspace*{-8pt} \\
+  \hspace*{-18pt} \hrulefill \\
+}
+
+\newcommand{\header}[1]{%
+  {\hspace*{-18pt}\vspace*{6pt} \textsc{#1}}
+  \vspace*{-6pt} \lineunder
+}
+
+\newcommand{\ResumeContact}[2]{%
+  \vspace*{-2pt}
+  \begin{center}
+    {\Huge \scshape #1}\\
+    \vspace*{2pt}
+    {\ResumeHeadline}\\
+    \vspace*{2pt}
+    #2
+  \end{center}
+  \vspace*{-8pt}
+}
+
+% Renderer order: role, date range, company, location.
+\newcommand{\ResumeEntry}[4]{%
+  \textbf{#3}\textbf{ | #1}\hfill #4 | #2\\
+  \vspace{-2mm}
+}
+
+% Renderer order: institution, location, degree, date range, details.
+\newcommand{\ResumeEducation}[5]{%
+  \textbf{#1}\hfill #2\\
+  #3 \hfill #4\\
+  {\sl #5}\\
+  \vspace{2mm}
+}
+
+\newcommand{\ResumeProject}[3]{%
+  \textbf{#1}\textbf{ | \href{#2}{Link}}\hfill{\sl #3}\\
+  \vspace{-2mm}
+}
+
+\newcommand{\ResumeBulletListStart}{%
+  \begin{itemize}\itemsep -3pt
+}
+\newcommand{\ResumeBullet}[1]{\item #1}
+\newcommand{\ResumeBulletListEnd}{\end{itemize}\vspace*{1mm}}
+
+\newcommand{\ResumeSkill}[2]{#1: & #2\\}
+% PROTECTED_PREAMBLE_END
+
+% The headline is the model's validated summary field. It is escaped and is
+% the only authorized editable value stored in the otherwise locked preamble.
+\newcommand{\ResumeHeadline}{@@SUMMARY@@}
+
+\begin{document}
+\vspace*{-40pt}
+
+% PROTECTED_CONTACT_START
+@@CONTACT@@
+% PROTECTED_CONTACT_END
+
+% AI_EDITABLE_START
+\header{Education}
+\vspace{1mm}
+@@EDUCATION@@
+
+\header{Experience}
+\vspace{1mm}
+@@EXPERIENCE@@
+
+\header{Skills}
+\begin{longtable}{p{4cm}p{12cm}}
+@@SKILLS@@
+\end{longtable}
+
+\header{Projects}
+@@PROJECTS@@
+
+\header{Achievements}
+\vspace{1mm}
+@@ACHIEVEMENTS@@
+% AI_EDITABLE_END
+
+\end{document}
