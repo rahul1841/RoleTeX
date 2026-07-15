@@ -1,0 +1,31 @@
+# Local development stack for RoleTeX multi-user mode.
+#
+# Start MongoDB:
+#   docker compose up -d mongo
+#
+# Then run the app against it (from the repo root):
+#   export MONGODB_URI=mongodb://localhost:27017
+#   export APP_SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
+#   .venv/bin/python -m uvicorn app.main:app --reload --port 8000
+#
+# Data persists in the named volume `mongo_data`; wipe it with:
+#   docker compose down -v
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: roletex-mongo
+    restart: unless-stopped
+    ports:
+      # Bind to localhost only — this instance runs without authentication.
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mongo_data:

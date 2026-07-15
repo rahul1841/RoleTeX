@@ -552,23 +552,73 @@ def _render_skills(resume: ResumeData, proposal: TailorProposal) -> str:
     return "\n".join(lines)
 
 
+def _section(header: str, body: str, *, prefix: str = "", suffix: str = "") -> str:
+    """Wrap a rendered section with its header, or collapse to nothing if empty."""
+
+    if not body.strip():
+        return ""
+    return "\\header{{{0}}}\n{1}{2}{3}".format(header, prefix, body, suffix)
+
+
+def _sectioned_replacements(
+    resume: ResumeData, proposal: TailorProposal, rewrites: Mapping[str, str]
+) -> Dict[str, str]:
+    """Section slots that carry their own headers so empty sections disappear.
+
+    Used for per-user imported templates, whose resumes may legitimately omit
+    whole sections (e.g. no projects). A literal ``\\header`` before an empty
+    slot would otherwise emit a dangling rule and break compilation.
+    """
+
+    return {
+        "@@CONTACT@@": _render_contact(resume),
+        "@@SUMMARY@@": escape_latex(proposal.summary),
+        "@@EDUCATION@@": _section("Education", _render_education(resume), prefix="\\vspace{1mm}\n"),
+        "@@EXPERIENCE@@": _section(
+            "Experience", _render_experience(resume, rewrites), prefix="\\vspace{1mm}\n"
+        ),
+        "@@SKILLS@@": _section(
+            "Skills",
+            _render_skills(resume, proposal),
+            prefix="\\begin{longtable}{p{4cm}p{12cm}}\n",
+            suffix="\n\\end{longtable}",
+        ),
+        "@@PROJECTS@@": _section("Projects", _render_projects(resume, rewrites)),
+        "@@ACHIEVEMENTS@@": _section(
+            "Achievements", _render_achievements(resume, rewrites), prefix="\\vspace{1mm}\n"
+        ),
+    }
+
+
 def render_template_text(
-    template_text: str, resume: ResumeData, proposal: TailorProposal
+    template_text: str,
+    resume: ResumeData,
+    proposal: TailorProposal,
+    sectioned: bool = False,
 ) -> str:
-    """Merge validated plain text into the seven authorized template slots."""
+    """Merge validated plain text into the seven authorized template slots.
+
+    With ``sectioned=True`` each body slot also emits its own section header and
+    wrapper, and empty sections render as nothing. This is for imported per-user
+    templates whose bodies contain only the bare tokens; the seed template keeps
+    its literal headers and uses the default (non-sectioned) behavior.
+    """
 
     validate_template(template_text)
     validate_proposal(resume, proposal)
     rewrites = {item.id: item.text for item in proposal.bullet_rewrites}
-    replacements = {
-        "@@CONTACT@@": _render_contact(resume),
-        "@@SUMMARY@@": escape_latex(proposal.summary),
-        "@@EXPERIENCE@@": _render_experience(resume, rewrites),
-        "@@PROJECTS@@": _render_projects(resume, rewrites),
-        "@@EDUCATION@@": _render_education(resume),
-        "@@SKILLS@@": _render_skills(resume, proposal),
-        "@@ACHIEVEMENTS@@": _render_achievements(resume, rewrites),
-    }
+    if sectioned:
+        replacements = _sectioned_replacements(resume, proposal, rewrites)
+    else:
+        replacements = {
+            "@@CONTACT@@": _render_contact(resume),
+            "@@SUMMARY@@": escape_latex(proposal.summary),
+            "@@EXPERIENCE@@": _render_experience(resume, rewrites),
+            "@@PROJECTS@@": _render_projects(resume, rewrites),
+            "@@EDUCATION@@": _render_education(resume),
+            "@@SKILLS@@": _render_skills(resume, proposal),
+            "@@ACHIEVEMENTS@@": _render_achievements(resume, rewrites),
+        }
     rendered = template_text
     for token in REQUIRED_TEMPLATE_TOKENS:
         rendered = rendered.replace(token, replacements[token], 1)

@@ -147,6 +147,53 @@ async def test_health_reports_all_injected_services_ready(
 
 
 @pytest.mark.asyncio
+async def test_health_reports_demo_mode_without_database(
+    repository, baseline_proposal, tmp_path: Path
+) -> None:
+    app = create_app(
+        repository,
+        StubLLM(baseline_proposal),
+        StubCompiler(available=True),
+        static_dir=tmp_path / "static",
+    )
+
+    response = await _request(app, "GET", "/api/health")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["mode"] == "demo"
+    assert body["checks"]["database"] == "not_configured"
+    assert body["checks"]["secret_key"] == "ephemeral"
+    assert "pdftotext" in body["checks"]
+    # Demo mode never degrades for the missing database.
+    assert body["status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_health_reports_multi_user_mode_with_user_keys(
+    repository, baseline_proposal, tmp_path: Path, database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    app = create_app(
+        repository,
+        StubLLM(baseline_proposal),
+        StubCompiler(available=True),
+        static_dir=tmp_path / "static",
+        database=database,
+    )
+
+    response = await _request(app, "GET", "/api/health")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["mode"] == "multi_user"
+    assert body["checks"]["database"] == "ok"
+    # Without an env provider, users bring their own keys — not degraded.
+    assert body["checks"]["llm"] == "user_keys"
+    assert body["status"] == "ok"
+
+
+@pytest.mark.asyncio
 async def test_health_is_degraded_when_resume_and_compiler_are_unavailable(
     baseline_proposal, tmp_path: Path
 ) -> None:

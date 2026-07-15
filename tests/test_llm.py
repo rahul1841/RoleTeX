@@ -9,6 +9,8 @@ import httpx
 import pytest
 
 from app.llm import (
+    EXTRACTION_SYSTEM_PROMPT,
+    EXTRACTION_TEXT_SYSTEM_PROMPT,
     LLMConfigurationError,
     LLMResponseError,
     OpenAICompatibleLLM,
@@ -217,3 +219,127 @@ def test_gemini_uses_current_flash_model_by_default(
     config = OpenAICompatibleLLM().resolve_config("gemini")
 
     assert config.model == "gemini-3.5-flash"
+
+
+def test_anthropic_provider_uses_openai_compatible_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-only-key")
+    monkeypatch.delenv("LLM_MODEL", raising=False)
+
+    config = OpenAICompatibleLLM().resolve_config("anthropic")
+
+    assert "anthropic" in supported_providers()
+    assert config.base_url == "https://api.anthropic.com/v1"
+    assert config.model == "claude-sonnet-5"
+    assert config.api_key == "test-only-key"
+
+
+def test_api_key_override_skips_env_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    client = OpenAICompatibleLLM()
+
+    with pytest.raises(LLMConfigurationError, match="No API key configured"):
+        client.resolve_config("groq")
+
+    config = client.resolve_config("groq", api_key_override="user-supplied-key")
+    assert config.api_key == "user-supplied-key"
+
+    # And the override wins even when an env key exists.
+    monkeypatch.setenv("GROQ_API_KEY", "operator-env-key")
+    config = client.resolve_config("groq", api_key_override="user-supplied-key")
+    assert config.api_key == "user-supplied-key"
+
+    # A blank override falls back to the env lookup.
+    config = client.resolve_config("groq", api_key_override="   ")
+    assert config.api_key == "operator-env-key"
+
+
+@pytest.mark.asyncio
+async def test_generate_sends_the_overriding_key_as_bearer(
+    resume, valid_job_description: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LLM_BASE_URL", "https://llm.example.invalid/v1")
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    captured_headers = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured_headers.append(dict(request.headers))
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {"message": {"content": json.dumps(_proposal_payload(resume))}}
+                ]
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        await OpenAICompatibleLLM(http_client=http_client).generate(
+            resume,
+            valid_job_description,
+            provider="custom",
+            model="test-model",
+            api_key="user-override-key",
+        )
+
+    assert captured_headers[0]["authorization"] == "Bearer user-override-key"
+
+
+@pytest.mark.asyncio
+async def test_extract_resume_text_kind_uses_text_prompt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LLM_BASE_URL", "https://llm.example.invalid/v1")
+    monkeypatch.setenv("LLM_API_KEY", "server-secret")
+    captured_bodies = []
+    extraction_payload = {
+        "identity": {"name": "Jane", "email": "j@x.com", "phone": "+1", "location": "Berlin"},
+        "summary": "Engineer",
+        "style": {"paper": "a4paper"},
+    }
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured_bodies.append(json.loads(request.content.decode("utf-8")))
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": json.dumps(extraction_payload)}}]},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        client = OpenAICompatibleLLM(http_client=http_client)
+        await client.extract_resume(
+            "Jane Doe, Berlin. Engineer at Acme.",
+            provider="custom",
+            model="test-model",
+            source_kind="text",
+        )
+        await client.extract_resume(
+            r"\documentclass{article} Jane Doe",
+            provider="custom",
+            model="test-model",
+        )
+
+    text_messages = captured_bodies[0]["messages"]
+    assert text_messages[0]["content"] == EXTRACTION_TEXT_SYSTEM_PROMPT
+    assert "<resume_text>" in text_messages[1]["content"]
+
+    latex_messages = captured_bodies[1]["messages"]
+    assert latex_messages[0]["content"] == EXTRACTION_SYSTEM_PROMPT
+    assert "<resume_latex>" in latex_messages[1]["content"]
+
+
+@pytest.mark.asyncio
+async def test_extract_resume_mock_supports_text_kind(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "mock")
+
+    result = await OpenAICompatibleLLM().extract_resume(
+        "Plain text resume body", source_kind="text"
+    )
+
+    assert result.provider == "mock"
+    assert result.resume["identity"]["email"] == "imported.user@example.com"
+    assert result.style["paper"] == "a4paper"
