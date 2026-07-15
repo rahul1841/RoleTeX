@@ -37,8 +37,8 @@ Paste a job description → an LLM proposes structured, fact-preserving edits (s
 
 ## 5. Users
 
-- **Primary:** the repo owner running a private instance with their own seed resume (`resume/data.json` + `resume/template.tex`).
-- **Secondary (added beyond original plan):** additional users who import their own LaTeX resume via `POST /api/import` and receive a private UUID-keyed profile under `data/<uuid>/`.
+- **Primary:** the repo owner running a private instance with their own seed resume (`resume/data.json` + `resume/template.tex`; demo mode).
+- **Secondary (2026-07 revamp):** registered users (email+password accounts, MongoDB-backed) who import their own resumes via `POST /api/resumes` (LaTeX paste) or `POST /api/resumes/pdf` (PDF upload) into a private, versioned, per-user library, manage saved JDs and tailor history, and bring their own provider API keys (encrypted at rest).
 
 ## 6. User flows
 
@@ -49,28 +49,29 @@ Paste a job description → an LLM proposes structured, fact-preserving edits (s
 4. Server validates the proposal (see design.md §3). One semantic repair attempt is allowed on failure.
 5. Server renders the locked template deterministically and compiles it with sandboxed Tectonic.
 6. If the PDF exceeds the page target or compilation fails, one constrained repair may run (shared single-repair budget).
-7. UI shows a before/after change list + embedded PDF preview (the API also returns a unified diff, which the UI does not currently render); user downloads the PDF or `.tex`.
+7. UI shows a before/after change list, the unified diff, and an embedded PDF preview; user downloads the PDF or `.tex`. In multi-user mode the run is saved to history (re-compilable later).
 
 ### 6.2 Import (multi-user flow)
-1. User pastes their full LaTeX resume (40–200,000 chars).
-2. The **whole paste, including contact details, is sent to the LLM** — a deliberate, documented exception scoped to import only (the user is importing their own document).
+1. A signed-in user pastes their full LaTeX resume (40–200,000 chars) or uploads a PDF (≤10 MB; parsed with poppler `pdftotext`).
+2. The **whole document, including contact details, is sent to the LLM** — a deliberate, documented exception scoped to import only (the user is importing their own document).
 3. LLM extracts structured facts + bounded style hints; the backend discards model-proposed IDs, assigns its own stable positional IDs, clamps style values to whitelists, and assembles a fully server-controlled template.
-4. Profile persisted at `data/<uuid>/` (`data.json`, `template.tex`, `source.tex`, `meta.json`); the UUID is returned and kept in browser `localStorage`.
-5. Subsequent tailor requests pass `resume_id` to use the imported profile (sectioned rendering).
+4. The resume is persisted to MongoDB (`resumes` + `resume_versions`, quota-checked); re-importing adds a new version. Raw source text is stored but never compiled.
+5. Subsequent tailor requests pass `resume_id` (and optionally a saved `jd_id`) to use the library resume (sectioned rendering); each run is saved to tailor history.
 
 ## 7. Functional requirements
 
 | ID | Requirement | Status |
 |---|---|---|
 | FR-1 | `POST /api/tailor` — JD in, validated proposal + diff + compiled PDF out | ✅ Done, tested |
-| FR-2 | `POST /api/import` — pasted LaTeX in, private profile + extracted resume out | ✅ Done, tested |
-| FR-3 | `GET /api/health` — resume validity, compiler availability, LLM config checks | ✅ Done, tested |
-| FR-4 | `GET /api/resume/{id}` — fetch stored profile | ✅ Done, **untested** |
-| FR-5 | Web UI: JD textarea, import pane, diff cards, PDF preview, PDF/.tex download | ✅ Done, **no automated coverage** |
-| FR-6 | Provider adapter: mock, groq, cerebras, gemini, openrouter, mistral, openai, custom | ✅ Implemented; real-provider path **unexercised by tests** |
+| FR-2 | `POST /api/resumes` / `POST /api/resumes/pdf` — LaTeX paste or PDF upload in, private versioned resume out | ✅ Done, tested (replaced legacy `POST /api/import`) |
+| FR-3 | `GET /api/health` — mode, resume validity, compiler/database/secret-key/pdftotext checks | ✅ Done, tested |
+| FR-4 | Resume library routes (`GET/PATCH/DELETE /api/resumes/{id}`, versions, source download) | ✅ Done, tested |
+| FR-5 | Web UI: auth, tailor, resume library, JD library, history, settings views; diff cards, PDF preview, downloads | ✅ Done, **no automated coverage in repo suite** |
+| FR-6 | Provider adapter: mock, groq, cerebras, gemini, openrouter, mistral, openai, anthropic, custom | ✅ Implemented; real-provider path **unexercised by tests** |
 | FR-7 | One shared repair budget per request (semantic OR compile/page repair, never both) | ✅ Done, tested |
 | FR-8 | Deterministic mock provider for offline dev/tests | ✅ Done, tested |
-| FR-9 | Profile lifecycle (list/delete/TTL/quota) | ❌ Not built |
+| FR-9 | Resume/JD/run lifecycle (list/delete/quota/pruning) | ✅ Done, tested (Mongo revamp) |
+| FR-12 | Accounts & sessions, per-user encrypted API keys, rate limiting, login throttling, CSRF origin checks | ✅ Done, tested |
 | FR-10 | Evaluation harness (compile success, fact preservation, keyword coverage across JDs) | ❌ Not built |
 | FR-11 | Automatic provider failover | ❌ Not built (providers selectable, no fallback chain) |
 | FR-12 | Cover letter generation | ❌ Not built |

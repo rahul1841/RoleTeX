@@ -58,4 +58,5 @@ RUN mkdir -p "$TECTONIC_CACHE_DIR" /tmp/tectonic-prewarm \
 
 EXPOSE 7860
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
+# Shell form so the hosting platform's $PORT is honored (defaults to 7860).
+CMD exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-7860}"

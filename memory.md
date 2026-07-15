@@ -6,12 +6,13 @@
 
 ---
 
-## 1. Status snapshot — 2026-07-14
+## 1. Status snapshot — 2026-07-16
 
-- **Overall: ~80% of the MVP complete.** Security-critical core (validation, rendering, sandboxed compile, PII handling) built and tested.
-- **Tests: 87/87 passing** in <1s (`.venv/bin/python -m pytest -q`, Python 3.9.6). Suite is fully offline: LLM stubbed, compiler subprocess mocked.
-- **Git:** single commit (`7a03a14 first commit`); the multi-user import feature + refinements are staged, uncommitted. The five companion docs (prd/architecture/design/rules/memory.md) are untracked, and the `.dockerignore` hunk excluding them from the image is unstaged.
-- **Phases (plan.md §7):** P0 done · P1 mostly (no CLI — see D-7) · P2 mostly (frontend untested) · P3 mostly (deploy unverified) · P4 in progress.
+- **Production multi-user revamp landed**: MongoDB (Motor) accounts + sessions, per-user resume/JD libraries with versions, tailor-run history, per-user Fernet-encrypted provider keys (incl. new `anthropic` provider), PDF-upload import (poppler `pdftotext` → LLM extraction), rate limiting + login throttling + CSRF origin checks + quotas, demo mode fallback when `MONGODB_URI` is unset, rebuilt hash-routed SPA. Legacy file store (`app/storage.py`, `data/<uuid>/`, `POST /api/import`, `GET /api/resume/{id}`) removed.
+- **Adversarial review pass complete (2026-07-16):** a 5-lens multi-agent review (security, backend correctness, real-Mongo realism, frontend, contract completeness) surfaced 12 findings (9 unique, 2 high); all confirmed by adversarial verifiers and **all fixed** with regression tests. See §3 D-15 and the fix list at the bottom of §6.
+- **Tests: 256/256 passing** in ~15s (`.venv/bin/python -m pytest -q`, Python 3.9.6). Suite fully offline: LLM stubbed, compiler subprocess mocked, Mongo via mongomock-motor.
+- **Git:** checkpoint commit `7d95a46` (pre-revamp snapshot) on top of `7a03a14`; the revamp + review fixes are committed on top (see git log).
+- Earlier snapshot (2026-07-14, pre-revamp): ~80% of the single-user MVP, 87/87 tests.
 
 ## 2. Verified facts log
 
@@ -21,8 +22,12 @@
 | 2026-07-14 | Import flow works end-to-end: paste LaTeX → `/api/import` → `data/<uuid>/` profile (4 files) → `/api/tailor` with `resume_id` → sectioned render → valid PDF | Manual smoke script (mock provider — extraction content is placeholder by design; real parsing needs a real provider) |
 | 2026-07-14 | All 87 tests pass; **zero** tests execute real Tectonic/poppler (subprocess + inspectors mocked) even though both are installed locally | `pytest -q -rs` + reading `tests/test_compiler.py` mocks |
 | 2026-07-14 | Tectonic 0.16.9 + poppler (`pdfinfo`, `pdftotext`) available on local PATH via Homebrew | `command -v` + `--version` |
+| 2026-07-16 | Multi-user revamp verified offline: demo mode (health `mode=demo`, seed mock tailor, register → 503) and multi-user mode (register → me → key upsert w/ masked hint → LaTeX import → tailor with `resume_id` → run in history) via a `TestClient` smoke script; 244/244 tests | Integration smoke script + full pytest run |
+| 2026-07-16 | **Full journey verified against REAL MongoDB (mongo:7 container) + real out-of-process uvicorn:** health `mode=multi_user`/`database=ok`, register (real unique-email index rejects dup → 409), key masking, LaTeX import (v1), **PDF upload happy path** (real 506-char poppler-extracted PDF → `source_type=pdf`), JD evolve (v2 + archived version), tailor with **real Tectonic compile → success, 1-page, 18KB PDF**, run persisted to history, cross-user isolation (A's resume/run/jd → 404 for B), logout → 401, DELETE-body 413 guard, per-user model-default fix (env `LLM_MODEL=llama` did not leak into a `gemini` request). motor bound cleanly to uvicorn's loop (no "different loop" error — that only appears with in-process TestClient reusing a module-level client). | `curl` + `httpx` scripts against live uvicorn on real Mongo |
+| 2026-07-16 | **DB-outage fix verified live:** with Mongo paused, an authed route returns structured `503 {code:"database_unavailable"}` as `application/json` (not a plain-text 500), and `/api/health` stays up reporting `degraded` / `database: error` | Paused the mongo container mid-request via `docker pause` |
+| 2026-07-16 | **256/256 tests pass** after the review fixes (baseline 244 + 12 regression tests incl. `tests/test_db_outage.py`) | `.venv/bin/python -m pytest -q` |
 
-**Never verified yet:** any real LLM provider call (Groq etc.), Docker image build, HF deployment, frontend in a real browser, pinned Tectonic SHA-256.
+**Never verified yet:** any **real LLM provider** call (Groq/Gemini/Anthropic — the mock provider still stands in for extraction/tailoring quality), Docker image build, HF deployment, frontend in a real browser (verified via `node --check` + DOM-stub harness only), pinned Tectonic SHA-256. *(Real MongoDB and real Tectonic are now both exercised — see above.)*
 
 ## 3. Decision log
 
@@ -38,6 +43,11 @@
 | D-8 | during build | Mock provider excluded from compile-repair | Deterministic output — a repair round-trip is waste |
 | D-9 | during build | Backend discards model-proposed IDs on import and assigns positional stable IDs | IDs are a security contract (rules.md R-12); the model must not control them |
 | D-10 | during build | Compile semaphore rebuilt per event loop | Allows test event loops to work without cross-loop asyncio primitives |
+| D-11 | 2026-07-16 | **R-13 amended: seed-resume tailoring survives only in demo mode.** In multi-user mode `/api/tailor` requires an owned `resume_id`; the seed (owner's personal data) is never served to other users | Multi-user privacy: the seed resume is the owner's PII |
+| D-12 | 2026-07-16 | **R-9 amended: users may supply their own provider API keys** via `PUT /api/keys/{provider}`; keys are Fernet-encrypted at rest (key derived from `APP_SECRET_KEY`) and never echoed back (masked hint only). Operator env keys serve demo mode and are used for user requests only when `ALLOW_ENV_KEY_FALLBACK=true` | Multi-user product need; encryption + no-echo keeps the spirit of R-9 |
+| D-13 | 2026-07-16 | **Legacy file-based storage removed** (`app/storage.py`, `data/<uuid>/`, `POST /api/import`, `GET /api/resume/{id}`); MongoDB stores (`app/db.py`) replace it, every query scoped by `user_id` | Lifecycle, quotas, and ownership isolation need a real store (closes old G-6) |
+| D-14 | 2026-07-16 | Rate limiting / login throttling are **in-memory sliding windows** (per-process); Docker `CMD` now honors `$PORT` | Single-container deployment target; multi-replica deployments would need a shared limiter store |
+| D-15 | 2026-07-16 | **Post-revamp adversarial review + fixes.** 12 confirmed findings fixed with regression tests. Notable hardening decisions: (a) `PyMongoError` → structured 503 `database_unavailable` via a FastAPI exception handler **and** an in-middleware catch (BaseHTTPMiddleware runs before route handlers); (b) `ensure_indexes` runs as a background retry task (ping-first, 15s backoff) so an unreachable Mongo never blocks uvicorn startup; (c) PBKDF2 hash/verify run in `run_in_executor` + a dummy-hash path on unknown-email login, closing the event-loop-block and the account-enumeration timing oracle together; (d) `resolve_llm_selection` falls back to the selected provider's default model so the operator's env `LLM_MODEL` can't bleed cross-provider (spec §6.4); (e) DELETE added to the body-size guard; (f) new `MAX_VERSIONS_PER_JD` cap prunes `jd_versions`. | Verified real by adversarial verifiers; each has a regression test |
 
 ## 4. Gap register
 
@@ -45,14 +55,16 @@ Severity: 🔴 blocks confidence in core promise · 🟠 should fix before deplo
 
 | # | Sev | Gap | Notes |
 |---|---|---|---|
-| G-1 | 🔴 | Real-provider LLM path never exercised (HTTP/retry/JSON-mode/`extract_resume`) | Whether tailoring quality is real with Groq/Gemini is unproven |
+| G-1 | 🔴 | Real-provider LLM path never exercised (HTTP/retry/JSON-mode/`extract_resume`, incl. new `anthropic` provider) | Whether tailoring quality is real with Groq/Gemini is unproven |
 | G-2 | 🔴 | No automated real-compile test | Suite mocks subprocess; add a tectonic-gated (skip-if-missing) integration test |
-| G-3 | 🟠 | Frontend has zero automated coverage | Client validation, diff render, base64 PDF decode, `localStorage` logic all unverified |
-| G-4 | 🟠 | Deployment unverified: no image build / cold-start / privacy test; `CMD` hardcodes port 7860 (ignores `$PORT`); no dependency lockfile | Phase-3 completion test from plan §7 never run |
+| G-3 | 🟠 | Frontend has zero automated coverage in the repo suite | Verified via `node --check` + a scripted DOM-stub smoke harness during the revamp, but no committed browser tests |
+| G-4 | 🟠 | Deployment unverified: no Docker **image build** / cold-start / privacy test; no dependency lockfile | `$PORT` fixed 2026-07-16. Real MongoDB (mongo:7) + real Tectonic compile + full journey manually verified 2026-07-16 (see §2); image build + HF Space still unproven |
 | G-5 | 🟠 | Fabrication guard is numeric-only | Invented non-numeric facts (fake employer/tech/credential) pass validation |
-| G-6 | 🟠 | Import storage has no lifecycle (list/delete/TTL/quota) and 4-file create is not transactional | Unbounded growth; crash mid-create leaves an orphan partial profile |
+| G-6 | ✅ closed 2026-07-16 | ~~Import storage has no lifecycle / not transactional~~ | Mongo stores with quotas, delete routes, and run pruning replaced the 4-file layout (D-13) |
 | G-7 | 🟡 | Body-size 413 guard trusts declared `Content-Length`; chunked requests bypass it | Middleware in `app/main.py` |
-| G-8 | 🟡 | Untested branches: `GET /api/resume/{id}`, `GET /` + static mount, provider-error → 429/502 mappings, `store_failed` 500, "repaired compile also failed" branch, empty-changes warning | Implemented, no coverage |
+| G-8 | 🟡 | Untested branches: `GET /` + static mount, "repaired compile also failed" branch | Provider-error → 429/502 mappings and empty-changes warning gained coverage in the revamp |
+| G-12 | 🟠 | Rate limiter / login throttle state is per-process (in-memory) | Fine for the single-container target; multi-replica needs a shared store (D-14) |
+| G-13 | 🟡 | `APP_SECRET_KEY` rotation invalidates all stored user keys (`key_decrypt_failed` 500 → user must re-enter) | No re-encryption tooling exists |
 | G-9 | 🟡 | No adversarial-JD test (malicious instructions embedded in a JD) | Architecture defends it; scenario never asserted |
 | G-10 | 🟡 | `_safe_url` rejection paths, blank-text checks, and the POSIX resource limiter are untested; `RLIMIT_AS` is Linux-only (no memory cap on macOS dev) | |
 | G-11 | 🟡 | Phase 4 unbuilt: eval harness, automatic provider failover, cover letter | Plan labels this "ongoing" |
@@ -68,9 +80,8 @@ Severity: 🔴 blocks confidence in core promise · 🟠 should fix before deplo
 
 1. Close G-1: one real-provider integration run (Groq) + a tiny repeatable eval set (compile success, fact preservation, keyword coverage).
 2. Close G-2: tectonic-gated real-compile pytest (skip when binary absent; runs locally + in Docker build).
-3. Close G-4: build the image, verify cold start / cached compile / secrets / privacy on a private HF Space; fix `$PORT`; add a lockfile.
-4. Close G-6: profile list/delete + TTL sweep + transactional create (write to temp dir, rename into place).
-5. Close G-3: minimal browser smoke (Playwright or scripted fetch against a served static dir).
+3. Close G-4: build the image, verify cold start / cached compile / secrets / privacy on a private deployment with a real MongoDB (`MONGODB_URI` + `APP_SECRET_KEY` set); add a lockfile.
+4. Close G-3: minimal browser smoke (Playwright or scripted fetch against a served static dir).
 6. Close G-5: extend fabrication guard (e.g., proper-noun/entity diff against factual source).
 
 ## 7. Operational notes

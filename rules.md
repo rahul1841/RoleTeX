@@ -9,7 +9,7 @@
 ## 1. Security invariants (MUST hold at all times)
 
 - **R-1 · PII never reaches the LLM during tailoring.** `build_llm_resume_payload` excludes `identity` (name, email, phone, location, links). Identity is restored only during local rendering. Compiler diagnostics MUST pass through `redact_identity` before being included in any repair prompt.
-- **R-2 · The import exception is scoped to import only.** `POST /api/import` deliberately sends the user's full paste (their own document, including contact details) to the LLM. This exception MUST NOT leak into the tailor path, and MUST stay documented in the README and prd.md.
+- **R-2 · The import exception is scoped to import only.** The resume import routes (`POST /api/resumes`, `POST /api/resumes/pdf`, and their `/versions` variants) deliberately send the user's full document (their own resume, including contact details) to the LLM for extraction. This exception MUST NOT leak into the tailor path, and MUST stay documented in the README and prd.md.
 - **R-3 · The LLM never emits LaTeX.** Model output is plain text in a strict JSON schema. The server — and only the server — produces LaTeX. Every model-provided string is passed through `escape_latex` before rendering.
 - **R-4 · The template is locked.** `resume/template.tex` (and every server-assembled profile template) contains each of the 7 tokens exactly once: `@@CONTACT@@ @@SUMMARY@@ @@EXPERIENCE@@ @@PROJECTS@@ @@EDUCATION@@ @@SKILLS@@ @@ACHIEVEMENTS@@`. `validate_template` enforces this; rendering substitutes each token exactly once and rejects leftovers. Do not rename, duplicate, or delete tokens without updating the renderer and its tests.
 - **R-5 · Raw user LaTeX is never compiled.** Imported source is stored verbatim as `source.tex` for future work but the compiler only ever receives server-assembled templates. Only clamped style values (paper, font size, margin, accent) may vary per profile.
@@ -38,10 +38,10 @@
 
 ## 4. Testing rules
 
-- **T-1 · The suite stays offline and fast.** No network, no real LLM calls, no real Tectonic in default `pytest` runs (mock/stub via DI). Anything needing the real toolchain must be gated (skip-if-unavailable) — the suite currently passes 87/87 in under a second; keep it that way.
+- **T-1 · The suite stays offline and fast.** No network, no real LLM calls, no real Tectonic in default `pytest` runs (mock/stub via DI). Anything needing the real toolchain must be gated (skip-if-unavailable) — the suite currently passes 244/244 in under ten seconds with no real Mongo (mongomock-motor); keep it that way.
 - **T-2 · Every security invariant keeps a test.** Changes to validation, escaping, redaction, token handling, or the compiler sandbox require updating/adding the corresponding tests in `tests/`.
 - **T-3 · Run tests with the project venv:** `.venv/bin/python -m pytest -q` (Python 3.9.6).
-- **T-4 · New endpoints get failure-path tests,** not just happy paths (see the 413/422/503 patterns in `test_api.py` and the 404 pattern in `test_import_flow.py`).
+- **T-4 · New endpoints get failure-path tests,** not just happy paths (see the 413/422/503 patterns in `test_api.py` and the ownership-404 patterns in `test_resumes_api.py` / `test_runs_api.py`).
 
 ## 5. Change management
 

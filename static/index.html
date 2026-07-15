@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Tailor a protected LaTeX resume to a job description and review every suggested change.">
+    <meta name="description" content="Save resumes and job descriptions, tailor any pairing with AI, and review every suggested change before you download.">
     <meta name="theme-color" content="#17201e">
     <title>Resume Tailor</title>
     <link rel="stylesheet" href="/static/styles.css">
@@ -14,7 +14,7 @@
 
     <div class="site-shell">
       <header class="site-header" aria-label="Application header">
-        <a class="brand" href="/" aria-label="Resume Tailor home">
+        <a class="brand" href="#/tailor" aria-label="Resume Tailor home">
           <span class="brand-mark" aria-hidden="true"><span>R</span></span>
           <span class="brand-copy">
             <strong>Resume Tailor</strong>
@@ -22,206 +22,727 @@
           </span>
         </a>
 
-        <div class="template-status" title="AI suggestions are merged into editable fields only">
-          <span class="status-dot" aria-hidden="true"></span>
-          Protected template
+        <nav id="app-nav" class="app-nav" aria-label="Primary" hidden>
+          <a href="#/tailor" data-route="tailor">Tailor</a>
+          <a href="#/resumes" data-route="resumes">Resumes</a>
+          <a href="#/jds" data-route="jds">JDs</a>
+          <a href="#/history" data-route="history">History</a>
+          <a href="#/settings" data-route="settings">Settings</a>
+        </nav>
+
+        <div class="header-side">
+          <div class="template-status" title="AI suggestions are merged into editable fields only">
+            <span class="status-dot" aria-hidden="true"></span>
+            Protected template
+          </div>
+          <div id="user-chip" class="user-chip" hidden>
+            <span id="user-chip-name" class="user-chip-name"></span>
+            <button id="logout-button" class="button button--quiet button--small" type="button">Log out</button>
+          </div>
         </div>
       </header>
 
+      <div id="demo-banner" class="demo-banner" role="status" hidden>
+        <strong>Demo mode.</strong>
+        No database is configured, so you are tailoring the built-in sample resume.
+        Accounts, resume libraries, saved JDs, and history are disabled.
+      </div>
+
+      <div id="boot-loading" class="boot-loading" aria-live="polite">Loading Resume Tailor…</div>
+
+      <section id="boot-error" class="notice notice--error boot-error" role="alert" hidden>
+        <span class="notice-icon" aria-hidden="true">!</span>
+        <div>
+          <h3>We couldn’t start the app</h3>
+          <p id="boot-error-message"></p>
+          <p><button id="boot-retry" class="button button--secondary button--small" type="button">Retry</button></p>
+        </div>
+      </section>
+
+      <noscript>
+        <p class="demo-banner"><strong>JavaScript required.</strong> Resume Tailor is an interactive app and needs JavaScript enabled.</p>
+      </noscript>
+
       <main id="main-content">
-        <section class="hero" aria-labelledby="hero-title">
-          <p class="eyebrow">Your experience, precisely positioned</p>
-          <h1 id="hero-title">Match the role.<br><em>Keep your story.</em></h1>
-          <p class="hero-copy">
-            Paste a job description and get a focused version of your existing resume.
-            Your layout stays locked; you review every content change.
-          </p>
-
-          <ol class="process" aria-label="How it works">
-            <li><span>01</span>Import your resume</li>
-            <li><span>02</span>Paste the role</li>
-            <li><span>03</span>Review the edits</li>
-            <li><span>04</span>Download the PDF</li>
-          </ol>
-        </section>
-
-        <section class="composer-card" id="import-card" aria-labelledby="import-title">
-          <div class="section-heading">
-            <div>
-              <p class="step-label">Step 01 · Your resume</p>
-              <h2 id="import-title">Import your LaTeX resume</h2>
-            </div>
-            <p class="section-note">Paste your resume's LaTeX once. We extract it into your private profile.</p>
-          </div>
-
-          <form id="import-form" novalidate>
-            <label class="sr-only" for="latex-input">Resume LaTeX source</label>
-            <div class="textarea-wrap">
-              <textarea
-                id="latex-input"
-                name="latex"
-                minlength="40"
-                maxlength="200000"
-                spellcheck="false"
-                aria-describedby="import-help latex-count"
-                placeholder="Paste your full resume .tex source here…"
-              ></textarea>
-              <div class="textarea-meta">
-                <p id="import-help">Your contact details are used only to build your resume. Minimum 40 characters.</p>
-                <output id="latex-count" for="latex-input" aria-label="LaTeX length">0 / 200,000</output>
-              </div>
-            </div>
-
-            <section id="import-error" class="notice notice--error" role="alert" tabindex="-1" hidden>
-              <span class="notice-icon" aria-hidden="true">!</span>
-              <div>
-                <h3>We couldn’t import that resume</h3>
-                <p id="import-error-message"></p>
-              </div>
-            </section>
-
-            <div class="form-footer">
-              <p class="privacy-note profile-status" id="profile-status">
-                <span class="status-dot" aria-hidden="true"></span>
-                <span id="profile-status-text">No resume imported yet — the sample resume will be used.</span>
+        <!-- ============================== AUTH ============================== -->
+        <section id="view-auth" class="view" aria-labelledby="auth-title" hidden>
+          <div class="auth-layout">
+            <div class="auth-intro">
+              <p class="eyebrow">Your experience, precisely positioned</p>
+              <h1 id="auth-title" class="view-title" tabindex="-1">Match the role.<br><em>Keep your story.</em></h1>
+              <p class="hero-copy">
+                Keep a private library of resumes and job descriptions, tailor any pairing,
+                and review every suggested change before you send it. Your layout stays locked.
               </p>
-              <div class="form-actions">
-                <button id="clear-profile-button" class="button button--quiet" type="button" hidden>Use sample</button>
-                <button id="import-button" class="button button--primary" type="submit">
-                  <span class="button-label">Import resume</span>
-                  <span class="button-arrow" aria-hidden="true">↗</span>
+              <ol class="process" aria-label="How it works">
+                <li><span>01</span>Import your resumes</li>
+                <li><span>02</span>Save the roles you want</li>
+                <li><span>03</span>Tailor and review the edits</li>
+                <li><span>04</span>Download the PDF</li>
+              </ol>
+            </div>
+
+            <div class="composer-card auth-card">
+              <div class="tab-row" role="tablist" aria-label="Sign in or create an account">
+                <button id="auth-tab-login" type="button" role="tab" aria-selected="true" aria-controls="login-form">Sign in</button>
+                <button id="auth-tab-register" type="button" role="tab" aria-selected="false" aria-controls="register-form" tabindex="-1">Create account</button>
+              </div>
+
+              <form id="login-form" role="tabpanel" aria-labelledby="auth-tab-login" novalidate>
+                <div class="field">
+                  <label for="login-email">Email</label>
+                  <input id="login-email" name="email" type="email" autocomplete="email" spellcheck="false" required>
+                </div>
+                <div class="field">
+                  <label for="login-password">Password</label>
+                  <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+                </div>
+                <section id="login-error" class="notice notice--error notice--compact" role="alert" tabindex="-1" hidden>
+                  <span class="notice-icon" aria-hidden="true">!</span>
+                  <p id="login-error-message"></p>
+                </section>
+                <button id="login-button" class="button button--primary button--block" type="submit">
+                  <span class="button-label">Sign in</span>
                   <span class="button-spinner" aria-hidden="true"></span>
                 </button>
-              </div>
-            </div>
-          </form>
-        </section>
+              </form>
 
-        <section class="composer-card" aria-labelledby="composer-title">
-          <div class="section-heading">
-            <div>
-              <p class="step-label">Step 02 · The role</p>
-              <h2 id="composer-title">Paste the job description</h2>
-            </div>
-            <p class="section-note">Use the complete posting for a more accurate result.</p>
-          </div>
-
-          <form id="tailor-form" novalidate>
-            <label class="sr-only" for="job-description">Job description</label>
-            <div class="textarea-wrap">
-              <textarea
-                id="job-description"
-                name="job_description"
-                minlength="50"
-                maxlength="20000"
-                required
-                spellcheck="true"
-                aria-describedby="job-description-help character-count"
-                placeholder="Paste the responsibilities, requirements, and preferred qualifications here…"
-              ></textarea>
-              <div class="textarea-meta">
-                <p id="job-description-help">Minimum 50 characters</p>
-                <output id="character-count" for="job-description" aria-label="Character count">0 / 20,000</output>
-              </div>
-            </div>
-
-            <section id="error-panel" class="notice notice--error" role="alert" tabindex="-1" hidden>
-              <span class="notice-icon" aria-hidden="true">!</span>
-              <div>
-                <h3>We couldn’t tailor your resume</h3>
-                <p id="error-message"></p>
-              </div>
-            </section>
-
-            <div class="form-footer">
-              <p class="privacy-note">
-                <span aria-hidden="true">✓</span>
-                Contact details remain in your locked template.
-              </p>
-              <div class="form-actions">
-                <button id="reset-button" class="button button--quiet" type="button">Clear</button>
-                <button id="submit-button" class="button button--primary" type="submit">
-                  <span class="button-label">Tailor my resume</span>
-                  <span class="button-arrow" aria-hidden="true">↗</span>
+              <form id="register-form" role="tabpanel" aria-labelledby="auth-tab-register" novalidate hidden>
+                <div class="field">
+                  <label for="register-name">Name <span class="optional-tag">optional</span></label>
+                  <input id="register-name" name="name" type="text" autocomplete="name" maxlength="120">
+                </div>
+                <div class="field">
+                  <label for="register-email">Email</label>
+                  <input id="register-email" name="email" type="email" autocomplete="email" spellcheck="false" required>
+                </div>
+                <div class="field">
+                  <label for="register-password">Password</label>
+                  <input id="register-password" name="password" type="password" autocomplete="new-password" required aria-describedby="register-password-help">
+                  <p id="register-password-help" class="field-note">8–128 characters.</p>
+                </div>
+                <section id="register-error" class="notice notice--error notice--compact" role="alert" tabindex="-1" hidden>
+                  <span class="notice-icon" aria-hidden="true">!</span>
+                  <p id="register-error-message"></p>
+                </section>
+                <button id="register-button" class="button button--primary button--block" type="submit">
+                  <span class="button-label">Create account</span>
                   <span class="button-spinner" aria-hidden="true"></span>
                 </button>
-              </div>
-            </div>
-          </form>
-        </section>
+              </form>
 
-        <section id="loading-panel" class="loading-card" aria-live="polite" aria-busy="true" hidden>
-          <div class="loading-visual" aria-hidden="true">
-            <span></span><span></span><span></span>
-          </div>
-          <div>
-            <p class="step-label">Building your tailored resume</p>
-            <h2 id="loading-message">Reading the role and your experience…</h2>
-            <p>This can take a minute or two while the server validates and compiles your resume.</p>
+              <p class="auth-note">Sessions use a secure, HttpOnly cookie. Your resume data stays in your account.</p>
+            </div>
           </div>
         </section>
 
-        <section id="results" class="results" aria-labelledby="results-title" tabindex="-1" hidden>
-          <div class="results-header">
+        <!-- ============================== TAILOR ============================== -->
+        <section id="view-tailor" class="view" aria-labelledby="tailor-title" hidden>
+          <header class="view-header">
             <div>
-              <p class="success-label"><span aria-hidden="true">✓</span> Ready for review</p>
-              <h2 id="results-title">Your tailored resume</h2>
-              <div class="result-meta" aria-label="Generation details">
-                <span id="provider-meta">AI model</span>
-                <span aria-hidden="true">·</span>
-                <span id="page-meta">PDF ready</span>
-              </div>
+              <p class="eyebrow">Tailor</p>
+              <h1 id="tailor-title" class="view-title" tabindex="-1">Tailor a resume <em>to a role</em></h1>
             </div>
-            <div class="result-actions">
-              <a id="pdf-download" class="button button--primary" href="#" download="tailored-resume.pdf">
-                Download PDF
-                <span aria-hidden="true">↓</span>
-              </a>
-              <a id="tex-download" class="button button--secondary" href="#" download="tailored-resume.tex" hidden>
-                Download .tex
-              </a>
-              <button id="start-over-button" class="button button--quiet" type="button">Start over</button>
-            </div>
-          </div>
+            <p class="view-note">Pick a resume and a job description. You review every change; your layout never moves.</p>
+          </header>
 
-          <section id="warnings-panel" class="notice notice--warning" aria-labelledby="warnings-title" hidden>
-            <span class="notice-icon" aria-hidden="true">!</span>
+          <section class="composer-card" aria-label="Tailoring composer">
+            <form id="tailor-form" novalidate>
+              <div id="tailor-setup" class="setup-grid" data-auth-only>
+                <div class="field">
+                  <label for="tailor-resume-select">Resume</label>
+                  <select id="tailor-resume-select"></select>
+                  <p id="tailor-resume-empty" class="field-note" hidden>No resumes yet — <a href="#/resumes">add one in Resumes</a>.</p>
+                </div>
+                <div class="field">
+                  <label for="tailor-provider-select">AI provider</label>
+                  <select id="tailor-provider-select"></select>
+                  <p id="tailor-provider-note" class="field-note" hidden>No provider keys yet — <a href="#/settings">add one in Settings</a>, or pick mock for an offline dry run.</p>
+                </div>
+                <div class="field">
+                  <label for="tailor-model-input">Model override <span class="optional-tag">optional</span></label>
+                  <input id="tailor-model-input" type="text" maxlength="200" spellcheck="false" placeholder="Provider default">
+                </div>
+              </div>
+
+              <section id="tailor-load-error" class="notice notice--error notice--compact" hidden>
+                <span class="notice-icon" aria-hidden="true">!</span>
+                <p>
+                  <span id="tailor-load-error-message"></span>
+                  <button id="tailor-load-retry" class="button button--secondary button--small" type="button">Retry</button>
+                </p>
+              </section>
+
+              <div class="jd-source">
+                <div id="jd-tab-row" class="tab-row" role="tablist" aria-label="Job description source" data-auth-only>
+                  <button id="jd-tab-saved" type="button" role="tab" aria-selected="true" aria-controls="jd-panel-saved">Saved JD</button>
+                  <button id="jd-tab-paste" type="button" role="tab" aria-selected="false" aria-controls="jd-panel-paste" tabindex="-1">Paste new</button>
+                </div>
+
+                <div id="jd-panel-saved" role="tabpanel" aria-labelledby="jd-tab-saved">
+                  <div class="field">
+                    <label for="tailor-jd-select">Saved job description</label>
+                    <select id="tailor-jd-select"></select>
+                    <p id="tailor-jd-empty" class="field-note" hidden>No saved JDs yet — <a href="#/jds">create one in JDs</a>, or switch to “Paste new”.</p>
+                  </div>
+                  <p id="tailor-jd-preview-status" class="field-note" role="status" hidden>Loading preview…</p>
+                  <pre id="tailor-jd-preview" class="jd-preview" hidden></pre>
+                </div>
+
+                <div id="jd-panel-paste" role="tabpanel" aria-labelledby="jd-tab-paste" hidden>
+                  <label class="sr-only" for="job-description">Job description</label>
+                  <div class="textarea-wrap">
+                    <textarea
+                      id="job-description"
+                      name="job_description"
+                      class="composer-textarea"
+                      minlength="50"
+                      maxlength="20000"
+                      spellcheck="true"
+                      aria-describedby="job-description-help character-count"
+                      placeholder="Paste the responsibilities, requirements, and preferred qualifications here…"
+                    ></textarea>
+                    <div class="textarea-meta">
+                      <p id="job-description-help">Minimum 50 characters. Use the complete posting for a more accurate result.</p>
+                      <output id="character-count" for="job-description" aria-label="Character count">0 / 20,000</output>
+                    </div>
+                  </div>
+                  <div class="save-jd-row" data-auth-only>
+                    <label class="check-label">
+                      <input type="checkbox" id="save-jd-checkbox">
+                      Save to my JDs
+                    </label>
+                    <input id="save-jd-title" type="text" maxlength="160" placeholder="Title, e.g. “Backend Engineer — Acme”" aria-label="Title for the saved job description" hidden>
+                  </div>
+                </div>
+              </div>
+
+              <div class="toggle-row">
+                <label class="check-label"><input type="checkbox" id="compile-toggle" checked> Compile PDF</label>
+                <label class="check-label"><input type="checkbox" id="one-page-toggle" checked> Keep to one page</label>
+              </div>
+
+              <section id="error-panel" class="notice notice--error" role="alert" tabindex="-1" hidden>
+                <span class="notice-icon" aria-hidden="true">!</span>
+                <div>
+                  <h3>We couldn’t tailor your resume</h3>
+                  <p id="error-message"></p>
+                </div>
+              </section>
+
+              <div class="form-footer">
+                <p class="privacy-note">
+                  <span aria-hidden="true">✓</span>
+                  Contact details never leave the server during tailoring.
+                </p>
+                <div class="form-actions">
+                  <button id="reset-button" class="button button--quiet" type="button">Clear</button>
+                  <button id="submit-button" class="button button--primary" type="submit">
+                    <span class="button-label">Tailor my resume</span>
+                    <span class="button-arrow" aria-hidden="true">↗</span>
+                    <span class="button-spinner" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </section>
+
+          <section id="loading-panel" class="loading-card" aria-live="polite" aria-busy="true" hidden>
+            <div class="loading-visual" aria-hidden="true">
+              <span></span><span></span><span></span>
+            </div>
             <div>
-              <h3 id="warnings-title">A few things to check</h3>
-              <ul id="warnings-list"></ul>
+              <p class="step-label">Building your tailored resume</p>
+              <h2 id="loading-message">Reading the role and your experience…</h2>
+              <p>This can take a minute or two while the server validates and compiles your resume.</p>
             </div>
           </section>
 
-          <div class="review-grid">
-            <section class="review-panel diff-panel" aria-labelledby="changes-title">
-              <div class="panel-header">
-                <div>
-                  <p class="step-label">Step 03 · Review</p>
-                  <h3 id="changes-title">Suggested changes</h3>
+          <section id="results" class="results" aria-labelledby="results-title" tabindex="-1" hidden>
+            <div class="results-header">
+              <div>
+                <p class="success-label"><span aria-hidden="true">✓</span> Ready for review</p>
+                <h2 id="results-title">Your tailored resume</h2>
+                <div class="result-meta" aria-label="Generation details">
+                  <span id="provider-meta">AI model</span>
+                  <span aria-hidden="true">·</span>
+                  <span id="page-meta">PDF ready</span>
                 </div>
-                <span id="change-count" class="count-badge">0 changes</span>
+                <p id="run-chip" class="run-chip" hidden>
+                  <span aria-hidden="true">✓</span>
+                  Saved to history ·
+                  <a id="run-link" href="#/history">view run</a>
+                </p>
               </div>
-              <p class="panel-intro">Check the wording carefully. The AI should clarify and reorder facts, never invent them.</p>
-              <div id="changes-list" class="changes-list"></div>
+              <div class="result-actions">
+                <a id="pdf-download" class="button button--primary" href="#" download="tailored-resume.pdf">
+                  Download PDF
+                  <span aria-hidden="true">↓</span>
+                </a>
+                <a id="tex-download" class="button button--secondary" href="#" download="tailored-resume.tex" hidden>
+                  Download .tex
+                </a>
+                <button id="start-over-button" class="button button--quiet" type="button">Start over</button>
+              </div>
+            </div>
+
+            <section id="warnings-panel" class="notice notice--warning" aria-labelledby="warnings-title" hidden>
+              <span class="notice-icon" aria-hidden="true">!</span>
+              <div>
+                <h3 id="warnings-title">A few things to check</h3>
+                <ul id="warnings-list"></ul>
+              </div>
             </section>
 
-            <section class="review-panel preview-panel" aria-labelledby="preview-title">
-              <div class="panel-header preview-header">
+            <div class="review-grid">
+              <section class="review-panel diff-panel" aria-labelledby="changes-title">
+                <div class="panel-header">
+                  <div>
+                    <p class="step-label">Review</p>
+                    <h3 id="changes-title">Suggested changes</h3>
+                  </div>
+                  <span id="change-count" class="count-badge">0 changes</span>
+                </div>
+                <p class="panel-intro">Check the wording carefully. The AI should clarify and reorder facts, never invent them.</p>
+                <div id="changes-list" class="changes-list"></div>
+              </section>
+
+              <section class="review-panel preview-panel" aria-labelledby="preview-title">
+                <div class="panel-header preview-header">
+                  <div>
+                    <p class="step-label">Preview</p>
+                    <h3 id="preview-title">Compiled PDF</h3>
+                  </div>
+                  <span id="preview-filename" class="file-chip">tailored-resume.pdf</span>
+                </div>
+                <div class="pdf-frame-wrap">
+                  <iframe id="pdf-preview" title="Tailored resume PDF preview" referrerpolicy="no-referrer"></iframe>
+                  <div id="preview-empty" class="preview-empty" hidden>
+                    <span aria-hidden="true">PDF</span>
+                    <h4>Preview unavailable</h4>
+                    <p>The source is ready, but no compiled PDF was returned.</p>
+                  </div>
+                </div>
+                <p class="preview-help">If your browser cannot display the preview, use Download PDF above.</p>
+              </section>
+            </div>
+          </section>
+        </section>
+
+        <!-- ============================== RESUMES ============================== -->
+        <section id="view-resumes" class="view" aria-labelledby="resumes-title" hidden>
+          <header class="view-header">
+            <div>
+              <p class="eyebrow">Library</p>
+              <h1 id="resumes-title" class="view-title" tabindex="-1">Your resumes</h1>
+            </div>
+            <p class="view-note">Import by pasting LaTeX or uploading a PDF. Re-importing into a resume adds a new version.</p>
+          </header>
+
+          <section class="composer-card" id="resume-add-panel" aria-labelledby="resume-add-title">
+            <div class="section-heading">
+              <div>
+                <p id="resume-add-step" class="step-label">Add a resume</p>
+                <h2 id="resume-add-title">Import your resume</h2>
+              </div>
+              <button id="resume-add-cancel" class="button button--quiet" type="button" hidden>Cancel new version</button>
+            </div>
+
+            <div class="tab-row" role="tablist" aria-label="Import source">
+              <button id="resume-tab-latex" type="button" role="tab" aria-selected="true" aria-controls="resume-panel-latex">Paste LaTeX</button>
+              <button id="resume-tab-pdf" type="button" role="tab" aria-selected="false" aria-controls="resume-panel-pdf" tabindex="-1">Upload PDF</button>
+            </div>
+
+            <form id="resume-add-form" novalidate>
+              <div id="resume-panel-latex" role="tabpanel" aria-labelledby="resume-tab-latex">
+                <label class="sr-only" for="resume-latex-input">Resume LaTeX source</label>
+                <div class="textarea-wrap">
+                  <textarea
+                    id="resume-latex-input"
+                    class="composer-textarea composer-textarea--mono"
+                    minlength="40"
+                    maxlength="200000"
+                    spellcheck="false"
+                    aria-describedby="resume-latex-help resume-latex-count"
+                    placeholder="Paste your full resume .tex source here…"
+                  ></textarea>
+                  <div class="textarea-meta">
+                    <p id="resume-latex-help">Your own document, including contact details. Minimum 40 characters.</p>
+                    <output id="resume-latex-count" for="resume-latex-input" aria-label="LaTeX length">0 / 200,000</output>
+                  </div>
+                </div>
+              </div>
+
+              <div id="resume-panel-pdf" role="tabpanel" aria-labelledby="resume-tab-pdf" hidden>
+                <div id="pdf-dropzone" class="dropzone">
+                  <input id="pdf-file-input" class="sr-only" type="file" accept="application/pdf,.pdf" aria-describedby="pdf-dropzone-help">
+                  <p class="dropzone-title"><strong>Drag &amp; drop a PDF here</strong></p>
+                  <button id="pdf-browse-button" class="button button--secondary" type="button">Choose a file</button>
+                  <p id="pdf-dropzone-help" class="field-note">Up to 10 MB. Text-based PDFs only — scanned images won’t work.</p>
+                  <p id="pdf-file-chip" class="file-chip file-chip--selected" hidden>
+                    <span id="pdf-file-name"></span>
+                    <button id="pdf-file-clear" class="chip-clear" type="button" aria-label="Remove selected file">×</button>
+                  </p>
+                </div>
+              </div>
+
+              <div class="setup-grid resume-add-grid">
+                <div class="field" id="resume-name-field">
+                  <label for="resume-name-input">Resume name <span class="optional-tag">optional</span></label>
+                  <input id="resume-name-input" type="text" maxlength="120" placeholder="e.g. Backend-focused">
+                </div>
+                <div class="field">
+                  <label for="resume-provider-select">AI provider</label>
+                  <select id="resume-provider-select"></select>
+                  <p id="resume-provider-note" class="field-note" hidden>No provider keys yet — <a href="#/settings">add one in Settings</a>, or pick mock for an offline dry run.</p>
+                </div>
+                <div class="field">
+                  <label for="resume-model-input">Model override <span class="optional-tag">optional</span></label>
+                  <input id="resume-model-input" type="text" maxlength="200" spellcheck="false" placeholder="Provider default">
+                </div>
+              </div>
+
+              <section id="resume-add-error" class="notice notice--error" role="alert" tabindex="-1" hidden>
+                <span class="notice-icon" aria-hidden="true">!</span>
                 <div>
-                  <p class="step-label">Step 04 · Preview</p>
-                  <h3 id="preview-title">Compiled PDF</h3>
+                  <h3>We couldn’t import that resume</h3>
+                  <p id="resume-add-error-message"></p>
                 </div>
-                <span id="preview-filename" class="file-chip">tailored-resume.pdf</span>
-              </div>
-              <div class="pdf-frame-wrap">
-                <iframe id="pdf-preview" title="Tailored resume PDF preview" referrerpolicy="no-referrer"></iframe>
-                <div id="preview-empty" class="preview-empty" hidden>
-                  <span aria-hidden="true">PDF</span>
-                  <h4>Preview unavailable</h4>
-                  <p>The source is ready, but no compiled PDF was returned.</p>
+              </section>
+
+              <section id="resume-add-warnings" class="notice notice--warning" hidden>
+                <span class="notice-icon" aria-hidden="true">!</span>
+                <div>
+                  <h3>Imported with warnings</h3>
+                  <ul id="resume-add-warnings-list"></ul>
+                </div>
+              </section>
+
+              <div class="form-footer">
+                <p class="privacy-note">
+                  <span aria-hidden="true">✓</span>
+                  Import sends your document to your chosen AI provider once, to extract it. Tailoring never sends contact details.
+                </p>
+                <div class="form-actions">
+                  <button id="resume-add-button" class="button button--primary" type="submit">
+                    <span class="button-label">Import resume</span>
+                    <span class="button-arrow" aria-hidden="true">↗</span>
+                    <span class="button-spinner" aria-hidden="true"></span>
+                  </button>
                 </div>
               </div>
-              <p class="preview-help">If your browser cannot display the preview, use Download PDF above.</p>
+            </form>
+          </section>
+
+          <section class="list-section" aria-labelledby="resumes-list-title">
+            <div class="list-header">
+              <h2 id="resumes-list-title">Saved resumes</h2>
+              <span id="resumes-count" class="count-badge">0</span>
+            </div>
+            <p id="resumes-loading" class="list-status" role="status" hidden>Loading your resumes…</p>
+            <section id="resumes-error" class="notice notice--error notice--compact" hidden>
+              <span class="notice-icon" aria-hidden="true">!</span>
+              <p>
+                <span id="resumes-error-message"></span>
+                <button id="resumes-retry" class="button button--secondary button--small" type="button">Retry</button>
+              </p>
+            </section>
+            <div id="resumes-empty" class="empty-state" hidden>
+              <strong>No resumes yet</strong>
+              <span>Import your first resume above — paste LaTeX or upload a PDF.</span>
+            </div>
+            <div id="resumes-list" class="card-list"></div>
+          </section>
+        </section>
+
+        <!-- ============================== JDS ============================== -->
+        <section id="view-jds" class="view" aria-labelledby="jds-title" hidden>
+          <header class="view-header">
+            <div>
+              <p class="eyebrow">Library</p>
+              <h1 id="jds-title" class="view-title" tabindex="-1">Job descriptions</h1>
+            </div>
+            <p class="view-note">Save the roles you care about. Editing a JD keeps its full version history.</p>
+          </header>
+
+          <section class="composer-card" aria-labelledby="jd-create-title">
+            <div class="section-heading">
+              <div>
+                <p class="step-label">New JD</p>
+                <h2 id="jd-create-title">Save a job description</h2>
+              </div>
+            </div>
+            <form id="jd-form" novalidate>
+              <div class="field jd-title-field">
+                <label for="jd-title-input">Title</label>
+                <input id="jd-title-input" type="text" maxlength="160" placeholder="e.g. Senior Backend Engineer — Acme">
+              </div>
+              <label class="sr-only" for="jd-content-input">Job description content</label>
+              <div class="textarea-wrap">
+                <textarea
+                  id="jd-content-input"
+                  class="composer-textarea composer-textarea--short"
+                  minlength="50"
+                  maxlength="20000"
+                  spellcheck="true"
+                  aria-describedby="jd-content-help jd-content-count"
+                  placeholder="Paste the full posting here…"
+                ></textarea>
+                <div class="textarea-meta">
+                  <p id="jd-content-help">Minimum 50 characters</p>
+                  <output id="jd-content-count" for="jd-content-input" aria-label="Character count">0 / 20,000</output>
+                </div>
+              </div>
+              <section id="jd-form-error" class="notice notice--error notice--compact" role="alert" tabindex="-1" hidden>
+                <span class="notice-icon" aria-hidden="true">!</span>
+                <p id="jd-form-error-message"></p>
+              </section>
+              <div class="form-footer">
+                <p class="privacy-note">
+                  <span aria-hidden="true">✓</span>
+                  JDs are treated as untrusted reference data — never as instructions.
+                </p>
+                <div class="form-actions">
+                  <button id="jd-create-button" class="button button--primary" type="submit">
+                    <span class="button-label">Save JD</span>
+                    <span class="button-arrow" aria-hidden="true">↗</span>
+                    <span class="button-spinner" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </section>
+
+          <section class="list-section" aria-labelledby="jds-list-title">
+            <div class="list-header">
+              <h2 id="jds-list-title">Saved JDs</h2>
+              <span id="jds-count" class="count-badge">0</span>
+            </div>
+            <p id="jds-loading" class="list-status" role="status" hidden>Loading your job descriptions…</p>
+            <section id="jds-error" class="notice notice--error notice--compact" hidden>
+              <span class="notice-icon" aria-hidden="true">!</span>
+              <p>
+                <span id="jds-error-message"></span>
+                <button id="jds-retry" class="button button--secondary button--small" type="button">Retry</button>
+              </p>
+            </section>
+            <div id="jds-empty" class="empty-state" hidden>
+              <strong>No saved JDs yet</strong>
+              <span>Save a job description above to reuse it across tailor runs.</span>
+            </div>
+            <div id="jds-list" class="card-list"></div>
+          </section>
+        </section>
+
+        <!-- ============================== HISTORY ============================== -->
+        <section id="view-history" class="view" aria-labelledby="history-title" hidden>
+          <header class="view-header">
+            <div>
+              <p class="eyebrow">Archive</p>
+              <h1 id="history-title" class="view-title" tabindex="-1">Tailor history</h1>
+            </div>
+            <p class="view-note">Every tailor run is saved with its changes and diff. PDFs are re-compiled on demand.</p>
+          </header>
+
+          <div id="history-list-wrap">
+            <p id="history-loading" class="list-status" role="status" hidden>Loading your history…</p>
+            <section id="history-error" class="notice notice--error notice--compact" hidden>
+              <span class="notice-icon" aria-hidden="true">!</span>
+              <p>
+                <span id="history-error-message"></span>
+                <button id="history-retry" class="button button--secondary button--small" type="button">Retry</button>
+              </p>
+            </section>
+            <div id="history-empty" class="empty-state" hidden>
+              <strong>No tailor runs yet</strong>
+              <span>Tailor a resume and the run will appear here for review and re-download.</span>
+            </div>
+            <div id="history-list" class="card-list"></div>
+          </div>
+
+          <section id="run-detail" class="results run-detail" aria-labelledby="run-detail-title" tabindex="-1" hidden>
+            <div class="results-header">
+              <div>
+                <p class="run-back-row"><button id="run-back-button" class="button button--quiet button--small" type="button">← All runs</button></p>
+                <h2 id="run-detail-title">Run details</h2>
+                <div id="run-detail-meta" class="result-meta" aria-label="Run details"></div>
+              </div>
+              <div class="result-actions">
+                <button id="run-compile-button" class="button button--primary" type="button">
+                  <span class="button-label">Compile PDF</span>
+                  <span class="button-spinner" aria-hidden="true"></span>
+                </button>
+                <a id="run-tex-download" class="button button--secondary" href="#" download hidden>Download .tex</a>
+                <button id="run-delete-button" class="button button--quiet button--danger-quiet" type="button">Delete run</button>
+              </div>
+            </div>
+
+            <p id="run-loading" class="list-status" role="status" hidden>Loading run…</p>
+
+            <section id="run-error" class="notice notice--error notice--compact" role="alert" tabindex="-1" hidden>
+              <span class="notice-icon" aria-hidden="true">!</span>
+              <p id="run-error-message"></p>
+            </section>
+
+            <section id="run-warnings" class="notice notice--warning" hidden>
+              <span class="notice-icon" aria-hidden="true">!</span>
+              <div>
+                <h3>Warnings from this run</h3>
+                <ul id="run-warnings-list"></ul>
+              </div>
+            </section>
+
+            <div id="run-detail-body" hidden>
+              <div class="review-grid">
+                <section class="review-panel diff-panel" aria-labelledby="run-changes-title">
+                  <div class="panel-header">
+                    <div>
+                      <p class="step-label">Review</p>
+                      <h3 id="run-changes-title">Suggested changes</h3>
+                    </div>
+                    <span id="run-change-count" class="count-badge">0 changes</span>
+                  </div>
+                  <p class="panel-intro">The exact change set from this run — original wording on top, tailored below.</p>
+                  <div id="run-changes-list" class="changes-list"></div>
+                </section>
+
+                <section class="review-panel preview-panel" aria-labelledby="run-preview-title">
+                  <div class="panel-header preview-header">
+                    <div>
+                      <p class="step-label">Preview</p>
+                      <h3 id="run-preview-title">Compiled PDF</h3>
+                    </div>
+                    <a id="run-pdf-download" class="button button--secondary button--small" href="#" download hidden>Download PDF</a>
+                  </div>
+                  <div class="pdf-frame-wrap">
+                    <iframe id="run-pdf-preview" title="Recompiled resume PDF preview" referrerpolicy="no-referrer" hidden></iframe>
+                    <div id="run-pdf-empty" class="preview-empty">
+                      <span aria-hidden="true">PDF</span>
+                      <h4>Not compiled yet</h4>
+                      <p>PDFs aren’t stored. Use “Compile PDF” to rebuild this run’s output from its saved source.</p>
+                    </div>
+                  </div>
+                  <p class="preview-help">Recompiling uses the stored LaTeX only — no AI call is made.</p>
+                </section>
+              </div>
+
+              <section class="diff-section" aria-labelledby="run-diff-title">
+                <div class="panel-header">
+                  <div>
+                    <p class="step-label">Source</p>
+                    <h3 id="run-diff-title">Unified diff</h3>
+                  </div>
+                </div>
+                <pre id="run-diff" class="diff-pre" tabindex="0" aria-label="Unified diff of the tailored resume"></pre>
+              </section>
+            </div>
+          </section>
+        </section>
+
+        <!-- ============================== SETTINGS ============================== -->
+        <section id="view-settings" class="view" aria-labelledby="settings-title" hidden>
+          <header class="view-header">
+            <div>
+              <p class="eyebrow">Account</p>
+              <h1 id="settings-title" class="view-title" tabindex="-1">Settings</h1>
+            </div>
+            <p class="view-note">Provider keys, tailoring defaults, and account controls.</p>
+          </header>
+
+          <p id="settings-loading" class="list-status" role="status" hidden>Loading settings…</p>
+          <section id="settings-error" class="notice notice--error notice--compact" hidden>
+            <span class="notice-icon" aria-hidden="true">!</span>
+            <p>
+              <span id="settings-error-message"></span>
+              <button id="settings-retry" class="button button--secondary button--small" type="button">Retry</button>
+            </p>
+          </section>
+
+          <div id="settings-body" hidden>
+            <section class="composer-card settings-card" aria-labelledby="keys-title">
+              <div class="section-heading">
+                <div>
+                  <p class="step-label">API keys</p>
+                  <h2 id="keys-title">Provider keys</h2>
+                </div>
+                <p class="section-note">Keys are encrypted at rest on the server and never shown again — only a masked hint.</p>
+              </div>
+              <div id="keys-list" class="keys-list"></div>
+            </section>
+
+            <section class="composer-card settings-card" aria-labelledby="defaults-title">
+              <div class="section-heading">
+                <div>
+                  <p class="step-label">Defaults</p>
+                  <h2 id="defaults-title">Tailoring defaults</h2>
+                </div>
+                <p class="section-note">Used when you don’t pick a provider or model on the Tailor page.</p>
+              </div>
+              <form id="defaults-form" novalidate>
+                <div class="setup-grid setup-grid--two">
+                  <div class="field">
+                    <label for="default-provider-select">Default provider</label>
+                    <select id="default-provider-select"></select>
+                  </div>
+                  <div class="field">
+                    <label for="default-model-input">Default model <span class="optional-tag">optional</span></label>
+                    <input id="default-model-input" type="text" maxlength="200" spellcheck="false" placeholder="Provider default">
+                  </div>
+                </div>
+                <section id="defaults-error" class="notice notice--error notice--compact" role="alert" tabindex="-1" hidden>
+                  <span class="notice-icon" aria-hidden="true">!</span>
+                  <p id="defaults-error-message"></p>
+                </section>
+                <div class="form-actions form-actions--end">
+                  <button id="defaults-save-button" class="button button--primary" type="submit">
+                    <span class="button-label">Save defaults</span>
+                    <span class="button-spinner" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </form>
+            </section>
+
+            <section class="composer-card settings-card" aria-labelledby="account-title">
+              <div class="section-heading">
+                <div>
+                  <p class="step-label">Account</p>
+                  <h2 id="account-title">Your account</h2>
+                </div>
+              </div>
+              <form id="account-form" novalidate>
+                <div class="setup-grid setup-grid--two">
+                  <div class="field">
+                    <label for="account-email">Email</label>
+                    <input id="account-email" type="email" readonly>
+                  </div>
+                  <div class="field">
+                    <label for="account-name-input">Name</label>
+                    <input id="account-name-input" type="text" maxlength="120" autocomplete="name">
+                  </div>
+                </div>
+                <section id="account-error" class="notice notice--error notice--compact" role="alert" tabindex="-1" hidden>
+                  <span class="notice-icon" aria-hidden="true">!</span>
+                  <p id="account-error-message"></p>
+                </section>
+                <div class="form-actions form-actions--end">
+                  <button id="settings-logout-button" class="button button--quiet" type="button">Log out</button>
+                  <button id="account-save-button" class="button button--primary" type="submit">
+                    <span class="button-label">Save account</span>
+                    <span class="button-spinner" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </form>
+            </section>
+
+            <section class="composer-card settings-card danger-card" aria-labelledby="danger-title">
+              <div class="section-heading">
+                <div>
+                  <p class="step-label">Danger zone</p>
+                  <h2 id="danger-title">Delete account</h2>
+                </div>
+              </div>
+              <p class="danger-copy">Permanently removes your account, resumes, job descriptions, tailor history, and stored keys. This cannot be undone.</p>
+              <button id="delete-account-button" class="button button--danger" type="button">Delete account…</button>
             </section>
           </div>
         </section>
@@ -229,8 +750,47 @@
 
       <footer class="site-footer">
         <p>Built for focused, truthful tailoring.</p>
-        <p>No API keys are stored in this browser.</p>
+        <p>API keys are encrypted at rest on the server — your browser only sends them once.</p>
       </footer>
     </div>
+
+    <!-- Generic confirm modal -->
+    <div id="confirm-modal" class="modal-backdrop" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title" aria-describedby="confirm-modal-message">
+        <h2 id="confirm-modal-title">Are you sure?</h2>
+        <p id="confirm-modal-message"></p>
+        <div class="modal-actions">
+          <button id="confirm-modal-cancel" class="button button--quiet" type="button">Cancel</button>
+          <button id="confirm-modal-confirm" class="button button--danger" type="button">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete-account modal (password confirm) -->
+    <div id="delete-account-modal" class="modal-backdrop" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-account-title">
+        <h2 id="delete-account-title">Delete your account?</h2>
+        <p>This permanently removes your resumes, job descriptions, tailor history, and stored keys. Enter your password to confirm.</p>
+        <form id="delete-account-form" novalidate>
+          <div class="field">
+            <label for="delete-password-input">Password</label>
+            <input id="delete-password-input" type="password" autocomplete="current-password">
+          </div>
+          <section id="delete-account-error" class="notice notice--error notice--compact" role="alert" tabindex="-1" hidden>
+            <span class="notice-icon" aria-hidden="true">!</span>
+            <p id="delete-account-error-message"></p>
+          </section>
+          <div class="modal-actions">
+            <button id="delete-account-cancel" class="button button--quiet" type="button">Cancel</button>
+            <button id="delete-account-confirm" class="button button--danger" type="submit">
+              <span class="button-label">Delete my account</span>
+              <span class="button-spinner" aria-hidden="true"></span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="toast-region" class="toast-region" aria-live="polite"></div>
   </body>
 </html>

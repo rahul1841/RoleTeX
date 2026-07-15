@@ -15,24 +15,32 @@ Request (`TailorRequest`):
 
 | Field | Type | Constraints |
 |---|---|---|
-| `job_description` | str | required, 50–20,000 chars |
-| `provider` / `model` | str? | optional per-request override |
+| `job_description` | str? | 50–20,000 chars; exactly one of this / `jd_id` (else 422 `jd_required`) |
+| `jd_id` | str? | id of a saved JD from the user's library (multi-user only) |
+| `provider` / `model` | str? | optional per-request override (multi-user: resolved against the user's stored keys) |
 | `compile` | bool | default `true`; `false` returns LaTeX preview only |
 | `require_one_page` | bool | default `true`; triggers shortening repair on overflow |
-| `resume_id` | str? | optional imported-profile id; omitted → seed resume |
+| `resume_id` | str? | required in multi-user mode (owned resume); omitted in demo mode → seed resume |
+| `save_run` | bool | default `true`; multi-user: persist the run into tailor history |
 
-Response (`TailorResponse`): `proposal` (the validated `TailorProposal`), `changes[]` (`{field_id, before, after}`), `unified_diff`, `latex_source`, `pdf_base64` (`pdf_data_url` exists in the schema but is always `null` — clients prepend the data-URL prefix themselves), `page_count`, `filename`, `provider`, `model`, `repaired`, `warnings[]`, `compiler` (`CompilerReport`: attempted/success/page_count/text_preview/warnings/log).
+Response (`TailorResponse`): `proposal` (the validated `TailorProposal`), `changes[]` (`{field_id, before, after}`), `unified_diff`, `latex_source`, `pdf_base64` (`pdf_data_url` exists in the schema but is always `null` — clients prepend the data-URL prefix themselves), `page_count`, `filename`, `provider`, `model`, `repaired`, `warnings[]`, `compiler` (`CompilerReport`: attempted/success/page_count/text_preview/warnings/log), `run_id` (multi-user, when the run was saved).
 
-### 1.2 `POST /api/import` → `ImportResponse`
+### 1.2 Resume import → `{resume: ResumeDetail, warnings[]}`
 
-Request: `latex` (40–200,000 chars), optional `provider`/`model`.
-Response: `id` (32-char UUID hex), `provider`, `model`, `style` (`ResumeStyle`), `resume` (full extracted `ResumeData`), `warnings[]` (always includes a review-your-import advisory).
+- `POST /api/resumes` — `latex` (40–200,000 chars), optional `name`/`provider`/`model`.
+- `POST /api/resumes/pdf` — multipart `file` (+ optional `name`/`provider`/`model`); poppler `pdftotext` → LLM extraction with `source_kind="text"`.
+- `POST /api/resumes/{id}/versions[/pdf]` — same bodies; bumps `current_version`.
+Both quota-checked (409 `resume_quota_exceeded` / `version_quota_exceeded`); warnings always include a review-your-import advisory.
 
-### 1.3 Other routes
+### 1.3 Other route groups
 
-- `GET /api/health` → `HealthResponse{status: ok|degraded, version, provider, model, resume_valid, compiler_available, checks{}}`. Health *renders a real baseline proposal* against the locked seed — it proves the render path, not just liveness.
-- `GET /api/resume/{id}` → `{id, resume}` wrapper around the stored `ResumeData` (404 on miss; hidden from OpenAPI).
-- Body-size middleware: declared `Content-Length` > 260KB (import) / 64KB (other `/api/*` writes) → 413. Non-integer `Content-Length` → 413.
+- Auth: `POST /api/auth/register|login|logout`, `GET/PATCH/DELETE /api/me` (session cookie `rt_session` or `Authorization: Bearer`).
+- Keys: `GET /api/providers` (public), `GET /api/keys` (masked hints only), `PUT/DELETE /api/keys/{provider}` (Fernet-encrypted at rest).
+- JDs: `GET/POST /api/jds`, `GET/PUT/DELETE /api/jds/{id}`, `GET /api/jds/{id}/versions` (edits archive the prior version).
+- Runs: `GET /api/runs`, `GET/DELETE /api/runs/{id}`, `POST /api/runs/{id}/compile` (recompile stored LaTeX, no LLM).
+- `GET /api/health` → `HealthResponse{status: ok|degraded, version, mode: demo|multi_user, provider, model, resume_valid, compiler_available, checks{}}`. When seed files exist, health *renders a real baseline proposal* against the locked seed — it proves the render path, not just liveness.
+- Body-size middleware: declared `Content-Length` > `MAX_PDF_UPLOAD_BYTES`+64KB (PDF uploads) / 260KB (LaTeX imports) / 64KB (other `/api/*` writes) → 413. Non-integer `Content-Length` → 413.
+- Demo mode (no `MONGODB_URI`): all DB-backed routes → 503 `database_not_configured`; only seed tailoring works.
 
 ## 2. LLM contract
 
@@ -93,14 +101,14 @@ At most **one** repair LLM call per request, spent on the first of:
 - **Identity:** rendered into `@@CONTACT@@` from locked data only — it never round-trips through the model.
 - **Diff:** `build_change_list` emits only material changes (`{field_id, before, after}`); `build_unified_diff` produces a reviewable text diff.
 
-## 5. Import design (`app/importer.py` + `app/storage.py`)
+## 5. Import design (`app/importer.py` + `app/db.py` + `app/pdftext.py`)
 
-Pipeline: `extract_resume` (LLM, JSON) → normalization → clamping → assembly → render-check → persist.
+Pipeline: (PDF only: bounded `pdftotext` extraction) → `extract_resume` (LLM, JSON) → normalization → clamping → assembly → render-check → persist.
 
 - **Normalization:** model-proposed IDs are discarded; the backend assigns deterministic positional IDs (stable across the profile's lifetime — see rules.md R-12).
 - **Style clamping (`ResumeStyle`):** paper → whitelist (default `a4paper`); font size → whitelist (default `10pt`); `margin_cm` → clamped 1.0–3.0 by the importer's `sanitize_style` (default 2.0; the schema's outer bound is 0.5–4.0); `accent_hex` → optional, exactly 6 hex chars. Nothing else from the paste influences the preamble.
-- **Template assembly:** a fully server-authored `template.tex` embedding only the clamped style values, with the same 7-token contract. The raw paste is stored as `source.tex` and **never compiled**.
-- **Storage layout:** `data/<uuid32>/{data.json, template.tex, source.tex, meta.json}`. UUIDs are canonicalized before path use (path-traversal defense). Writes are per-file atomic (temp + rename), though the 4-file create is not transactional (gap tracked in memory.md).
+- **Template assembly:** a fully server-authored template embedding only the clamped style values, with the same 7-token contract. The raw paste / extracted PDF text is stored as `source_text` and **never compiled**.
+- **Storage layout:** MongoDB `resumes` + `resume_versions` collections (`{data, template_tex, source_text, source_type, style, provider, model, ...}`), every query scoped by `user_id`; version numbers are monotonic and `current_version` tracks the latest.
 
 ## 6. Compiler design (`app/compiler.py`)
 
@@ -112,11 +120,11 @@ Pipeline: `extract_resume` (LLM, JSON) → normalization → clamping → assemb
 
 ## 7. Frontend design (`static/`)
 
-Vanilla JS SPA, no build step. Two panes: **Import** (paste LaTeX → profile chip persisted in `localStorage`) and **Tailor** (JD textarea → results).
+Vanilla JS SPA, no build step, hash-routed views: `#/auth`, `#/tailor`, `#/resumes`, `#/jds`, `#/history`, `#/settings`. Boot: `GET /api/health` → demo banner + seed tailor only, or `GET /api/me` → full authenticated app. No localStorage — sessions live in the HttpOnly cookie; API keys are sent once and stored encrypted server-side.
 
-- Results view: before/after diff cards (`<del>`/`<ins>`), embedded PDF `<iframe>` from a base64 object URL, PDF + `.tex` downloads.
-- Robustness: in-flight request abort + monotonic request versioning (stale responses dropped), object-URL revocation, status-specific error copy, reduced-motion support. Progress messages are canned/cosmetic, not backend-driven.
-- *Known gap: zero automated coverage; verified only by manual use.*
+- Results view: before/after diff cards (`<del>`/`<ins>`), embedded PDF `<iframe>` from a base64 object URL, PDF + `.tex` downloads, "Saved to history" chip.
+- Robustness: in-flight request abort + monotonic request versioning (stale responses dropped), object-URL revocation, status-specific error copy (error-code → friendly message map, `Retry-After` surfaced on 429), global 401 interceptor → `#/auth`, reduced-motion support. All server text rendered via `textContent` (no `innerHTML`).
+- *Known gap: zero automated coverage in the repo suite; verified by `node --check` plus a scripted DOM-stub smoke harness during development.*
 
 ## 8. Key design decisions & rationale
 
@@ -127,5 +135,5 @@ Vanilla JS SPA, no build step. Two panes: **Import** (paste LaTeX → profile ch
 | Single shared repair budget | Caps cost and attack surface; repair can't ping-pong |
 | Server-assembled import templates | Compiling user LaTeX safely would require full sandbox hardening; clamped style hints capture most visual identity at ~zero risk |
 | Mock provider excluded from compile-repair | Its output is deterministic; a repair round-trip is pure waste |
-| No database | Single-container target (HF Space); filesystem profiles suffice at this scale |
+| MongoDB (Motor) with a demo fallback | Multi-user accounts/libraries need a real store; the app still boots without `MONGODB_URI` in a degraded seed-only demo mode |
 | Web-only (no CLI from plan Phase 1) | The API + SPA subsumed the CLI's purpose; folded into Phase 2 |

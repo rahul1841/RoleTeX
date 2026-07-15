@@ -14,10 +14,12 @@ Browser (static/ vanilla JS SPA)
         ▼
 FastAPI app  (app/main.py — create_app() factory, DI-friendly)
         │
-        ├── ResumeRepository (app/resume.py) ── resume/data.json + resume/template.tex (locked seed)
-        ├── UserResumeStore  (app/storage.py) ── data/<uuid>/ per-user profiles (PII, git-ignored)
-        ├── LLM adapter      (app/llm.py)     ── OpenAI-compatible chat completions (7 providers + mock)
+        ├── ResumeRepository (app/resume.py) ── resume/data.json + resume/template.tex (locked seed, demo mode)
+        ├── Database         (app/db.py)     ── MongoDB (Motor): users, sessions, api_keys, resumes(+versions), jds(+versions), runs
+        ├── Security         (app/security.py)── PBKDF2 passwords, session tokens, Fernet key encryption, rate/login limiting, origin checks
+        ├── LLM adapter      (app/llm.py)     ── OpenAI-compatible chat completions (8 providers + mock, per-user key overrides)
         ├── Importer         (app/importer.py)── extraction normalization + template assembly
+        ├── PDF text         (app/pdftext.py) ── bounded poppler pdftotext extraction for PDF imports
         └── CompileService   (app/compiler.py)── Tectonic in a per-request sandbox + poppler checks
 ```
 
@@ -30,30 +32,40 @@ FastAPI app  (app/main.py — create_app() factory, DI-friendly)
 | `app/resume.py` | Load/validate locked resume data; `build_llm_resume_payload` (identity excluded); `validate_proposal` (safety contract); `escape_latex`; `redact_identity`; deterministic token rendering incl. `sectioned=True` mode; change list + unified diff |
 | `app/compiler.py` | `CompileService`: unique temp dir per compile, `tectonic -X compile --untrusted [--only-cached]`, timeout + POSIX rlimits, per-event-loop `asyncio.Semaphore`, `pdfinfo` page count, `pdftotext` extraction, log sanitization |
 | `app/importer.py` | Normalize LLM extraction into `ResumeData` (backend-assigned positional stable IDs), clamp style hints to whitelists, assemble a fully server-controlled `template.tex` |
-| `app/storage.py` | `UserResumeStore`: UUID-keyed profiles under `data/<uuid>/`, UUID canonicalization (path-traversal defense), per-file atomic writes |
+| `app/config.py` | `AppConfig` dataclass; `load_config()` reads env with clamped, documented bounds |
+| `app/security.py` | Password hashing (PBKDF2-HMAC-SHA256), session token issue/hash, Fernet secret encryption + key hints, `RateLimiter`/`LoginThrottle`, CSRF origin check |
+| `app/db.py` | `Database` wrapper over Motor with per-collection stores; every query is `user_id`-scoped (ownership enforced at the query level) |
+| `app/auth.py` | Session dependency (`require_user`), auth routes, provider/key resolution for user LLM requests |
+| `app/pdftext.py` | Bounded `pdftotext` subprocess extraction (`%PDF-` magic check, size/timeout caps, no shell) |
+| `app/routes_keys.py` / `routes_resumes.py` / `routes_jds.py` / `routes_runs.py` | Route groups for per-user API keys, resume library, JD library, and tailor-run history |
 | `app/schemas.py` | All Pydantic models (`StrictModel` base, `extra="forbid"`), Pydantic v1/v2 compatibility helpers (`validate_model`, `dump_model`) |
-| `static/` | Vanilla JS SPA: import pane, JD textarea, diff cards, PDF iframe preview, downloads, `localStorage` profile id, abort + request versioning |
+| `static/` | Vanilla JS SPA: hash routing (auth/tailor/resumes/jds/history/settings), diff cards, PDF iframe preview, downloads, abort + request versioning; no localStorage |
 | `resume/` | Seed: `data.json` (facts + stable IDs), `template.tex` (locked, 7 tokens), `assets/` (approved files; currently empty) |
-| `tests/` | 87 offline tests; stub LLM + mocked compiler subprocess via `create_app` dependency injection |
+| `tests/` | 244 offline tests; stub LLM, mocked compiler subprocess, and mongomock-motor database via `create_app` dependency injection |
 
 ## 3. HTTP surface
 
 | Route | Purpose |
 |---|---|
-| `GET /api/health` | Renders a baseline proposal against the locked seed, checks compiler availability + `only_cached`, resolves LLM config → `ok` / `degraded` |
-| `POST /api/tailor` | Core pipeline (below). Optional `resume_id` selects an imported profile |
-| `POST /api/import` | LLM extraction → normalization → style clamp → template assembly → render-check → persist profile |
-| `GET /api/resume/{id}` | Fetch stored profile (hidden from OpenAPI schema) |
+| `GET /api/health` | Mode (`demo`/`multi_user`), compiler/database/secret-key/pdftotext checks, seed render check when seed files exist → `ok` / `degraded` |
+| `POST /api/tailor` | Core pipeline (below). Multi-user: auth + owned `resume_id` (+ optional `jd_id`), run persisted to history. Demo: seed resume, env LLM config |
+| `POST /api/auth/register` / `login` / `logout`, `GET/PATCH/DELETE /api/me` | Accounts and sessions (HttpOnly `rt_session` cookie or `Authorization: Bearer`) |
+| `GET /api/providers`, `GET /api/keys`, `PUT/DELETE /api/keys/{provider}` | Per-user provider keys, Fernet-encrypted at rest, masked hint only in responses |
+| `GET/POST /api/resumes`, `POST /api/resumes/pdf`, `GET/PATCH/DELETE /api/resumes/{id}`, `.../versions[/pdf]`, `.../versions/{n}/source` | Resume library: LaTeX paste or PDF upload → LLM extraction → versioned storage |
+| `GET/POST /api/jds`, `GET/PUT/DELETE /api/jds/{id}`, `.../versions` | JD library with version history |
+| `GET /api/runs`, `GET/DELETE /api/runs/{id}`, `POST /api/runs/{id}/compile` | Tailor history; on-demand recompile of stored LaTeX (no LLM) |
 | `GET /` + `/static` | Serve the SPA (inline HTML fallback if `static/index.html` is missing) |
 
-Middleware: POST/PUT/PATCH to `/api/*` are rejected with 413 when the declared `Content-Length` exceeds 260KB (`/api/import`) or 64KB (other API routes). *Known gap: a request omitting `Content-Length` (chunked) bypasses this guard.*
+Middleware (one combined handler): declared-`Content-Length` body-size guard (PDF uploads `MAX_PDF_UPLOAD_BYTES`+64KB, LaTeX import routes 260KB, other `/api/*` 64KB) → CSRF origin check for cookie-authenticated state-changing requests → sliding-window rate limiting (LLM bucket for tailor/imports/recompile, general bucket for other authed calls; keyed by user id, `Retry-After` on 429). *Known gap: a request omitting `Content-Length` (chunked) bypasses the size guard.*
 
 ## 4. Tailor request flow
 
 ```text
-TailorRequest ──► _load_resume_source
-                    │  resume_id? → UserResumeStore (sectioned=True)
-                    │  none?      → ResumeRepository seed (sectioned=False)
+TailorRequest ──► resume source
+                    │  multi-user → require_user + owned resume from Mongo
+                    │               (current version, sectioned=True);
+                    │               jd_id → owned JD content; provider/key per user
+                    │  demo mode  → ResumeRepository seed (sectioned=False), env config
                     ▼
              build_llm_resume_payload      ← identity stripped here
                     ▼
@@ -75,7 +87,10 @@ TailorRequest ──► _load_resume_source
                     │               and never for the mock provider)
                     ▼
              TailorResponse: proposal, changes, unified_diff, latex_source,
-                             pdf_base64, page_count, compiler report
+                             pdf_base64, page_count, compiler report, run_id
+                    ▼
+             multi-user + save_run → RunStore.create (capped latex/diff,
+                             JD excerpt, no PDF bytes; oldest runs pruned)
 ```
 
 The **single repair budget** is the key orchestration invariant: at most one LLM repair per request, whether spent on semantic validation, compile failure, or page overflow.
@@ -83,19 +98,24 @@ The **single repair budget** is the key orchestration invariant: at most one LLM
 ## 5. Import request flow
 
 ```text
-ImportRequest.latex ──► llm.extract_resume  (FULL paste incl. identity — deliberate,
-                    │                        import-only exception; see rules.md R-2)
-                    ▼
-             importer normalization: model IDs discarded → backend positional IDs
-             style clamped: paper/font size whitelists, margin 1.0–3.0cm
-                            (schema outer bound 0.5–4.0), accent 6-hex
-                    ▼
-             server-assembled template.tex (only clamped style values vary;
-             raw user LaTeX is NEVER compiled)
-                    ▼
-             render-check (sectioned) → UserResumeStore.create
-                    ▼
-             data/<uuid>/{data.json, template.tex, source.tex, meta.json}
+POST /api/resumes (latex)          POST /api/resumes/pdf (multipart)
+        │                                  │ magic/size checks →
+        │                                  │ pdftext.extract_pdf_text (bounded subprocess)
+        ▼                                  ▼
+   llm.extract_resume(source_kind="latex"|"text")
+        (FULL document incl. identity — deliberate, import-only
+         exception; see rules.md R-2)
+        ▼
+   importer normalization: model IDs discarded → backend positional IDs
+   style clamped: paper/font size whitelists, margin 1.0–3.0cm
+                  (schema outer bound 0.5–4.0), accent 6-hex
+        ▼
+   server-assembled template.tex (only clamped style values vary;
+   raw user LaTeX / PDF text is NEVER compiled)
+        ▼
+   render-check (sectioned) → ResumeStore.create / add_version (quota-checked)
+        ▼
+   Mongo: resumes + resume_versions {data, template_tex, source_text, style, ...}
 ```
 
 ## 6. Trust boundaries & threat model
