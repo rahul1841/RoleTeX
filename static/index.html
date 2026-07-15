@@ -38,16 +38,69 @@
           </p>
 
           <ol class="process" aria-label="How it works">
-            <li><span>01</span>Paste the role</li>
-            <li><span>02</span>Review the edits</li>
-            <li><span>03</span>Download the PDF</li>
+            <li><span>01</span>Import your resume</li>
+            <li><span>02</span>Paste the role</li>
+            <li><span>03</span>Review the edits</li>
+            <li><span>04</span>Download the PDF</li>
           </ol>
+        </section>
+
+        <section class="composer-card" id="import-card" aria-labelledby="import-title">
+          <div class="section-heading">
+            <div>
+              <p class="step-label">Step 01 · Your resume</p>
+              <h2 id="import-title">Import your LaTeX resume</h2>
+            </div>
+            <p class="section-note">Paste your resume's LaTeX once. We extract it into your private profile.</p>
+          </div>
+
+          <form id="import-form" novalidate>
+            <label class="sr-only" for="latex-input">Resume LaTeX source</label>
+            <div class="textarea-wrap">
+              <textarea
+                id="latex-input"
+                name="latex"
+                minlength="40"
+                maxlength="200000"
+                spellcheck="false"
+                aria-describedby="import-help latex-count"
+                placeholder="Paste your full resume .tex source here…"
+              ></textarea>
+              <div class="textarea-meta">
+                <p id="import-help">Your contact details are used only to build your resume. Minimum 40 characters.</p>
+                <output id="latex-count" for="latex-input" aria-label="LaTeX length">0 / 200,000</output>
+              </div>
+            </div>
+
+            <section id="import-error" class="notice notice--error" role="alert" tabindex="-1" hidden>
+              <span class="notice-icon" aria-hidden="true">!</span>
+              <div>
+                <h3>We couldn’t import that resume</h3>
+                <p id="import-error-message"></p>
+              </div>
+            </section>
+
+            <div class="form-footer">
+              <p class="privacy-note profile-status" id="profile-status">
+                <span class="status-dot" aria-hidden="true"></span>
+                <span id="profile-status-text">No resume imported yet — the sample resume will be used.</span>
+              </p>
+              <div class="form-actions">
+                <button id="clear-profile-button" class="button button--quiet" type="button" hidden>Use sample</button>
+                <button id="import-button" class="button button--primary" type="submit">
+                  <span class="button-label">Import resume</span>
+                  <span class="button-arrow" aria-hidden="true">↗</span>
+                  <span class="button-spinner" aria-hidden="true"></span>
+                </button>
+              </div>
+            </div>
+          </form>
         </section>
 
         <section class="composer-card" aria-labelledby="composer-title">
           <div class="section-heading">
             <div>
-              <p class="step-label">Step 01 · The role</p>
+              <p class="step-label">Step 02 · The role</p>
               <h2 id="composer-title">Paste the job description</h2>
             </div>
             <p class="section-note">Use the complete posting for a more accurate result.</p>
@@ -143,7 +196,7 @@
             <section class="review-panel diff-panel" aria-labelledby="changes-title">
               <div class="panel-header">
                 <div>
-                  <p class="step-label">Step 02 · Review</p>
+                  <p class="step-label">Step 03 · Review</p>
                   <h3 id="changes-title">Suggested changes</h3>
                 </div>
                 <span id="change-count" class="count-badge">0 changes</span>
@@ -155,7 +208,7 @@
             <section class="review-panel preview-panel" aria-labelledby="preview-title">
               <div class="panel-header preview-header">
                 <div>
-                  <p class="step-label">Step 03 · Preview</p>
+                  <p class="step-label">Step 04 · Preview</p>
                   <h3 id="preview-title">Compiled PDF</h3>
                 </div>
                 <span id="preview-filename" class="file-chip">tailored-resume.pdf</span>

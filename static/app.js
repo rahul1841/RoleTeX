@@ -2,7 +2,20 @@
   "use strict";
 
   const API_ENDPOINT = "/api/tailor";
+  const IMPORT_ENDPOINT = "/api/import";
   const REQUEST_TIMEOUT_MS = 180_000;
+  const RESUME_ID_KEY = "jd_resume_id";
+  const RESUME_NAME_KEY = "jd_resume_name";
+
+  const importForm = document.getElementById("import-form");
+  const latexInput = document.getElementById("latex-input");
+  const latexCount = document.getElementById("latex-count");
+  const importButton = document.getElementById("import-button");
+  const importLabel = importButton.querySelector(".button-label");
+  const importError = document.getElementById("import-error");
+  const importErrorMessage = document.getElementById("import-error-message");
+  const profileStatusText = document.getElementById("profile-status-text");
+  const clearProfileButton = document.getElementById("clear-profile-button");
 
   const form = document.getElementById("tailor-form");
   const jobDescription = document.getElementById("job-description");
@@ -59,6 +72,169 @@
     const length = jobDescription.value.length;
     characterCount.textContent = `${numberFormat.format(length)} / ${numberFormat.format(maximumCharacters)}`;
     characterCount.classList.toggle("is-near-limit", length >= maximumCharacters * 0.9);
+  }
+
+  const maximumLatex = Number(latexInput.maxLength) || 200_000;
+  const minimumLatex = Number(latexInput.minLength) || 40;
+
+  function getStored(key) {
+    try {
+      return window.localStorage.getItem(key) || "";
+    } catch (_error) {
+      return "";
+    }
+  }
+
+  function setStored(key, value) {
+    try {
+      if (value) {
+        window.localStorage.setItem(key, value);
+      } else {
+        window.localStorage.removeItem(key);
+      }
+    } catch (_error) {
+      /* Storage may be unavailable (private mode); the id simply won't persist. */
+    }
+  }
+
+  function updateLatexCount() {
+    const length = latexInput.value.length;
+    latexCount.textContent = `${numberFormat.format(length)} / ${numberFormat.format(maximumLatex)}`;
+    latexCount.classList.toggle("is-near-limit", length >= maximumLatex * 0.9);
+  }
+
+  function updateProfileStatus() {
+    const resumeId = getStored(RESUME_ID_KEY);
+    const name = getStored(RESUME_NAME_KEY);
+    if (resumeId) {
+      profileStatusText.textContent = name
+        ? `Tailoring ${name}’s imported resume.`
+        : "Tailoring your imported resume.";
+      clearProfileButton.hidden = false;
+    } else {
+      profileStatusText.textContent = "No resume imported yet — the sample resume will be used.";
+      clearProfileButton.hidden = true;
+    }
+  }
+
+  function clearImportError() {
+    importError.hidden = true;
+    importErrorMessage.textContent = "";
+  }
+
+  function showImportError(message) {
+    importErrorMessage.textContent = message;
+    importError.hidden = false;
+    importError.focus({ preventScroll: true });
+    importError.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "center" });
+  }
+
+  function setImporting(isImporting) {
+    importButton.disabled = isImporting;
+    latexInput.disabled = isImporting;
+    importForm.setAttribute("aria-busy", String(isImporting));
+    importForm.classList.toggle("is-loading", isImporting);
+    importLabel.textContent = isImporting ? "Importing…" : "Import resume";
+  }
+
+  async function handleImport(event) {
+    event.preventDefault();
+    clearImportError();
+
+    const latex = latexInput.value.trim();
+    if (latex.length < minimumLatex) {
+      showImportError(`Paste your resume LaTeX first — at least ${minimumLatex} characters.`);
+      latexInput.focus();
+      return;
+    }
+    if (latex.length > maximumLatex) {
+      showImportError(`That LaTeX is too long. Trim it to ${numberFormat.format(maximumLatex)} characters or fewer.`);
+      return;
+    }
+
+    const controller = new AbortController();
+    let didTimeOut = false;
+    const timeout = window.setTimeout(() => {
+      didTimeOut = true;
+      controller.abort();
+    }, REQUEST_TIMEOUT_MS);
+    setImporting(true);
+
+    try {
+      const response = await fetch(IMPORT_ENDPOINT, {
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({ latex }),
+        signal: controller.signal,
+      });
+      const payload = await parseResponse(response);
+      if (!response.ok) {
+        throw new ApiError(errorFromPayload(payload, response.status), response.status);
+      }
+
+      const id = readableValue(payload.id).trim();
+      if (!id) {
+        throw new ApiError("The import did not return a profile id. Please try again.");
+      }
+      const name = payload.resume && payload.resume.identity
+        ? readableValue(payload.resume.identity.name).trim()
+        : "";
+      setStored(RESUME_ID_KEY, id);
+      setStored(RESUME_NAME_KEY, name);
+      updateProfileStatus();
+      profileStatusText.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "center" });
+      jobDescription.focus({ preventScroll: true });
+    } catch (error) {
+      if (didTimeOut) {
+        showImportError("The import took longer than three minutes. The server may be waking up—please try once more.");
+      } else if (error instanceof ApiError) {
+        showImportError(error.message);
+      } else if (error && error.name === "AbortError") {
+        /* Superseded or navigated away; ignore. */
+      } else {
+        showImportError("Could not reach the server. Check your connection and try again.");
+      }
+    } finally {
+      window.clearTimeout(timeout);
+      setImporting(false);
+    }
+  }
+
+  function clearProfile() {
+    setStored(RESUME_ID_KEY, "");
+    setStored(RESUME_NAME_KEY, "");
+    updateProfileStatus();
+  }
+
+  async function verifyStoredProfile() {
+    const resumeId = getStored(RESUME_ID_KEY);
+    if (!resumeId) {
+      return;
+    }
+    try {
+      const response = await fetch(`/api/resume/${encodeURIComponent(resumeId)}`, {
+        headers: { Accept: "application/json" },
+      });
+      if (response.status === 404) {
+        // The profile is gone (e.g. ephemeral disk was reset). Fall back cleanly.
+        clearProfile();
+        return;
+      }
+      if (response.ok) {
+        const payload = await response.json();
+        const name = payload && payload.resume && payload.resume.identity
+          ? readableValue(payload.resume.identity.name).trim()
+          : "";
+        setStored(RESUME_NAME_KEY, name);
+        updateProfileStatus();
+      }
+    } catch (_error) {
+      /* Offline or transient; keep the stored id and let tailoring surface issues. */
+    }
+  }
+
+  function prefersReducedMotion() {
+    return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   }
 
   function clearError() {
@@ -492,13 +668,18 @@
     setLoading(true);
 
     try {
+      const requestBody = { job_description: description };
+      const resumeId = getStored(RESUME_ID_KEY);
+      if (resumeId) {
+        requestBody.resume_id = resumeId;
+      }
       const response = await fetch(API_ENDPOINT, {
         method: "POST",
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ job_description: description }),
+        body: JSON.stringify(requestBody),
         signal: controller.signal,
       });
       const payload = await parseResponse(response);
@@ -546,5 +727,12 @@
   startOverButton.addEventListener("click", () => resetWorkspace());
   window.addEventListener("beforeunload", clearGeneratedFiles);
 
+  latexInput.addEventListener("input", updateLatexCount);
+  importForm.addEventListener("submit", handleImport);
+  clearProfileButton.addEventListener("click", clearProfile);
+
   updateCharacterCount();
+  updateLatexCount();
+  updateProfileStatus();
+  verifyStoredProfile();
 })();

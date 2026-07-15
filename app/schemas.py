@@ -118,6 +118,37 @@ class TailorRequest(StrictModel):
     model: Optional[str] = Field(default=None, min_length=1, max_length=200)
     compile: bool = True
     require_one_page: bool = True
+    # Optional per-user profile id created by /api/import. When omitted, the
+    # server falls back to the canonical seed resume for backward compatibility.
+    resume_id: Optional[str] = Field(default=None, min_length=1, max_length=64)
+
+
+class ResumeStyle(StrictModel):
+    """Bounded, server-validated layout hints extracted from a pasted resume.
+
+    Only these safe parameters influence the compiled preamble; the rest of the
+    template stays server-controlled so the locked-template safety model holds.
+    """
+
+    paper: str = Field(default="a4paper", max_length=20)
+    font_size: str = Field(default="10pt", max_length=8)
+    margin_cm: float = Field(default=2.0, ge=0.5, le=4.0)
+    accent_hex: Optional[str] = Field(default=None, min_length=6, max_length=6)
+
+
+class ImportRequest(StrictModel):
+    latex: str = Field(..., min_length=40, max_length=200_000)
+    provider: Optional[str] = Field(default=None, min_length=1, max_length=40)
+    model: Optional[str] = Field(default=None, min_length=1, max_length=200)
+
+
+class ImportResponse(StrictModel):
+    id: str
+    provider: str
+    model: str
+    style: ResumeStyle
+    resume: ResumeData
+    warnings: List[str] = Field(default_factory=list)
 
 
 class ResumeChange(StrictModel):

@@ -6,14 +6,16 @@ import base64
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import ValidationError
 
 from . import __version__
 from .compiler import CompileResult, CompileService
+from .importer import assemble_template, build_resume_data, sanitize_style
 from .llm import (
     LLMClient,
     LLMConfigurationError,
@@ -36,13 +38,19 @@ from .resume import (
 from .schemas import (
     CompilerReport,
     HealthResponse,
+    ImportRequest,
+    ImportResponse,
     TailorProposal,
     TailorRequest,
     TailorResponse,
+    dump_model,
 )
+from .storage import ResumeStoreError, UserResumeStore
 
 
 MAX_HTTP_BODY_BYTES = 64_000
+# Importing a full pasted LaTeX resume needs a larger ceiling than tailoring.
+MAX_IMPORT_BODY_BYTES = 260_000
 
 
 @dataclass
@@ -50,6 +58,7 @@ class ApplicationServices:
     repository: ResumeRepository
     llm: LLMClient
     compiler: CompileService
+    store: UserResumeStore
 
 
 def _api_error(status_code: int, code: str, message: str, **details: Any) -> HTTPException:
@@ -143,11 +152,48 @@ def _compile_report(result: CompileResult, attempted: bool = True) -> CompilerRe
     )
 
 
+def _load_resume_source(
+    services: "ApplicationServices", resume_id: Optional[str]
+) -> Tuple[Any, str, bool]:
+    """Resolve the tailoring source: a stored per-user profile, or the seed.
+
+    Returns ``(resume, template, sectioned)`` where ``sectioned`` selects the
+    header-carrying render path used by imported per-user templates.
+    """
+
+    if resume_id:
+        try:
+            resume, template = services.store.load(resume_id)
+        except ResumeStoreError as exc:
+            raise _api_error(
+                404,
+                "resume_not_found",
+                "No imported resume was found for this id. Import a resume first.",
+            ) from exc
+        except ResumeError as exc:
+            raise _api_error(
+                500,
+                "resume_configuration_error",
+                "The stored resume profile is invalid.",
+            ) from exc
+        return resume, template, True
+    try:
+        resume, template = services.repository.load()
+    except ResumeError as exc:
+        raise _api_error(
+            500,
+            "resume_configuration_error",
+            "The locked resume source is invalid. Check the server configuration.",
+        ) from exc
+    return resume, template, False
+
+
 def create_app(
     repository: Optional[ResumeRepository] = None,
     llm_client: Optional[LLMClient] = None,
     compiler: Optional[CompileService] = None,
     static_dir: Optional[Path] = None,
+    store: Optional[UserResumeStore] = None,
 ) -> FastAPI:
     """Create an app with injectable filesystem, LLM, and compiler dependencies."""
 
@@ -160,6 +206,7 @@ def create_app(
         repository=repository or ResumeRepository(),
         llm=llm_client or LLMClient(),
         compiler=compiler or CompileService(),
+        store=store or UserResumeStore(),
     )
     application.state.services = services
 
@@ -168,10 +215,15 @@ def create_app(
     @application.middleware("http")
     async def reject_oversized_api_requests(request: Request, call_next: Any) -> Any:
         if request.url.path.startswith("/api/") and request.method in ("POST", "PUT", "PATCH"):
+            limit = (
+                MAX_IMPORT_BODY_BYTES
+                if request.url.path.startswith("/api/import")
+                else MAX_HTTP_BODY_BYTES
+            )
             content_length = request.headers.get("content-length")
             if content_length:
                 try:
-                    too_large = int(content_length) > MAX_HTTP_BODY_BYTES
+                    too_large = int(content_length) > limit
                 except ValueError:
                     too_large = True
                 if too_large:
@@ -180,7 +232,9 @@ def create_app(
                         content={
                             "detail": {
                                 "code": "request_too_large",
-                                "message": "Request body exceeds the 64 KB safety limit.",
+                                "message": "Request body exceeds the {0} KB safety limit.".format(
+                                    limit // 1_000
+                                ),
                             }
                         },
                     )
@@ -242,14 +296,7 @@ def create_app(
 
     @application.post("/api/tailor", response_model=TailorResponse)
     async def tailor(payload: TailorRequest) -> TailorResponse:
-        try:
-            resume, template = services.repository.load()
-        except ResumeError as exc:
-            raise _api_error(
-                500,
-                "resume_configuration_error",
-                "The locked resume source is invalid. Check the server configuration.",
-            ) from exc
+        resume, template, sectioned = _load_resume_source(services, payload.resume_id)
 
         try:
             result, repair_used = await _generate_valid_proposal(
@@ -262,7 +309,7 @@ def create_app(
             raise _api_error(status_code, "llm_provider_error", str(exc)) from exc
 
         try:
-            latex_source = render_template_text(template, resume, result.proposal)
+            latex_source = render_template_text(template, resume, result.proposal, sectioned)
             changes = build_change_list(resume, result.proposal)
             unified_diff = build_unified_diff(changes)
         except (ResumeError, ProposalValidationError) as exc:
@@ -336,7 +383,7 @@ def create_app(
                 )
                 validate_proposal(resume, repaired_result.proposal)
                 repaired_latex = render_template_text(
-                    template, resume, repaired_result.proposal
+                    template, resume, repaired_result.proposal, sectioned
                 )
                 repaired_compile = await services.compiler.compile(
                     repaired_latex, services.repository.assets_dir
@@ -390,6 +437,88 @@ def create_app(
             warnings=warnings,
             compiler=report,
         )
+
+    @application.post("/api/import", response_model=ImportResponse)
+    async def import_resume(payload: ImportRequest) -> ImportResponse:
+        try:
+            extraction = await services.llm.extract_resume(
+                payload.latex, provider=payload.provider, model=payload.model
+            )
+        except LLMConfigurationError as exc:
+            raise _api_error(503, "llm_not_configured", str(exc)) from exc
+        except LLMProviderError as exc:
+            status_code = 429 if exc.status_code == 429 else 502
+            raise _api_error(status_code, "llm_provider_error", str(exc)) from exc
+        except LLMResponseError as exc:
+            raise _api_error(
+                422,
+                "invalid_extraction",
+                "The AI could not extract a structured resume from that LaTeX.",
+            ) from exc
+
+        try:
+            resume = build_resume_data(extraction.resume)
+            style = sanitize_style(extraction.style)
+            template = assemble_template(style)
+            # Confirm the extraction actually renders into the locked template
+            # before anything is stored.
+            baseline = TailorProposal(
+                summary=resume.summary,
+                bullet_rewrites=[],
+                skills_order=flattened_skills(resume),
+            )
+            render_template_text(template, resume, baseline, sectioned=True)
+        except (ResumeError, ProposalValidationError, ValidationError) as exc:
+            raise _api_error(
+                422,
+                "invalid_extraction",
+                "The extracted resume did not satisfy the resume safety contract. "
+                "The pasted LaTeX may be missing required fields (name, email, phone, location).",
+                errors=(
+                    exc.errors
+                    if isinstance(exc, ProposalValidationError)
+                    else [_validation_issue(exc)]
+                ),
+            ) from exc
+
+        try:
+            resume_id = services.store.create(
+                resume,
+                template,
+                payload.latex,
+                style,
+                extraction.provider,
+                extraction.model,
+            )
+        except ResumeError as exc:
+            raise _api_error(
+                500,
+                "store_failed",
+                "The imported resume could not be saved.",
+            ) from exc
+
+        warnings: List[str] = [
+            "Review the imported fields; the AI extraction may have missed or "
+            "misread details from your LaTeX."
+        ]
+        return ImportResponse(
+            id=resume_id,
+            provider=extraction.provider,
+            model=extraction.model,
+            style=style,
+            resume=resume,
+            warnings=warnings,
+        )
+
+    @application.get("/api/resume/{resume_id}", include_in_schema=False)
+    async def get_resume(resume_id: str) -> Any:
+        try:
+            resume, _template = services.store.load(resume_id)
+        except ResumeStoreError as exc:
+            raise _api_error(404, "resume_not_found", "No imported resume for this id.") from exc
+        except ResumeError as exc:
+            raise _api_error(500, "resume_configuration_error", "Stored resume is invalid.") from exc
+        return {"id": resume_id, "resume": dump_model(resume)}
 
     @application.get("/", include_in_schema=False)
     async def index() -> Any:

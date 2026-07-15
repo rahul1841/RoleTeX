@@ -23,6 +23,12 @@ tests
 requirements-dev.txt
 pla.md
 plan.md
+prd.md
+architecture.md
+design.md
+rules.md
+memory.md
+data
 .claude
 .DS_Store
 .idea

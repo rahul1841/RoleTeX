@@ -327,7 +327,8 @@ textarea:focus-visible,
   box-shadow: 0 0 0 4px rgba(83, 114, 104, 0.09);
 }
 
-#job-description {
+#job-description,
+#latex-input {
   display: block;
   width: 100%;
   min-height: 330px;
@@ -341,13 +342,31 @@ textarea:focus-visible,
   line-height: 1.7;
 }
 
-#job-description::placeholder {
+#latex-input {
+  min-height: 220px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre;
+}
+
+#job-description::placeholder,
+#latex-input::placeholder {
   color: #939a96;
 }
 
-#job-description:disabled {
+#job-description:disabled,
+#latex-input:disabled {
   color: var(--ink-soft);
   cursor: wait;
+}
+
+.profile-status {
+  align-items: center;
+}
+
+.profile-status .status-dot {
+  flex: none;
 }
 
 .textarea-meta {

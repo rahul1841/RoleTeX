@@ -16,8 +16,8 @@ contact information. Keep both the Git repository and deployed Space private.
 
 ## Safety model
 
-- The model receives editable resume facts, not the contact header or arbitrary
-  LaTeX.
+- During **tailoring**, the model receives editable resume facts, not the
+  contact header or arbitrary LaTeX.
 - The seven template tokens are replaced deterministically by the server.
 - Unknown IDs, newly invented skills, excessive text, and invalid model output
   are rejected.
@@ -25,17 +25,38 @@ contact information. Keep both the Git repository and deployed Space private.
   cached-only mode and a timeout.
 - The browser shows the proposed changes before the user accepts a result.
 
-This MVP intentionally does not accept uploaded LaTeX projects. Supporting
-untrusted templates requires stronger operating-system or virtual-machine
-isolation.
+### Importing a resume (multi-user)
+
+The app can create a private profile per user from a pasted LaTeX resume
+(`POST /api/import`). Each profile lives under `data/<uuid>/` as `data.json`
+(extracted facts), `template.tex` (a server-controlled, style-personalized
+template), `source.tex` (the raw paste), and `meta.json`. Tailoring targets a
+profile with the optional `resume_id`; without it the seed resume is used.
+
+Two deliberate boundaries keep this safe:
+
+- **Only the import request sends the whole resume — including contact details —
+  to the model**, because the user is importing their own document. Tailoring
+  keeps excluding identity, unchanged.
+- **The compiled template is still entirely server-controlled.** Import extracts
+  plain-text facts plus a few bounded style hints (paper size, font size,
+  margins, an optional accent color, each whitelisted); it never compiles the
+  user's raw LaTeX. The pasted source is stored verbatim for future exact-layout
+  work but is not fed to the compiler.
+
+The `data/` directory holds personal data and is git-ignored (only `.gitkeep`
+is tracked) and excluded from the Docker image. Keep deployments private.
 
 ## Repository layout
 
 ```text
 app/                  FastAPI application, validation, rendering, and compiler
-resume/data.json      Canonical resume facts and stable editable IDs
+app/importer.py       LaTeX-extraction normalization and template assembly
+app/storage.py        Per-user (UUID-keyed) profile storage
+resume/data.json      Canonical seed resume facts and stable editable IDs
 resume/template.tex   Locked Tectonic-compatible LaTeX template
 resume/assets/        Approved local images/fonts, if the template needs them
+data/                 Per-user imported profiles (git-ignored; runtime only)
 static/               Browser UI
 tests/                Validation, rendering, compiler, and API tests
 Dockerfile            Hugging Face-compatible production image
@@ -117,7 +138,9 @@ Docker build always renders the configured baseline and performs a real compile.
 | `COMPILE_TIMEOUT_SECONDS` | No | `90` | Per-compile process timeout, bounded from 10–180 seconds |
 | `COMPILE_CONCURRENCY` | No | `1` | Simultaneous compiler processes, bounded from 1–4 |
 | `MAX_PDF_PAGES` | No | `1` | Page-count target/check threshold, bounded from 1–10 |
-| `RESUME_DATA_PATH` | No | `resume/data.json` | Canonical structured resume file |
+| `USER_DATA_DIR` | No | `data` | Directory for per-user imported profiles |
+| `LLM_EXTRACT_MAX_TOKENS` | No | `6000` | Max tokens for resume extraction, bounded 1000–8000 |
+| `RESUME_DATA_PATH` | No | `resume/data.json` | Canonical seed structured resume file |
 | `RESUME_TEMPLATE_PATH` | No | `resume/template.tex` | Locked LaTeX template |
 | `RESUME_ASSETS_DIR` | No | `resume/assets` | Approved local template assets |
 | `TECTONIC_UNTRUSTED_MODE` | No | `1` in Docker | Disables trusted-only Tectonic features |
