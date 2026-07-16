@@ -143,10 +143,15 @@ Docker build always renders the configured baseline and performs a real compile.
 | `LLM_TIMEOUT_SECONDS` | No | `60` | LLM HTTP timeout, bounded from 5–180 seconds |
 | `LLM_MAX_TOKENS` | No | `3000` | Maximum structured completion tokens, bounded from 256–8000 |
 | `LLM_REASONING_EFFORT` | No | `low` for Gemini and Groq GPT-OSS | Provider reasoning budget: `none`, `minimal`, `low`, `medium`, or `high` |
+| `LLM_JSON_MODE` | No | `true` | Request JSON-object response format; auto-retries once without it on an HTTP 400 |
+| `LLM_HTTP_ATTEMPTS` | No | `3` | Provider HTTP retry attempts (timeouts/429/5xx), bounded 1–4 |
+| `ALLOW_INSECURE_LLM_BASE_URL` | No | `false` | Permit non-HTTPS LLM base URLs (**weakens transport security**; leave off in production) |
+| `OPENROUTER_SITE_URL` / `OPENROUTER_APP_NAME` | No | — / `JD Resume Builder` | OpenRouter attribution headers (`HTTP-Referer` / `X-Title`) |
 | `TECTONIC_BIN` | No | `tectonic` | Compiler executable or absolute path |
 | `TECTONIC_ONLY_CACHED` | No | `true` | Prevent support-file downloads during a request |
 | `COMPILE_TIMEOUT_SECONDS` | No | `90` | Per-compile process timeout, bounded from 10–180 seconds |
 | `COMPILE_CONCURRENCY` | No | `1` | Simultaneous compiler processes, bounded from 1–4 |
+| `COMPILE_MEMORY_LIMIT_MB` | No | `2048` | Address-space cap (`RLIMIT_AS`) for the compile subprocess, bounded 256–8192; **Linux only** |
 | `MAX_PDF_PAGES` | No | `1` | Page-count target/check threshold, bounded from 1–10 |
 | `LLM_EXTRACT_MAX_TOKENS` | No | `6000` | Max tokens for resume extraction, bounded 1000–8000 |
 | `RESUME_DATA_PATH` | No | `resume/data.json` | Canonical seed structured resume file |
@@ -166,6 +171,7 @@ Docker build always renders the configured baseline and performs a real compile.
 | `LOGIN_MAX_ATTEMPTS` / `LOGIN_WINDOW_SECONDS` | No | `10` / `900` | Failed-login throttle per email+IP; bounded 1–100 / 10–3600 |
 | `MAX_RESUMES_PER_USER` | No | `10` | Bounded 1–100 |
 | `MAX_VERSIONS_PER_RESUME` | No | `20` | Bounded 1–100 |
+| `MAX_VERSIONS_PER_JD` | No | `20` | Archived JD revisions kept per JD, bounded 1–100; oldest pruned |
 | `MAX_JDS_PER_USER` | No | `50` | Bounded 1–500 |
 | `MAX_RUNS_PER_USER` | No | `200` | Bounded 10–2000; oldest runs pruned |
 | `MAX_PDF_UPLOAD_BYTES` | No | `10000000` | PDF upload cap, bounded 1–20 MB |

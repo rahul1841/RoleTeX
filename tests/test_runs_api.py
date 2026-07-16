@@ -110,6 +110,38 @@ async def test_multi_user_tailor_persists_run_with_saved_jd(
         assert run["jd_excerpt"] == JD_CONTENT[:300]
 
 
+async def test_run_listing_is_not_capped_below_stored_runs(
+    make_app, make_client, register_user, database
+) -> None:
+    """Regression: the history listing must return every retained run, not a
+    silent page of the store's default limit (was 50 while up to
+    ``max_runs_per_user`` are kept)."""
+
+    app = make_app()
+    async with make_client(app) as client:
+        await register_user(client)
+        user = await database.users.get_by_email("user@example.com")
+        for index in range(60):
+            await database.runs.create(
+                user["_id"],
+                {
+                    "resume_id": "seed",
+                    "resume_name": "Seed",
+                    "resume_version": 1,
+                    "jd_excerpt": "role {0}".format(index),
+                    "provider": "mock",
+                    "model": "deterministic-local",
+                    "latex_source": r"\documentclass{article}",
+                },
+            )
+
+        listing = await client.get("/api/runs")
+        assert listing.status_code == 200
+        # 60 exceeds the store's former default page size of 50 and stays under
+        # the default MAX_RUNS_PER_USER (200), so all 60 must come back.
+        assert len(listing.json()["runs"]) == 60
+
+
 async def test_tailor_with_pasted_jd_and_save_run_disabled(
     make_app, make_client, register_user
 ) -> None:

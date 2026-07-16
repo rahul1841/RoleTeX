@@ -74,7 +74,7 @@ Paste a job description → an LLM proposes structured, fact-preserving edits (s
 | FR-12 | Accounts & sessions, per-user encrypted API keys, rate limiting, login throttling, CSRF origin checks | ✅ Done, tested |
 | FR-10 | Evaluation harness (compile success, fact preservation, keyword coverage across JDs) | ❌ Not built |
 | FR-11 | Automatic provider failover | ❌ Not built (providers selectable, no fallback chain) |
-| FR-12 | Cover letter generation | ❌ Not built |
+| FR-13 | Cover letter generation | ❌ Not built |
 
 ## 8. Non-functional requirements
 
@@ -108,10 +108,10 @@ Paste a job description → an LLM proposes structured, fact-preserving edits (s
 
 Biggest remaining items, in priority order:
 1. Prove the real-provider LLM path (Groq et al.) with at least one integration/eval run.
-2. A Tectonic-gated real-compile test so CI can exercise the actual pipeline.
+2. ~~A Tectonic-gated real-compile test~~ ✅ done — `tests/test_compile_integration.py` (2026-07-16).
 3. Frontend coverage (or at minimum a scripted browser smoke test).
 4. Verified Docker build + HF deployment (cold start, cached compile, secrets, privacy).
-5. Import storage lifecycle (list/delete/TTL/quota) and multi-file write atomicity.
-6. Extend the fabrication guard beyond numeric claims.
+5. Extend the fabrication guard beyond numeric claims.
+6. Gate demo-mode env-key usage / document the asymmetry (memory G-14).
 
 See [memory.md](memory.md) for the full gap register and decision log.

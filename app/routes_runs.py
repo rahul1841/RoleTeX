@@ -124,7 +124,12 @@ def register_runs_routes(app: FastAPI, services: Any) -> None:
     @app.get("/api/runs", response_model=RunListResponse)
     async def list_runs(request: Request) -> RunListResponse:
         user = await require_user(request, services)
-        docs = await services.database.runs.list_for_user(user["_id"])
+        # List up to the same per-user cap that storage prunes to, so every
+        # retained run is visible instead of being silently clipped at the
+        # store's default page size.
+        docs = await services.database.runs.list_for_user(
+            user["_id"], limit=services.config.max_runs_per_user
+        )
         return RunListResponse(runs=[_run_summary(doc) for doc in docs])
 
     @app.get("/api/runs/{run_id}", response_model=RunResponse)
