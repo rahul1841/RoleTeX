@@ -24,7 +24,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
@@ -110,6 +111,7 @@ class ApplicationServices:
     database: Optional[Database]
     config: AppConfig
     rate_limiter_llm: security.RateLimiter
+    rate_limiter_llm_ip: security.RateLimiter
     rate_limiter_general: security.RateLimiter
     login_throttle: security.LoginThrottle
     pdf_extractor: Callable[[bytes], str]
@@ -169,6 +171,128 @@ def _body_size_limit(path: str, config: AppConfig) -> int:
     if _LATEX_IMPORT_PATH.match(path):
         return MAX_IMPORT_BODY_BYTES
     return MAX_HTTP_BODY_BYTES
+
+
+def _request_too_large_detail(limit: int) -> Dict[str, Any]:
+    return {
+        "code": "request_too_large",
+        "message": "Request body exceeds the {0} KB safety limit.".format(limit // 1_000),
+    }
+
+
+def _request_too_large_response(limit: int) -> JSONResponse:
+    return JSONResponse(
+        status_code=413, content={"detail": _request_too_large_detail(limit)}
+    )
+
+
+class _BodyTooLarge(HTTPException):
+    """Raised by the counting receive shim when a streamed body passes its cap.
+
+    Subclassing ``HTTPException`` is load-bearing: FastAPI turns any other
+    exception raised while a body is being parsed into an opaque
+    ``400 There was an error parsing the body``, but re-raises ``HTTPException``
+    untouched. This way the structured 413 survives whichever parser — JSON or
+    multipart — happened to be draining the stream.
+    """
+
+    def __init__(self, limit: int) -> None:
+        super().__init__(status_code=413, detail=_request_too_large_detail(limit))
+
+
+def _limited_receive(receive: Callable[[], Any], limit: int) -> Callable[[], Any]:
+    """Wrap an ASGI receive callable so the accepted body cannot exceed ``limit``.
+
+    ``Content-Length`` is client-supplied and absent entirely on chunked
+    requests, so checking the header is an optimization, not a ceiling. Counting
+    the bytes actually handed to the application is the enforcement: it stops a
+    body before Starlette can spool it to disk or a route can read it into
+    memory, and it runs before routing — hence before authentication.
+    """
+
+    received = 0
+
+    async def limited() -> Any:
+        nonlocal received
+        message = await receive()
+        if message.get("type") == "http.request":
+            received += len(message.get("body", b"") or b"")
+            if received > limit:
+                raise _BodyTooLarge(limit)
+        return message
+
+    return limited
+
+
+_BODY_LIMITED_METHODS = frozenset(("POST", "PUT", "PATCH", "DELETE"))
+
+
+class BodySizeLimitMiddleware:
+    """Hard cap on request-body bytes, enforced at the raw ASGI layer.
+
+    DELETE is included because ``DELETE /api/me`` parses a JSON body.
+
+    Deliberately a pure-ASGI middleware rather than a ``BaseHTTPMiddleware``
+    dispatch function, and deliberately installed *inside* one:
+    ``BaseHTTPMiddleware`` pumps the receive callable from within an anyio task
+    group, so anything the shim raises there re-emerges as an ``ExceptionGroup``
+    that FastAPI reports as an opaque ``400 There was an error parsing the
+    body``. Wrapping receive closer to the route than that task group keeps the
+    structured 413 intact.
+    """
+
+    def __init__(self, app: Any, config: AppConfig) -> None:
+        self.app = app
+        self.config = config
+
+    async def __call__(
+        self, scope: Dict[str, Any], receive: Callable[[], Any], send: Callable[..., Any]
+    ) -> None:
+        path = str(scope.get("path", ""))
+        if (
+            scope.get("type") != "http"
+            or str(scope.get("method", "")).upper() not in _BODY_LIMITED_METHODS
+            or not path.startswith("/api/")
+        ):
+            await self.app(scope, receive, send)
+            return
+
+        limit = _body_size_limit(path, self.config)
+        for name, value in scope.get("headers") or ():
+            if name != b"content-length":
+                continue
+            try:
+                declared = int(value)
+            except (TypeError, ValueError):
+                declared = limit + 1  # an unparseable length is not a free pass
+            if declared > limit:
+                # Declared oversize: reject without reading a single byte.
+                await _request_too_large_response(limit)(scope, receive, send)
+                return
+            break
+
+        await self.app(scope, _limited_receive(receive, limit), send)
+
+
+MAX_REPORTED_VALIDATION_ERRORS = 10
+
+
+def _safe_validation_errors(errors: List[Dict[str, Any]]) -> List[str]:
+    """Field-level rejection reasons with every submitted value stripped.
+
+    Pydantic reports the offending value under ``input`` (and sometimes inside
+    ``ctx``). For this app that value is resume or JD text, so only the field
+    location and the constraint that failed may leave the server (rule R-10).
+    """
+
+    reported: List[str] = []
+    for error in errors[:MAX_REPORTED_VALIDATION_ERRORS]:
+        location = ".".join(
+            str(part) for part in error.get("loc", ()) if part != "body"
+        )
+        message = str(error.get("msg", "invalid value"))[:200]
+        reported.append("{0}: {1}".format(location or "body", message))
+    return reported
 
 
 def _database_unavailable_response() -> JSONResponse:
@@ -247,6 +371,15 @@ def create_app(
         rate_limiter_llm=security.RateLimiter(
             app_config.rate_limit_llm_calls, app_config.rate_limit_llm_window_seconds
         ),
+        # Per-IP ceiling on the same expensive routes. The per-user bucket alone
+        # is resettable by registering another account, so it caps politeness,
+        # not cost; this one caps cost. Deliberately looser than the per-user
+        # limit so a shared egress (office NAT, the HF Space proxy) is not
+        # throttled to a single user's budget.
+        rate_limiter_llm_ip=security.RateLimiter(
+            app_config.rate_limit_llm_ip_calls,
+            app_config.rate_limit_llm_window_seconds,
+        ),
         rate_limiter_general=security.RateLimiter(
             app_config.rate_limit_general_calls,
             app_config.rate_limit_general_window_seconds,
@@ -285,12 +418,35 @@ def create_app(
         if task is not None and not task.done():
             task.cancel()
 
+    @application.exception_handler(RequestValidationError)
+    async def handle_request_validation(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        # FastAPI's default 422 echoes the rejected value back under "input",
+        # which hands an unauthenticated caller their own submitted resume or JD
+        # text (rule R-10) in a body that is not the {code, message} contract
+        # (rule C-4) and is as large as the request was.
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": {
+                    "code": "invalid_request",
+                    "message": "The request did not match the expected schema.",
+                    "errors": _safe_validation_errors(exc.errors()),
+                }
+            },
+        )
+
     @application.exception_handler(PyMongoError)
     async def handle_database_outage(request: Request, exc: PyMongoError) -> JSONResponse:
         # Keep the structured {code, message} error contract (rule C-4) when
         # Mongo is unreachable instead of leaking a plain-text 500.
         logger.error("Database error while handling %s: %s", request.url.path, exc)
         return _database_unavailable_response()
+
+    # Registered first, so it ends up *inside* api_request_guard: the body cap
+    # has to wrap receive closer to the route than any BaseHTTPMiddleware does.
+    application.add_middleware(BodySizeLimitMiddleware, config=app_config)
 
     @application.middleware("http")
     async def api_request_guard(request: Request, call_next: Any) -> Any:
@@ -299,28 +455,8 @@ def create_app(
             return await call_next(request)
         method = request.method.upper()
 
-        # 1. Declared body-size limits (cheap rejection before any parsing).
-        # DELETE is included because DELETE /api/me parses a JSON body.
-        if method in ("POST", "PUT", "PATCH", "DELETE"):
-            limit = _body_size_limit(path, services.config)
-            content_length = request.headers.get("content-length")
-            if content_length:
-                try:
-                    too_large = int(content_length) > limit
-                except ValueError:
-                    too_large = True
-                if too_large:
-                    return JSONResponse(
-                        status_code=413,
-                        content={
-                            "detail": {
-                                "code": "request_too_large",
-                                "message": "Request body exceeds the {0} KB safety limit.".format(
-                                    limit // 1_000
-                                ),
-                            }
-                        },
-                    )
+        # 1. Body-size limits are enforced by BodySizeLimitMiddleware, which
+        # runs one layer further in (see its docstring for why).
 
         # 2. CSRF origin check for state-changing requests riding the cookie.
         if (
@@ -342,7 +478,7 @@ def create_app(
         # resolves and by client IP otherwise. Health stays unthrottled for
         # monitoring probes.
         if path != "/api/health":
-            bucket_key = ""
+            user_key = ""
             if services.database is not None:
                 # This runs before routing, so route-level exception handlers
                 # cannot catch a Mongo outage here; translate it in place.
@@ -354,12 +490,27 @@ def create_app(
                     )
                     return _database_unavailable_response()
                 if context is not None:
-                    bucket_key = context[0]["_id"]
-            if not bucket_key:
-                client = getattr(request, "client", None)
-                bucket_key = getattr(client, "host", "") or "anonymous"
+                    user_key = context[0]["_id"]
+            client_host = (
+                security.client_ip(
+                    request,
+                    services.config.trust_proxy_headers,
+                    services.config.trusted_proxy_hops,
+                )
+                or "anonymous"
+            )
+            bucket_key = user_key or client_host
             if method == "POST" and _LLM_BUCKET_PATH.match(path):
                 retry_after = services.rate_limiter_llm.check("llm:" + bucket_key)
+                if retry_after is None and user_key:
+                    # A per-user budget is resettable by registering another
+                    # account, so on its own it limits politeness rather than
+                    # cost. The per-IP ceiling is what survives account cycling.
+                    # Anonymous callers already key the bucket above on their
+                    # IP, so charging them twice would just halve their budget.
+                    retry_after = services.rate_limiter_llm_ip.check(
+                        "llm:ip:" + client_host
+                    )
             else:
                 retry_after = services.rate_limiter_general.check("gen:" + bucket_key)
             if retry_after is not None:

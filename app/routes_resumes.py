@@ -183,13 +183,16 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
         return resume, style, template, extraction, warnings
 
     async def _read_pdf_upload(file: UploadFile) -> str:
-        data = await file.read()
-        if len(data) > services.config.max_pdf_upload_bytes:
+        cap = services.config.max_pdf_upload_bytes
+        # Read one byte past the cap rather than the whole part: an oversized
+        # upload must not be materialized in memory just to be rejected.
+        data = await file.read(cap + 1)
+        if len(data) > cap:
             raise _api_error(
                 413,
                 "pdf_too_large",
                 "The uploaded PDF exceeds the {0} MB limit.".format(
-                    services.config.max_pdf_upload_bytes // 1_000_000
+                    cap // 1_000_000
                 ),
             )
         if data[:5] != b"%PDF-":

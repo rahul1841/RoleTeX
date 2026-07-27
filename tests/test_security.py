@@ -12,6 +12,7 @@ from app.security import (
     RateLimiter,
     SecretCipherError,
     SESSION_COOKIE_NAME,
+    client_ip,
     decrypt_secret,
     encrypt_secret,
     hash_password,
@@ -43,12 +44,23 @@ class FakeURL:
         self.scheme = scheme
 
 
-class FakeRequest:
-    """Duck-typed stand-in for starlette.Request (headers + url.scheme)."""
+class FakeClient:
+    def __init__(self, host: str) -> None:
+        self.host = host
 
-    def __init__(self, headers: Dict[str, str], scheme: str = "http") -> None:
+
+class FakeRequest:
+    """Duck-typed stand-in for starlette.Request (headers, url.scheme, client)."""
+
+    def __init__(
+        self,
+        headers: Dict[str, str],
+        scheme: str = "http",
+        client: Optional[str] = None,
+    ) -> None:
         self.headers = headers
         self.url = FakeURL(scheme)
+        self.client = FakeClient(client) if client is not None else None
 
 
 # ---------------------------------------------------------------------------
@@ -353,3 +365,50 @@ def test_origin_rejects_port_mismatch() -> None:
         scheme="http",
     )
     assert origin_allowed(request) is False
+
+
+# ---------------------------------------------------------------------------
+# Client IP resolution (rate-limit / login-throttle keys)
+# ---------------------------------------------------------------------------
+
+
+def test_client_ip_ignores_forwarded_header_by_default() -> None:
+    """X-Forwarded-For is client-supplied: trusting it would hand out buckets."""
+
+    request = FakeRequest({"x-forwarded-for": "1.2.3.4"}, client="10.0.0.9")
+    assert client_ip(request) == "10.0.0.9"
+
+
+def test_client_ip_uses_forwarded_header_when_trusted() -> None:
+    request = FakeRequest({"x-forwarded-for": "1.2.3.4"}, client="10.0.0.9")
+    assert client_ip(request, trust_proxy=True) == "1.2.3.4"
+
+
+def test_client_ip_reads_hops_from_the_right() -> None:
+    """Only entries the trusted proxies appended may be believed."""
+
+    # The client forged the two leftmost entries; one trusted proxy appended
+    # the real peer last, so with trusted_hops=1 that is the address used.
+    request = FakeRequest(
+        {"x-forwarded-for": "9.9.9.9, 8.8.8.8, 203.0.113.7"}, client="10.0.0.9"
+    )
+    assert client_ip(request, trust_proxy=True, trusted_hops=1) == "203.0.113.7"
+    assert client_ip(request, trust_proxy=True, trusted_hops=2) == "8.8.8.8"
+
+
+def test_client_ip_falls_back_when_chain_is_shorter_than_declared() -> None:
+    request = FakeRequest({"x-forwarded-for": "203.0.113.7"}, client="10.0.0.9")
+    assert client_ip(request, trust_proxy=True, trusted_hops=5) == "203.0.113.7"
+
+
+def test_client_ip_falls_back_to_peer_without_forwarded_header() -> None:
+    assert client_ip(FakeRequest({}, client="10.0.0.9"), trust_proxy=True) == "10.0.0.9"
+    assert (
+        client_ip(FakeRequest({"x-forwarded-for": "  , ,"}, client="10.0.0.9"),
+                  trust_proxy=True)
+        == "10.0.0.9"
+    )
+
+
+def test_client_ip_tolerates_a_missing_peer() -> None:
+    assert client_ip(FakeRequest({})) == ""

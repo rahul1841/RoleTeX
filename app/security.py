@@ -342,6 +342,40 @@ class LoginThrottle:
 
 
 # ---------------------------------------------------------------------------
+# Client identity (rate-limit and throttle keys)
+# ---------------------------------------------------------------------------
+
+
+def client_ip(
+    request: "object", trust_proxy: bool = False, trusted_hops: int = 1
+) -> str:
+    """Best-known client address for rate-limit and login-throttle keys.
+
+    The socket peer is the only trustworthy source by default: ``X-Forwarded-For``
+    is attacker-supplied, so honoring it unconditionally would let anyone forge a
+    fresh bucket per request. Behind a reverse proxy the socket peer is instead
+    the *proxy* for every visitor, which collapses all callers into one bucket —
+    so operators opt in with ``TRUST_PROXY_HEADERS`` and declare how many proxies
+    they run (``TRUSTED_PROXY_HOPS``). Only the entries those proxies appended
+    are trustworthy, so the address is read ``trusted_hops`` from the right;
+    anything further left was supplied by the client and is ignored.
+    """
+
+    direct = getattr(getattr(request, "client", None), "host", "") or ""
+    if not trust_proxy:
+        return direct
+    headers = getattr(request, "headers", {})
+    forwarded = headers.get("x-forwarded-for") or ""
+    hops = [part.strip() for part in forwarded.split(",") if part.strip()]
+    if not hops:
+        return direct
+    # A shorter chain than declared means fewer proxies than configured ran;
+    # fall back to the leftmost entry rather than indexing past the start.
+    index = max(0, len(hops) - max(1, trusted_hops))
+    return hops[index] or direct
+
+
+# ---------------------------------------------------------------------------
 # CSRF origin check
 # ---------------------------------------------------------------------------
 

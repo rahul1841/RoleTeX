@@ -164,9 +164,12 @@ Docker build always renders the configured baseline and performs a real compile.
 | `APP_SECRET_KEY` | Recommended | random ephemeral | Derives the Fernet key encrypting user API keys at rest; unset → keys unreadable after restart (`checks.secret_key: "ephemeral"`) |
 | `SESSION_TTL_DAYS` | No | `30` | Session lifetime, bounded 1–90 days |
 | `COOKIE_SECURE` | No | `auto` | `auto` (Secure when https / `X-Forwarded-Proto: https`), `true`, or `false` |
+| `TRUST_PROXY_HEADERS` | No | `false` | Derive the client IP for rate limits and the login throttle from `X-Forwarded-For`. **Enable only behind a proxy that overwrites the header** — otherwise callers forge a fresh bucket per request. Leave off and every visitor behind a proxy shares one bucket instead |
+| `TRUSTED_PROXY_HOPS` | No | `1` | How many proxies you run; the client address is read that many entries from the right of `X-Forwarded-For`. Bounded 1–10. Ignored unless `TRUST_PROXY_HEADERS` is on |
 | `ALLOW_REGISTRATION` | No | `true` | Allow new account registration |
 | `ALLOW_ENV_KEY_FALLBACK` | No | `false` | Let users without a stored key use the operator's env provider keys |
-| `RATE_LIMIT_LLM_CALLS` / `RATE_LIMIT_LLM_WINDOW_SECONDS` | No | `10` / `300` | LLM-cost bucket (tailor, imports, recompile); bounded 1–1000 / 10–3600 |
+| `RATE_LIMIT_LLM_CALLS` / `RATE_LIMIT_LLM_WINDOW_SECONDS` | No | `10` / `300` | Per-user LLM-cost bucket (tailor, imports, recompile); bounded 1–1000 / 10–3600 |
+| `RATE_LIMIT_LLM_IP_CALLS` | No | `30` | Per-IP ceiling on the same routes over the same window, so registering fresh accounts cannot mint fresh LLM budget; bounded 1–5000 |
 | `RATE_LIMIT_GENERAL_CALLS` / `RATE_LIMIT_GENERAL_WINDOW_SECONDS` | No | `120` / `60` | General authed-API bucket; bounded 10–10000 / 1–3600 |
 | `LOGIN_MAX_ATTEMPTS` / `LOGIN_WINDOW_SECONDS` | No | `10` / `900` | Failed-login throttle per email+IP; bounded 1–100 / 10–3600 |
 | `MAX_RESUMES_PER_USER` | No | `10` | Bounded 1–100 |
