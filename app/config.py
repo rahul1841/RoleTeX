@@ -65,8 +65,11 @@ class AppConfig:
     allow_env_key_fallback: bool
     rate_limit_llm_calls: int
     rate_limit_llm_window_seconds: int
+    rate_limit_llm_ip_calls: int
     rate_limit_general_calls: int
     rate_limit_general_window_seconds: int
+    trust_proxy_headers: bool
+    trusted_proxy_hops: int
     login_max_attempts: int
     login_window_seconds: int
     max_resumes_per_user: int
@@ -108,10 +111,13 @@ def load_config() -> AppConfig:
         rate_limit_llm_window_seconds=_bounded_int(
             "RATE_LIMIT_LLM_WINDOW_SECONDS", 300, 10, 3_600
         ),
+        rate_limit_llm_ip_calls=_bounded_int("RATE_LIMIT_LLM_IP_CALLS", 30, 1, 5_000),
         rate_limit_general_calls=_bounded_int("RATE_LIMIT_GENERAL_CALLS", 120, 10, 10_000),
         rate_limit_general_window_seconds=_bounded_int(
             "RATE_LIMIT_GENERAL_WINDOW_SECONDS", 60, 1, 3_600
         ),
+        trust_proxy_headers=_env_bool("TRUST_PROXY_HEADERS", False),
+        trusted_proxy_hops=_bounded_int("TRUSTED_PROXY_HOPS", 1, 1, 10),
         login_max_attempts=_bounded_int("LOGIN_MAX_ATTEMPTS", 10, 1, 100),
         login_window_seconds=_bounded_int("LOGIN_WINDOW_SECONDS", 900, 10, 3_600),
         max_resumes_per_user=_bounded_int("MAX_RESUMES_PER_USER", 10, 1, 100),

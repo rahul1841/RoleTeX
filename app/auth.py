@@ -56,9 +56,12 @@ def _api_error(
     return HTTPException(status_code=status_code, detail=payload, headers=headers)
 
 
-def _client_ip(request: Request) -> str:
-    client = getattr(request, "client", None)
-    return getattr(client, "host", "") or ""
+def _client_ip(request: Request, config: Any) -> str:
+    """Login-throttle key half. See :func:`security.client_ip` for the trust model."""
+
+    return security.client_ip(
+        request, config.trust_proxy_headers, config.trusted_proxy_hops
+    )
 
 
 def extract_session_token(request: Request) -> Optional[str]:
@@ -329,7 +332,7 @@ def register_auth_routes(app: FastAPI, services: Any) -> None:
         payload: LoginRequest, request: Request, response: Response
     ) -> UserResponse:
         database = _database_or_503()
-        client_ip = _client_ip(request)
+        client_ip = _client_ip(request, services.config)
         email = security.normalize_email(payload.email) or payload.email.strip().lower()
 
         retry_after = services.login_throttle.check(email, client_ip)
