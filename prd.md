@@ -1,6 +1,7 @@
 # PRD — JD Resume Builder ("RoleTeX")
 
-> **Status:** Living document. Reflects the codebase as of 2026-07-14 (~80% of MVP complete, 87/87 tests passing).
+> **Status:** Living document. Reflects the codebase as of 2026-08-19 (single-user MVP ~85%, multi-user product ~75% after the account-lifecycle work; 313 tests passing + 1 Tectonic-gated skip).
+> Earlier headline figures in this file's history ("~80% / 87 tests", and the differing counts in `architecture.md` and `memory.md`) were stale snapshots stated in the present tense — treat any test count here as of its dated revision only.
 > **Companion docs:** [architecture.md](architecture.md) · [design.md](design.md) · [rules.md](rules.md) · [memory.md](memory.md) · [plan.md](plan.md) (original validated feasibility plan)
 
 ---
@@ -38,7 +39,7 @@ Paste a job description → an LLM proposes structured, fact-preserving edits (s
 ## 5. Users
 
 - **Primary:** the repo owner running a private instance with their own seed resume (`resume/data.json` + `resume/template.tex`; demo mode).
-- **Secondary (2026-07 revamp):** registered users (email+password accounts, MongoDB-backed) who import their own resumes via `POST /api/resumes` (LaTeX paste) or `POST /api/resumes/pdf` (PDF upload) into a private, versioned, per-user library, manage saved JDs and tailor history, and bring their own provider API keys (encrypted at rest).
+- **Secondary (2026-07 revamp):** registered users (email+password accounts with self-service password change/reset, optional email verification, and session revocation — MongoDB-backed) who import their own resumes via `POST /api/resumes` (LaTeX paste) or `POST /api/resumes/pdf` (PDF upload) into a private, versioned, per-user library, manage saved JDs and tailor history, and bring their own provider API keys (encrypted at rest).
 
 ## 6. User flows
 
@@ -72,9 +73,11 @@ Paste a job description → an LLM proposes structured, fact-preserving edits (s
 | FR-8 | Deterministic mock provider for offline dev/tests | ✅ Done, tested |
 | FR-9 | Resume/JD/run lifecycle (list/delete/quota/pruning) | ✅ Done, tested (Mongo revamp) |
 | FR-12 | Accounts & sessions, per-user encrypted API keys, rate limiting, login throttling, CSRF origin checks | ✅ Done, tested |
+| FR-14 | Account lifecycle: password change, emailed password reset, email verification (optionally enforced), active-session listing + per-device/bulk revocation, `disabled` account flag | ✅ Done, tested (2026-08-19, D-18). Mail transport is pluggable: SMTP driver + console driver; **no real SMTP server exercised yet** (G-19) |
 | FR-10 | Evaluation harness (compile success, fact preservation, keyword coverage across JDs) | ❌ Not built |
 | FR-11 | Automatic provider failover | ❌ Not built (providers selectable, no fallback chain) |
 | FR-13 | Cover letter generation | ❌ Not built |
+| FR-15 | Admin/operator surface for the `disabled` flag | ❌ Not built — set the field directly in MongoDB (G-20) |
 
 ## 8. Non-functional requirements
 

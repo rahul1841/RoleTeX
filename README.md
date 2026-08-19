@@ -16,6 +16,11 @@ saved job descriptions, tailor history, and per-user encrypted provider API
 keys. Without it the app boots in **demo mode**: no accounts, seed-resume
 tailoring only.
 
+Account management covers the full lifecycle: password change, emailed password
+reset, email verification (optionally enforced), a list of active sessions with
+per-device and bulk revocation, and a `disabled` flag that ejects an account on
+its next request. See [Account lifecycle](#account-lifecycle).
+
 The repository currently contains Rahul Kumar's personal seed resume data,
 including contact information. Keep the Git repository private, and keep demo
 deployments private (the seed resume is exposed to anyone with access).
@@ -55,12 +60,41 @@ Two deliberate boundaries keep this safe:
 Resume data is PII and lives only in MongoDB (never in the repo or the Docker
 image). The legacy `data/` directory stays git-ignored and docker-ignored.
 
+### Account lifecycle
+
+| Flow | Route | Notes |
+|---|---|---|
+| Change password | `POST /api/auth/password` | Requires the current password. Signs out **every other** session and voids outstanding reset links |
+| Request a reset | `POST /api/auth/password/forgot` | Always returns the same body — it never reveals whether an address has an account, or whether that account is disabled |
+| Complete a reset | `POST /api/auth/password/reset` | Single-use, expiring token. Signs out **all** sessions, including the requester's, because nobody proved possession of the old password |
+| Send a verification mail | `POST /api/auth/verify/request` | Signed-in; `409` once already verified |
+| Confirm an address | `POST /api/auth/verify/confirm` | Deliberately unauthenticated — the link is usually opened in a different browser, and the token is the proof |
+| List sessions | `GET /api/sessions` | Marks the requesting session; shows a coarse device label, IP, and last-active time |
+| Revoke one / all others | `DELETE /api/sessions/{id}` · `DELETE /api/sessions` | Ownership is enforced in the Mongo filter, so an id guess cannot reach another user |
+
+Reset and verification tokens are 256-bit values stored only as SHA-256 hashes,
+redeemed through a conditional update so a token can never be spent twice, and
+destroyed en masse whenever the account's password changes.
+
+**Mail transport.** With `SMTP_HOST` unset the app uses a console driver that
+logs each message instead of sending it, so both flows are exercisable locally
+with no mail server. Setting `SMTP_HOST` switches to real SMTP and makes
+`PUBLIC_BASE_URL` mandatory — see the configuration table for why.
+
+**Disabling an account.** There is no admin UI. Set `disabled: true` on the
+user document in MongoDB; the next request from that account is refused with
+`403 account_disabled` and its session document is deleted. Login refuses a
+disabled account only *after* verifying the password, so the endpoint does not
+become an account oracle.
+
 ## Repository layout
 
 ```text
 app/                  FastAPI application, validation, rendering, and compiler
 app/importer.py       LaTeX-extraction normalization and template assembly
-app/db.py             MongoDB (Motor) stores: users, sessions, keys, resumes, JDs, runs
+app/db.py             MongoDB (Motor) stores: users, sessions, auth tokens, keys, resumes, JDs, runs
+app/routes_account.py Password change/reset, email verification, session management
+app/mailer.py         Pluggable outbound mail: SMTP driver plus a console driver
 app/security.py       Password hashing, sessions, Fernet key encryption, rate limiting
 app/config.py         Env-driven AppConfig with clamped bounds
 resume/data.json      Canonical seed resume facts and stable editable IDs
@@ -168,6 +202,17 @@ Docker build always renders the configured baseline and performs a real compile.
 | `TRUSTED_PROXY_HOPS` | No | `1` | How many proxies you run; the client address is read that many entries from the right of `X-Forwarded-For`. Bounded 1–10. Ignored unless `TRUST_PROXY_HEADERS` is on |
 | `ALLOW_REGISTRATION` | No | `true` | Allow new account registration |
 | `ALLOW_ENV_KEY_FALLBACK` | No | `false` | Let users without a stored key use the operator's env provider keys |
+| `REQUIRE_EMAIL_VERIFICATION` | No | `false` | Refuse feature routes until the account's address is confirmed (`403 email_verification_required`). `/api/me`, session management, logout, and the verification routes stay reachable |
+| `PUBLIC_BASE_URL` | Once SMTP is set | — | Public origin (`https://host`) used to build one-time links in outbound mail. **Required when `SMTP_HOST` is set**: without it the origin would come from the request `Host` header, which lets an attacker aim a victim's real reset token at their own domain. Non-http(s) values are ignored |
+| `MAIL_FROM` | No | `roletex@localhost` | Envelope sender for account mail |
+| `SMTP_HOST` | No | — | SMTP server. Unset → console driver: the message (link included) is written to the application log instead of sent. Fine locally, never for a deployment real users reach |
+| `SMTP_PORT` | No | `587` | Bounded 1–65535 |
+| `SMTP_USERNAME` / `SMTP_PASSWORD` | No | — | SMTP credentials; omit for an unauthenticated relay |
+| `SMTP_STARTTLS` | No | `true` | Issue STARTTLS after connecting |
+| `SMTP_TIMEOUT_SECONDS` | No | `15` | Per-send socket timeout, bounded 5–120 |
+| `PASSWORD_RESET_TTL_MINUTES` | No | `60` | Reset-link lifetime, bounded 5–1440 |
+| `EMAIL_VERIFY_TTL_HOURS` | No | `48` | Verification-link lifetime, bounded 1–168 |
+| `RATE_LIMIT_EMAIL_CALLS` / `RATE_LIMIT_EMAIL_WINDOW_SECONDS` | No | `5` / `900` | Mail bucket for reset/verification requests, charged against both the caller's IP and the target address; bounded 1–100 / 60–86400 |
 | `RATE_LIMIT_LLM_CALLS` / `RATE_LIMIT_LLM_WINDOW_SECONDS` | No | `10` / `300` | Per-user LLM-cost bucket (tailor, imports, recompile); bounded 1–1000 / 10–3600 |
 | `RATE_LIMIT_LLM_IP_CALLS` | No | `30` | Per-IP ceiling on the same routes over the same window, so registering fresh accounts cannot mint fresh LLM budget; bounded 1–5000 |
 | `RATE_LIMIT_GENERAL_CALLS` / `RATE_LIMIT_GENERAL_WINDOW_SECONDS` | No | `120` / `60` | General authed-API bucket; bounded 10–10000 / 1–3600 |
