@@ -66,7 +66,16 @@ def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
 class UserStore:
     """Accounts. Unique on ``email`` (enforced by index and a pre-check)."""
 
-    _UPDATABLE_FIELDS = ("name", "default_provider", "default_model", "password_hash")
+    _UPDATABLE_FIELDS = (
+        "name",
+        "default_provider",
+        "default_model",
+        "password_hash",
+        "password_changed_at",
+        "email_verified",
+        "email_verified_at",
+        "disabled",
+    )
 
     def __init__(self, collection: Any) -> None:
         self._collection = collection
@@ -83,6 +92,12 @@ class UserStore:
             "name": name,
             "default_provider": None,
             "default_model": None,
+            # Accounts created before these fields existed read as unverified
+            # and enabled via ``.get(..., default)`` at every call site.
+            "email_verified": False,
+            "email_verified_at": None,
+            "disabled": False,
+            "password_changed_at": now,
             "created_at": now,
             "updated_at": now,
         }
@@ -121,16 +136,35 @@ class SessionStore:
     def __init__(self, collection: Any) -> None:
         self._collection = collection
 
-    async def create(self, user_id: str, token_hash: str, expires_at: datetime) -> None:
+    async def create(
+        self,
+        user_id: str,
+        token_hash: str,
+        expires_at: datetime,
+        user_agent: str = "",
+        client_ip: str = "",
+    ) -> str:
+        """Open a session and return its document id (for "this device" marking).
+
+        ``user_agent``/``client_ip`` exist only so a signed-in user can recognize
+        their own sessions in the revocation UI; both are truncated and neither
+        is ever used for authorization.
+        """
+
+        session_id = _new_id()
         await self._collection.insert_one(
             {
-                "_id": _new_id(),
+                "_id": session_id,
                 "user_id": user_id,
                 "token_hash": token_hash,
+                "user_agent": (user_agent or "")[:200],
+                "client_ip": (client_ip or "")[:64],
                 "created_at": _utc_now(),
+                "last_seen_at": _utc_now(),
                 "expires_at": expires_at,
             }
         )
+        return session_id
 
     async def get(self, token_hash: str) -> Optional[Dict[str, Any]]:
         doc = await self._collection.find_one({"token_hash": token_hash})
@@ -143,14 +177,105 @@ class SessionStore:
 
     async def touch(self, token_hash: str, expires_at: datetime) -> None:
         await self._collection.update_one(
-            {"token_hash": token_hash}, {"$set": {"expires_at": expires_at}}
+            {"token_hash": token_hash},
+            {"$set": {"expires_at": expires_at, "last_seen_at": _utc_now()}},
         )
+
+    async def list_for_user(self, user_id: str) -> List[Dict[str, Any]]:
+        """Unexpired sessions for one user, newest first.
+
+        Expiry is filtered in code as well as in the query because the TTL
+        monitor is lazy and mongomock does not run one at all.
+        """
+
+        cursor = self._collection.find({"user_id": user_id}).sort("created_at", -1)
+        docs = await cursor.to_list(length=500)
+        now = _utc_now()
+        live = []
+        for doc in docs:
+            expires_at = _as_utc(doc.get("expires_at"))
+            if expires_at is not None and expires_at > now:
+                live.append(doc)
+        return live
+
+    async def delete_by_id(self, user_id: str, session_id: str) -> bool:
+        """Revoke one session, scoped by owner so an id guess cannot cross users."""
+
+        result = await self._collection.delete_one(
+            {"_id": session_id, "user_id": user_id}
+        )
+        return bool(getattr(result, "deleted_count", 0))
+
+    async def delete_for_user_except(self, user_id: str, keep_token_hash: str) -> int:
+        """Revoke every session for a user except the one making the request."""
+
+        result = await self._collection.delete_many(
+            {"user_id": user_id, "token_hash": {"$ne": keep_token_hash}}
+        )
+        return int(getattr(result, "deleted_count", 0))
 
     async def delete(self, token_hash: str) -> None:
         await self._collection.delete_one({"token_hash": token_hash})
 
     async def delete_for_user(self, user_id: str) -> None:
         await self._collection.delete_many({"user_id": user_id})
+
+
+class AuthTokenStore:
+    """Single-use, expiring tokens for password reset and email verification.
+
+    Only the SHA-256 hash of a token is stored, exactly as for sessions, so a
+    database leak yields nothing usable. ``consume`` is a conditional
+    ``find_one_and_update`` on ``used_at: None``: two concurrent redemptions of
+    the same token can never both succeed, because only the update that flips
+    the field observes the unused document.
+    """
+
+    PURPOSE_PASSWORD_RESET = "password_reset"
+    PURPOSE_EMAIL_VERIFY = "email_verify"
+
+    def __init__(self, collection: Any) -> None:
+        self._collection = collection
+
+    async def create(
+        self, user_id: str, purpose: str, token_hash: str, expires_at: datetime
+    ) -> None:
+        await self._collection.insert_one(
+            {
+                "_id": _new_id(),
+                "user_id": user_id,
+                "purpose": purpose,
+                "token_hash": token_hash,
+                "created_at": _utc_now(),
+                "expires_at": expires_at,
+                "used_at": None,
+            }
+        )
+
+    async def consume(self, purpose: str, token_hash: str) -> Optional[Dict[str, Any]]:
+        """Atomically redeem a token; None when unknown, spent, or expired."""
+
+        doc = await self._collection.find_one_and_update(
+            {"purpose": purpose, "token_hash": token_hash, "used_at": None},
+            {"$set": {"used_at": _utc_now()}},
+            return_document=ReturnDocument.BEFORE,
+        )
+        if doc is None:
+            return None
+        expires_at = _as_utc(doc.get("expires_at"))
+        if expires_at is None or expires_at <= _utc_now():
+            return None
+        return doc
+
+    async def delete_for_user(
+        self, user_id: str, purpose: Optional[str] = None
+    ) -> None:
+        """Invalidate outstanding tokens (on password change, reset, or delete)."""
+
+        query: Dict[str, Any] = {"user_id": user_id}
+        if purpose is not None:
+            query["purpose"] = purpose
+        await self._collection.delete_many(query)
 
 
 class ApiKeyStore:
@@ -550,6 +675,7 @@ class Database:
         self._db = motor_db
         self.users = UserStore(motor_db["users"])
         self.sessions = SessionStore(motor_db["sessions"])
+        self.auth_tokens = AuthTokenStore(motor_db["auth_tokens"])
         self.api_keys = ApiKeyStore(motor_db["api_keys"])
         self.resumes = ResumeStore(motor_db["resumes"], motor_db["resume_versions"])
         self.jds = JdStore(motor_db["jds"], motor_db["jd_versions"])
@@ -591,6 +717,10 @@ class Database:
             (self._db["users"], "email", {"unique": True}),
             (self._db["sessions"], "token_hash", {"unique": True}),
             (self._db["sessions"], "expires_at", {"expireAfterSeconds": 0}),
+            (self._db["sessions"], "user_id", {}),
+            (self._db["auth_tokens"], "token_hash", {"unique": True}),
+            (self._db["auth_tokens"], "expires_at", {"expireAfterSeconds": 0}),
+            (self._db["auth_tokens"], [("user_id", 1), ("purpose", 1)], {}),
             (self._db["api_keys"], [("user_id", 1), ("provider", 1)], {"unique": True}),
             (self._db["resumes"], "user_id", {}),
             (self._db["resume_versions"], [("resume_id", 1), ("version", 1)], {"unique": True}),

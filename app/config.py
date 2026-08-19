@@ -5,7 +5,8 @@ hostile environment value can never disable a safety limit. ``APP_SECRET_KEY``
 protects session-independent secrets (Fernet encryption of user API keys); if
 it is unset a random ephemeral key is generated so the app still boots, and
 the config records that fact so ``/api/health`` can surface the warning —
-encrypted keys and sessions will not survive a restart in that state.
+encrypted provider keys become unreadable after a restart in that state
+(sessions are unaffected: their token hashes do not involve this key).
 """
 
 from __future__ import annotations
@@ -38,6 +39,22 @@ def _bounded_float(name: str, default: float, minimum: float, maximum: float) ->
     return max(minimum, min(maximum, value))
 
 
+def _public_base_url(raw: str) -> str:
+    """Normalize ``PUBLIC_BASE_URL`` to a scheme-qualified origin with no trailing slash.
+
+    Only http/https are accepted: this value is interpolated into password-reset
+    links, so a ``javascript:`` or ``data:`` origin must never survive.
+    """
+
+    value = (raw or "").strip().rstrip("/")
+    if not value:
+        return ""
+    lowered = value.lower()
+    if not (lowered.startswith("http://") or lowered.startswith("https://")):
+        return ""
+    return value
+
+
 def _cookie_secure_mode(raw: str) -> str:
     value = raw.strip().lower()
     if value in ("true", "1", "yes", "on"):
@@ -63,6 +80,19 @@ class AppConfig:
     cookie_secure: str  # "auto" | "true" | "false"
     allow_registration: bool
     allow_env_key_fallback: bool
+    require_email_verification: bool
+    password_reset_ttl_minutes: int
+    email_verify_ttl_hours: int
+    public_base_url: str
+    mail_from: str
+    smtp_host: str
+    smtp_port: int
+    smtp_username: str
+    smtp_password: str
+    smtp_starttls: bool
+    smtp_timeout_seconds: int
+    rate_limit_email_calls: int
+    rate_limit_email_window_seconds: int
     rate_limit_llm_calls: int
     rate_limit_llm_window_seconds: int
     rate_limit_llm_ip_calls: int
@@ -107,6 +137,23 @@ def load_config() -> AppConfig:
         cookie_secure=_cookie_secure_mode(os.getenv("COOKIE_SECURE", "auto")),
         allow_registration=_env_bool("ALLOW_REGISTRATION", True),
         allow_env_key_fallback=_env_bool("ALLOW_ENV_KEY_FALLBACK", False),
+        require_email_verification=_env_bool("REQUIRE_EMAIL_VERIFICATION", False),
+        password_reset_ttl_minutes=_bounded_int(
+            "PASSWORD_RESET_TTL_MINUTES", 60, 5, 1_440
+        ),
+        email_verify_ttl_hours=_bounded_int("EMAIL_VERIFY_TTL_HOURS", 48, 1, 168),
+        public_base_url=_public_base_url(os.getenv("PUBLIC_BASE_URL", "")),
+        mail_from=os.getenv("MAIL_FROM", "").strip() or "roletex@localhost",
+        smtp_host=os.getenv("SMTP_HOST", "").strip(),
+        smtp_port=_bounded_int("SMTP_PORT", 587, 1, 65_535),
+        smtp_username=os.getenv("SMTP_USERNAME", "").strip(),
+        smtp_password=os.getenv("SMTP_PASSWORD", ""),
+        smtp_starttls=_env_bool("SMTP_STARTTLS", True),
+        smtp_timeout_seconds=_bounded_int("SMTP_TIMEOUT_SECONDS", 15, 5, 120),
+        rate_limit_email_calls=_bounded_int("RATE_LIMIT_EMAIL_CALLS", 5, 1, 100),
+        rate_limit_email_window_seconds=_bounded_int(
+            "RATE_LIMIT_EMAIL_WINDOW_SECONDS", 900, 60, 86_400
+        ),
         rate_limit_llm_calls=_bounded_int("RATE_LIMIT_LLM_CALLS", 10, 1, 1_000),
         rate_limit_llm_window_seconds=_bounded_int(
             "RATE_LIMIT_LLM_WINDOW_SECONDS", 300, 10, 3_600

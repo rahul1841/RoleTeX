@@ -16,7 +16,18 @@
   const REQUEST_TIMEOUT_MS = 180_000;
   const MAX_PDF_BYTES = 10_000_000;
   const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-  const ROUTES = ["auth", "tailor", "resumes", "jds", "history", "settings"];
+  const ROUTES = [
+    "auth",
+    "tailor",
+    "resumes",
+    "jds",
+    "history",
+    "settings",
+    "reset-password",
+    "verify-email",
+  ];
+  // Reachable while signed out: the one-time token in the hash is the credential.
+  const PUBLIC_ROUTES = ["reset-password", "verify-email"];
 
   const numberFormat = new Intl.NumberFormat();
 
@@ -50,6 +61,14 @@
     pdf_support_unavailable: "PDF import isn’t available on this server right now. Paste LaTeX instead.",
     pdf_extract_timeout: "Reading that PDF took too long. Try a smaller or simpler file.",
     invalid_llm_proposal: "The AI response did not pass the resume safety checks. Please try again.",
+    password_unchanged: "Choose a password different from your current one.",
+    invalid_token: "That link is invalid, already used, or expired. Request a new one.",
+    already_verified: "This email address is already verified.",
+    email_verification_required: "Verify your email address to use this feature.",
+    account_disabled: "This account has been disabled. Contact the server administrator.",
+    mail_not_configured: "This server cannot send account emails yet. Ask the operator to set PUBLIC_BASE_URL.",
+    too_many_requests: "Too many email requests. Please wait a few minutes and try again.",
+    session_not_found: "That session is no longer active.",
   };
 
   /* ------------------------------------------------------------- DOM refs */
@@ -76,6 +95,8 @@
     jds: $("view-jds"),
     history: $("view-history"),
     settings: $("view-settings"),
+    "reset-password": $("view-reset-password"),
+    "verify-email": $("view-verify-email"),
   };
   const viewTitles = {
     auth: $("auth-title"),
@@ -84,7 +105,46 @@
     jds: $("jds-title"),
     history: $("history-title"),
     settings: $("settings-title"),
+    "reset-password": $("reset-title"),
+    "verify-email": $("verify-title"),
   };
+
+  // Account lifecycle
+  const forgotLink = $("forgot-link");
+  const forgotForm = $("forgot-form");
+  const forgotEmail = $("forgot-email");
+  const forgotError = $("forgot-error");
+  const forgotErrorMessage = $("forgot-error-message");
+  const forgotSent = $("forgot-sent");
+  const forgotSentMessage = $("forgot-sent-message");
+  const forgotButton = $("forgot-button");
+  const forgotBack = $("forgot-back");
+  const resetForm = $("reset-form");
+  const resetPasswordInput = $("reset-password-input");
+  const resetPasswordConfirm = $("reset-password-confirm");
+  const resetError = $("reset-error");
+  const resetErrorMessage = $("reset-error-message");
+  const resetButtonEl = $("reset-button");
+  const resetDone = $("reset-done");
+  const resetSignin = $("reset-signin");
+  const verifyStatus = $("verify-status");
+  const verifyError = $("verify-error");
+  const verifyErrorMessage = $("verify-error-message");
+  const verifyDone = $("verify-done");
+  const verifyContinue = $("verify-continue");
+  const verifyBanner = $("verify-banner");
+  const verifyBannerMessage = $("verify-banner-message");
+  const verifySendButton = $("verify-send-button");
+  const passwordForm = $("password-form");
+  const currentPasswordInput = $("current-password-input");
+  const newPasswordInput = $("new-password-input");
+  const newPasswordConfirm = $("new-password-confirm");
+  const passwordError = $("password-error");
+  const passwordErrorMessage = $("password-error-message");
+  const passwordSaveButton = $("password-save-button");
+  const sessionsStatus = $("sessions-status");
+  const sessionsList = $("sessions-list");
+  const sessionsRevokeAll = $("sessions-revoke-all");
 
   // Auth
   const authTabLogin = $("auth-tab-login");
@@ -308,6 +368,12 @@
     settings: {
       loadVersion: 0,
     },
+    sessions: {
+      items: [],
+      listVersion: 0,
+    },
+    // Guards the one-shot verification POST against repeated showView() calls.
+    verify: { token: null },
   };
 
   /* --------------------------------------------------------------- helpers */
@@ -592,6 +658,11 @@
       if (response.status === 401 && parts.code === "not_authenticated" && !opts.quiet401) {
         handleSessionLost();
       }
+      // The server destroys the session document when it refuses a disabled
+      // account, so the cookie this browser holds is already dead.
+      if (response.status === 403 && parts.code === "account_disabled") {
+        handleSessionLost();
+      }
       throw apiError;
     }
     return payload || {};
@@ -745,6 +816,353 @@
     { tab: resumeTabPdf, panel: resumePanelPdf },
   ]);
 
+
+  /* --------------------------------------------------- account lifecycle */
+
+  function showAuthPanel(which) {
+    const forgot = which === "forgot";
+    forgotForm.hidden = !forgot;
+    loginForm.hidden = forgot;
+    registerForm.hidden = true;
+    authTabLogin.parentElement.hidden = forgot;
+    if (forgot) {
+      hideNotice(forgotError, forgotErrorMessage);
+      forgotSent.hidden = true;
+      forgotEmail.value = loginEmail.value.trim();
+      forgotEmail.focus();
+    } else {
+      loginEmail.focus();
+    }
+  }
+
+  async function handleForgotSubmit(event) {
+    event.preventDefault();
+    hideNotice(forgotError, forgotErrorMessage);
+    forgotSent.hidden = true;
+    const email = forgotEmail.value.trim();
+    if (!EMAIL_PATTERN.test(email)) {
+      showNotice(forgotError, forgotErrorMessage, "Enter a valid email address.");
+      forgotEmail.focus();
+      return;
+    }
+    setBusy(forgotButton, true, "Sending…");
+    try {
+      const payload = await api("/api/auth/password/forgot", {
+        method: "POST",
+        body: { email },
+      });
+      // Deliberately the same message for every address: the server does not
+      // tell us whether an account exists, and neither should this screen.
+      forgotSentMessage.textContent = payload && payload.delivered
+        ? "If that address has an account, a reset link is on its way. It expires shortly."
+        : "Reset link created. This server has no mail transport configured, so ask the operator to read it from the application log.";
+      forgotSent.hidden = false;
+      forgotSent.focus();
+    } catch (error) {
+      showNotice(forgotError, forgotErrorMessage, errorText(error));
+    } finally {
+      setBusy(forgotButton, false);
+    }
+  }
+
+  function prepareResetView() {
+    hideNotice(resetError, resetErrorMessage);
+    resetDone.hidden = true;
+    resetPasswordInput.value = "";
+    resetPasswordConfirm.value = "";
+    const hasToken = Boolean(routeToken());
+    resetForm.hidden = !hasToken;
+    if (!hasToken) {
+      showNotice(
+        resetError,
+        resetErrorMessage,
+        "This reset link is missing its token. Request a new one from the sign-in page."
+      );
+    }
+  }
+
+  async function handleResetSubmit(event) {
+    event.preventDefault();
+    hideNotice(resetError, resetErrorMessage);
+    const next = resetPasswordInput.value;
+    if (next.length < 8 || next.length > 128) {
+      showNotice(resetError, resetErrorMessage, ERROR_COPY.weak_password);
+      resetPasswordInput.focus();
+      return;
+    }
+    if (next !== resetPasswordConfirm.value) {
+      showNotice(resetError, resetErrorMessage, "The two passwords don’t match.");
+      resetPasswordConfirm.focus();
+      return;
+    }
+    setBusy(resetButtonEl, true, "Saving…");
+    try {
+      await api("/api/auth/password/reset", {
+        method: "POST",
+        body: { token: routeToken(), new_password: next },
+      });
+      // The server revoked every session, including any this browser held.
+      state.user = null;
+      clearUserCaches();
+      updateChrome();
+      resetForm.hidden = true;
+      resetDone.hidden = false;
+      resetDone.focus();
+    } catch (error) {
+      showNotice(resetError, resetErrorMessage, errorText(error));
+    } finally {
+      setBusy(resetButtonEl, false);
+    }
+  }
+
+  async function runEmailVerification() {
+    const token = routeToken();
+    if (state.verify.token === token) {
+      return; // showView() re-enters on every navigation; redeem only once.
+    }
+    state.verify.token = token;
+    hideNotice(verifyError, verifyErrorMessage);
+    verifyDone.hidden = true;
+    if (!token) {
+      verifyStatus.hidden = true;
+      showNotice(
+        verifyError,
+        verifyErrorMessage,
+        "This verification link is missing its token."
+      );
+      return;
+    }
+    verifyStatus.hidden = false;
+    try {
+      await api("/api/auth/verify/confirm", {
+        method: "POST",
+        body: { token },
+        quiet401: true,
+      });
+      verifyDone.hidden = false;
+      verifyDone.focus();
+      if (state.user) {
+        state.user.email_verified = true;
+        updateVerifyBanner();
+      }
+    } catch (error) {
+      showNotice(verifyError, verifyErrorMessage, errorText(error));
+    } finally {
+      verifyStatus.hidden = true;
+    }
+  }
+
+  function updateVerifyBanner() {
+    const user = state.user;
+    if (!user || user.email_verified) {
+      verifyBanner.hidden = true;
+      return;
+    }
+    verifyBannerMessage.textContent = user.verification_required
+      ? "Verify your email address to unlock tailoring, resumes, and history."
+      : "Your email address isn’t verified yet.";
+    verifyBanner.hidden = false;
+  }
+
+  async function handleSendVerification() {
+    setBusy(verifySendButton, true, "Sending…");
+    try {
+      const payload = await api("/api/auth/verify/request", { method: "POST" });
+      toast(
+        payload && payload.delivered
+          ? "Verification email sent — check your inbox."
+          : "Verification link created. This server logs it instead of sending mail.",
+        "success"
+      );
+    } catch (error) {
+      toast(errorText(error), "error");
+    } finally {
+      setBusy(verifySendButton, false);
+    }
+  }
+
+  async function handlePasswordChange(event) {
+    event.preventDefault();
+    hideNotice(passwordError, passwordErrorMessage);
+    const current = currentPasswordInput.value;
+    const next = newPasswordInput.value;
+    if (!current) {
+      showNotice(passwordError, passwordErrorMessage, "Enter your current password.");
+      currentPasswordInput.focus();
+      return;
+    }
+    if (next.length < 8 || next.length > 128) {
+      showNotice(passwordError, passwordErrorMessage, ERROR_COPY.weak_password);
+      newPasswordInput.focus();
+      return;
+    }
+    if (next !== newPasswordConfirm.value) {
+      showNotice(passwordError, passwordErrorMessage, "The two passwords don’t match.");
+      newPasswordConfirm.focus();
+      return;
+    }
+    setBusy(passwordSaveButton, true, "Saving…");
+    try {
+      const payload = await api("/api/auth/password", {
+        method: "POST",
+        body: { current_password: current, new_password: next },
+      });
+      if (payload && payload.user) {
+        state.user = payload.user;
+        updateChrome();
+      }
+      currentPasswordInput.value = "";
+      newPasswordInput.value = "";
+      newPasswordConfirm.value = "";
+      toast("Password changed. Other devices were signed out.", "success");
+      loadSessions();
+    } catch (error) {
+      showNotice(passwordError, passwordErrorMessage, errorText(error));
+    } finally {
+      setBusy(passwordSaveButton, false);
+    }
+  }
+
+  function describeAgent(agent) {
+    const value = (agent || "").trim();
+    if (!value) {
+      return "Unknown device";
+    }
+    // Chrome's UA also contains "Safari", and Edge/Opera contain both, so the
+    // order of these tests is what makes the answer right.
+    const browser = /Edg\//.test(value)
+      ? "Edge"
+      : /OPR\//.test(value)
+      ? "Opera"
+      : /Chrome\//.test(value)
+      ? "Chrome"
+      : /Firefox\//.test(value)
+      ? "Firefox"
+      : /Safari\//.test(value)
+      ? "Safari"
+      : "";
+    const platform = /Windows/.test(value)
+      ? "Windows"
+      : /Macintosh|Mac OS X/.test(value)
+      ? "macOS"
+      : /Android/.test(value)
+      ? "Android"
+      : /iPhone|iPad|iPod/.test(value)
+      ? "iOS"
+      : /Linux/.test(value)
+      ? "Linux"
+      : "";
+    if (browser && platform) {
+      return browser + " on " + platform;
+    }
+    return browser || platform || value.slice(0, 60);
+  }
+
+  function renderSessions(items) {
+    sessionsList.textContent = "";
+    items.forEach((item) => {
+      const row = el("div", "session-row" + (item.current ? " is-current" : ""));
+      const info = el("div", "session-info");
+      info.append(el("p", "session-agent", describeAgent(item.user_agent)));
+      const meta = [];
+      if (item.client_ip) {
+        meta.push(item.client_ip);
+      }
+      if (item.last_seen_at) {
+        meta.push("last active " + formatDateTime(item.last_seen_at));
+      } else if (item.created_at) {
+        meta.push("signed in " + formatDateTime(item.created_at));
+      }
+      info.append(el("p", "session-meta", meta.join(" · ")));
+      row.append(info);
+      if (item.current) {
+        row.append(el("span", "session-badge", "This device"));
+      } else {
+        const button = smallButton("Sign out", "button--danger");
+        button.addEventListener("click", () => revokeSession(item, button));
+        row.append(button);
+      }
+      sessionsList.append(row);
+    });
+    sessionsRevokeAll.hidden = items.filter((item) => !item.current).length === 0;
+  }
+
+  async function loadSessions() {
+    if (state.mode !== "multi_user" || !state.user) {
+      return;
+    }
+    const version = ++state.sessions.listVersion;
+    sessionsStatus.textContent = "Loading sessions…";
+    sessionsStatus.hidden = false;
+    try {
+      const payload = await api("/api/sessions");
+      if (version !== state.sessions.listVersion) {
+        return;
+      }
+      const items = Array.isArray(payload.sessions) ? payload.sessions : [];
+      state.sessions.items = items;
+      renderSessions(items);
+      sessionsStatus.hidden = items.length > 0;
+      if (!items.length) {
+        sessionsStatus.textContent = "No active sessions.";
+      }
+    } catch (error) {
+      if (version !== state.sessions.listVersion) {
+        return;
+      }
+      sessionsList.textContent = "";
+      sessionsStatus.textContent = errorText(error, "Could not load your sessions.");
+      sessionsStatus.hidden = false;
+    }
+  }
+
+  async function revokeSession(item, button) {
+    const confirmed = await openConfirm({
+      title: "Sign out this device?",
+      message: describeAgent(item.user_agent) + " will need to sign in again.",
+      confirmLabel: "Sign out",
+    });
+    if (!confirmed) {
+      return;
+    }
+    setBusy(button, true);
+    try {
+      await api("/api/sessions/" + encodeURIComponent(item.id), { method: "DELETE" });
+      toast("That device was signed out.", "success");
+      await loadSessions();
+    } catch (error) {
+      toast(errorText(error), "error");
+      setBusy(button, false);
+    }
+  }
+
+  async function handleRevokeOtherSessions() {
+    const confirmed = await openConfirm({
+      title: "Sign out other devices?",
+      message: "Every browser except this one will need to sign in again.",
+      confirmLabel: "Sign out others",
+    });
+    if (!confirmed) {
+      return;
+    }
+    setBusy(sessionsRevokeAll, true, "Signing out…");
+    try {
+      const payload = await api("/api/sessions", { method: "DELETE" });
+      const count = payload && typeof payload.revoked === "number" ? payload.revoked : 0;
+      toast(
+        count
+          ? "Signed out " + count + (count === 1 ? " other device." : " other devices.")
+          : "No other devices were signed in.",
+        "success"
+      );
+      await loadSessions();
+    } catch (error) {
+      toast(errorText(error), "error");
+    } finally {
+      setBusy(sessionsRevokeAll, false);
+    }
+  }
+
   /* --------------------------------------------------------------- router */
 
   function parseRoute() {
@@ -757,13 +1175,32 @@
     if (state.mode === "demo") {
       return "tailor";
     }
+    // Token-bearing links must resolve before the sign-in redirect: the whole
+    // point is that the visitor cannot sign in yet.
+    if (PUBLIC_ROUTES.includes(requested)) {
+      return requested;
+    }
     if (!state.user) {
       return "auth";
     }
     if (!requested || requested === "auth") {
       return "tailor";
     }
+    // When the server gates on verification, every other view would 403 —
+    // send the user to the one screen that can fix it.
+    if (state.user.verification_required && !state.user.email_verified) {
+      return "settings";
+    }
     return requested;
+  }
+
+  function routeToken() {
+    const hash = window.location.hash || "";
+    const start = hash.indexOf("?");
+    if (start < 0) {
+      return "";
+    }
+    return (new URLSearchParams(hash.slice(start + 1)).get("token") || "").trim();
   }
 
   function navigate(route) {
@@ -822,6 +1259,10 @@
       loadHistory();
     } else if (route === "settings") {
       loadSettings();
+    } else if (route === "reset-password") {
+      prepareResetView();
+    } else if (route === "verify-email") {
+      runEmailVerification();
     }
   }
 
@@ -862,6 +1303,8 @@
   }
 
   function clearUserCaches() {
+    state.sessions.items = [];
+    state.verify.token = null;
     state.resumes.items = [];
     state.resumes.pendingFile = null;
     state.jds.items = [];
@@ -2758,7 +3201,9 @@
       }
       const keys = Array.isArray(keysPayload.keys) ? keysPayload.keys : [];
       renderSettings(providers, keys);
+      updateVerifyBanner();
       settingsBody.hidden = false;
+      loadSessions();
     } catch (error) {
       if (version !== state.settings.loadVersion) {
         return;
@@ -3070,6 +3515,21 @@
 
   settingsRetry.addEventListener("click", loadSettings);
   defaultsForm.addEventListener("submit", handleDefaultsSave);
+  forgotLink.addEventListener("click", () => showAuthPanel("forgot"));
+  forgotBack.addEventListener("click", () => showAuthPanel("login"));
+  forgotForm.addEventListener("submit", handleForgotSubmit);
+  resetForm.addEventListener("submit", handleResetSubmit);
+  resetSignin.addEventListener("click", () => {
+    showAuthPanel("login");
+    navigate("auth");
+  });
+  verifyContinue.addEventListener("click", () => {
+    navigate(state.user ? "settings" : "auth");
+  });
+  verifySendButton.addEventListener("click", handleSendVerification);
+  passwordForm.addEventListener("submit", handlePasswordChange);
+  sessionsRevokeAll.addEventListener("click", handleRevokeOtherSessions);
+
   accountForm.addEventListener("submit", handleAccountSave);
   deleteAccountButton.addEventListener("click", openDeleteAccountModal);
   deleteAccountForm.addEventListener("submit", handleDeleteAccount);

@@ -114,8 +114,21 @@ async def resolve_session(
     return context
 
 
-async def require_user(request: Request, services: Any) -> Dict[str, Any]:
-    """Session dependency for DB-backed routes (503 in demo mode, 401 unauthenticated)."""
+async def require_user(
+    request: Request, services: Any, allow_unverified: bool = False
+) -> Dict[str, Any]:
+    """Session dependency for DB-backed routes (503 in demo mode, 401 unauthenticated).
+
+    Two account-state gates run after the session resolves:
+
+    - A **disabled** account is refused and its session is destroyed on the spot,
+      so flipping ``disabled`` in the database ejects a signed-in user on their
+      next request rather than at their next login.
+    - When the operator sets ``REQUIRE_EMAIL_VERIFICATION``, an unverified
+      account is refused with a distinct code. ``allow_unverified`` exempts the
+      handful of routes a blocked user still needs: reading their own profile,
+      requesting a new verification mail, confirming one, and signing out.
+    """
 
     if getattr(services, "database", None) is None:
         raise _api_error(
@@ -127,6 +140,26 @@ async def require_user(request: Request, services: Any) -> Dict[str, Any]:
     if context is None:
         raise _api_error(401, "not_authenticated", "Sign in to use this feature.")
     user, session, token_hash = context
+
+    if user.get("disabled", False):
+        # Destroy the credential rather than merely refusing the request.
+        await services.database.sessions.delete(token_hash)
+        raise _api_error(
+            403,
+            "account_disabled",
+            "This account has been disabled. Contact the server administrator.",
+        )
+
+    if (
+        not allow_unverified
+        and services.config.require_email_verification
+        and not user.get("email_verified", False)
+    ):
+        raise _api_error(
+            403,
+            "email_verification_required",
+            "Verify your email address to use this feature.",
+        )
 
     # Sliding renewal: refresh the server-side expiry once <75% TTL remains.
     ttl_seconds = services.config.session_ttl_seconds
@@ -182,6 +215,8 @@ async def build_user_out(services: Any, user: Dict[str, Any]) -> UserOut:
         default_model=user.get("default_model") or None,
         created_at=user.get("created_at"),
         providers_with_keys=providers_with_keys,
+        email_verified=bool(user.get("email_verified", False)),
+        verification_required=bool(services.config.require_email_verification),
     )
 
 
@@ -290,6 +325,8 @@ def register_auth_routes(app: FastAPI, services: Any) -> None:
             user_id,
             security.hash_token(token),
             _session_expiry(services.config.session_ttl_seconds),
+            user_agent=request.headers.get("user-agent", ""),
+            client_ip=_client_ip(request, services.config),
         )
         set_session_cookie(response, request, token, services.config)
 
@@ -366,6 +403,15 @@ def register_auth_routes(app: FastAPI, services: Any) -> None:
                 401, "invalid_credentials", "Incorrect email or password."
             )
 
+        # Checked only once the password is known-good: reporting it earlier
+        # would tell an unauthenticated caller which addresses have accounts.
+        if user.get("disabled", False):
+            raise _api_error(
+                403,
+                "account_disabled",
+                "This account has been disabled. Contact the server administrator.",
+            )
+
         services.login_throttle.clear(email, client_ip)
         await _open_session(request, response, user["_id"])
         return UserResponse(user=await build_user_out(services, user))
@@ -381,7 +427,9 @@ def register_auth_routes(app: FastAPI, services: Any) -> None:
 
     @app.get("/api/me", response_model=UserResponse)
     async def me(request: Request) -> UserResponse:
-        user = await require_user(request, services)
+        # Readable while unverified: the UI needs it to render the "verify your
+        # email" state that explains why everything else is refused.
+        user = await require_user(request, services, allow_unverified=True)
         return UserResponse(user=await build_user_out(services, user))
 
     @app.patch("/api/me", response_model=UserResponse)
@@ -430,6 +478,7 @@ def register_auth_routes(app: FastAPI, services: Any) -> None:
         database = services.database
         user_id = user["_id"]
         await database.sessions.delete_for_user(user_id)
+        await database.auth_tokens.delete_for_user(user_id)
         await database.api_keys.delete_for_user(user_id)
         await database.resumes.delete_for_user(user_id)
         await database.jds.delete_for_user(user_id)

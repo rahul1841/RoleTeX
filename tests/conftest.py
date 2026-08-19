@@ -49,6 +49,20 @@ _MODE_ENV_VARS = (
     "MAX_PDF_UPLOAD_BYTES",
     "PDFTOTEXT_BIN",
     "PDF_EXTRACT_TIMEOUT_SECONDS",
+    "MAX_VERSIONS_PER_JD",
+    "REQUIRE_EMAIL_VERIFICATION",
+    "PASSWORD_RESET_TTL_MINUTES",
+    "EMAIL_VERIFY_TTL_HOURS",
+    "PUBLIC_BASE_URL",
+    "MAIL_FROM",
+    "SMTP_HOST",
+    "SMTP_PORT",
+    "SMTP_USERNAME",
+    "SMTP_PASSWORD",
+    "SMTP_STARTTLS",
+    "SMTP_TIMEOUT_SECONDS",
+    "RATE_LIMIT_EMAIL_CALLS",
+    "RATE_LIMIT_EMAIL_WINDOW_SECONDS",
     "LLM_PROVIDER",
     "LLM_API_KEY",
     "GROQ_API_KEY",
@@ -204,6 +218,46 @@ class RecordingStubLLM:
         )
 
 
+class RecordingMailer:
+    """Test mailer that captures messages instead of sending them.
+
+    ``delivers`` defaults to True so tests exercise the production branch of
+    :func:`app.routes_account._link_base` (which requires ``PUBLIC_BASE_URL``);
+    set it False to model the console driver.
+    """
+
+    driver = "recording"
+
+    def __init__(self, delivers: bool = True, fail: bool = False) -> None:
+        self.delivers = delivers
+        self.fail = fail
+        self.sent: List[Dict[str, str]] = []
+
+    async def send(self, to: str, subject: str, body: str) -> None:
+        if self.fail:
+            from app.mailer import MailDeliveryError
+
+            raise MailDeliveryError("boom")
+        self.sent.append({"to": to, "subject": subject, "body": body})
+
+    def last_link(self) -> str:
+        """Extract the one-time link from the most recent message."""
+
+        assert self.sent, "no message was sent"
+        for word in self.sent[-1]["body"].split():
+            if "token=" in word:
+                return word
+        raise AssertionError("no token link in message body")
+
+    def last_token(self) -> str:
+        return self.last_link().split("token=", 1)[1].strip()
+
+
+@pytest.fixture
+def mailer() -> RecordingMailer:
+    return RecordingMailer()
+
+
 @pytest.fixture
 def _fast_password_hashing(monkeypatch: pytest.MonkeyPatch) -> None:
     """Speed up API tests: fewer PBKDF2 iterations for throwaway accounts.
@@ -231,6 +285,7 @@ def make_app(
     database: Database,
     repository: ResumeRepository,
     tmp_path: Path,
+    mailer: "RecordingMailer",
     _fast_password_hashing: None,
 ):
     """Factory for multi-user (default) or demo apps with injected doubles."""
@@ -241,6 +296,7 @@ def make_app(
         pdf_extractor: Any = None,
         multi_user: bool = True,
         repo: Any = None,
+        mail: Any = None,
     ):
         return create_app(
             repository=repo or repository,
@@ -249,6 +305,7 @@ def make_app(
             static_dir=tmp_path / "static",
             database=database if multi_user else None,
             pdf_extractor=pdf_extractor,
+            mailer=mail if mail is not None else mailer,
         )
 
     return factory

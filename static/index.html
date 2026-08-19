@@ -105,6 +105,34 @@
                   <span class="button-label">Sign in</span>
                   <span class="button-spinner" aria-hidden="true"></span>
                 </button>
+                <p class="auth-aside">
+                  <button id="forgot-link" class="link-button" type="button">Forgot your password?</button>
+                </p>
+              </form>
+
+              <form id="forgot-form" novalidate hidden>
+                <p class="field-note field-note--lead">
+                  Enter your account email and we’ll send a link to choose a new password.
+                </p>
+                <div class="field">
+                  <label for="forgot-email">Email</label>
+                  <input id="forgot-email" name="email" type="email" autocomplete="email" spellcheck="false" required>
+                </div>
+                <section id="forgot-error" class="notice notice--error notice--compact" role="alert" tabindex="-1" hidden>
+                  <span class="notice-icon" aria-hidden="true">!</span>
+                  <p id="forgot-error-message"></p>
+                </section>
+                <section id="forgot-sent" class="notice notice--ok notice--compact" role="status" tabindex="-1" hidden>
+                  <span class="notice-icon" aria-hidden="true">✓</span>
+                  <p id="forgot-sent-message"></p>
+                </section>
+                <button id="forgot-button" class="button button--primary button--block" type="submit">
+                  <span class="button-label">Send reset link</span>
+                  <span class="button-spinner" aria-hidden="true"></span>
+                </button>
+                <p class="auth-aside">
+                  <button id="forgot-back" class="link-button" type="button">Back to sign in</button>
+                </p>
               </form>
 
               <form id="register-form" role="tabpanel" aria-labelledby="auth-tab-register" novalidate hidden>
@@ -137,6 +165,57 @@
         </section>
 
         <!-- ============================== TAILOR ============================== -->
+        <section id="view-reset-password" class="view" aria-labelledby="reset-title" hidden>
+          <div class="auth-layout auth-layout--single">
+            <div class="composer-card auth-card">
+              <h1 id="reset-title" class="view-title" tabindex="-1">Choose a new password</h1>
+              <form id="reset-form" novalidate>
+                <div class="field">
+                  <label for="reset-password-input">New password</label>
+                  <input id="reset-password-input" type="password" autocomplete="new-password" required aria-describedby="reset-password-help">
+                  <p id="reset-password-help" class="field-note">8–128 characters.</p>
+                </div>
+                <div class="field">
+                  <label for="reset-password-confirm">Confirm new password</label>
+                  <input id="reset-password-confirm" type="password" autocomplete="new-password" required>
+                </div>
+                <section id="reset-error" class="notice notice--error notice--compact" role="alert" tabindex="-1" hidden>
+                  <span class="notice-icon" aria-hidden="true">!</span>
+                  <p id="reset-error-message"></p>
+                </section>
+                <button id="reset-button" class="button button--primary button--block" type="submit">
+                  <span class="button-label">Set new password</span>
+                  <span class="button-spinner" aria-hidden="true"></span>
+                </button>
+              </form>
+              <section id="reset-done" class="notice notice--ok notice--compact" role="status" tabindex="-1" hidden>
+                <span class="notice-icon" aria-hidden="true">✓</span>
+                <p>Your password has been changed and every session was signed out. <button id="reset-signin" class="link-button" type="button">Sign in</button></p>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        <section id="view-verify-email" class="view" aria-labelledby="verify-title" hidden>
+          <div class="auth-layout auth-layout--single">
+            <div class="composer-card auth-card">
+              <h1 id="verify-title" class="view-title" tabindex="-1">Email verification</h1>
+              <p id="verify-status" class="list-status" role="status">Confirming your address…</p>
+              <section id="verify-error" class="notice notice--error notice--compact" role="alert" tabindex="-1" hidden>
+                <span class="notice-icon" aria-hidden="true">!</span>
+                <p id="verify-error-message"></p>
+              </section>
+              <section id="verify-done" class="notice notice--ok notice--compact" role="status" tabindex="-1" hidden>
+                <span class="notice-icon" aria-hidden="true">✓</span>
+                <p>Your email address is confirmed.</p>
+              </section>
+              <p class="auth-aside">
+                <button id="verify-continue" class="link-button" type="button">Continue</button>
+              </p>
+            </div>
+          </div>
+        </section>
+
         <section id="view-tailor" class="view" aria-labelledby="tailor-title" hidden>
           <header class="view-header">
             <div>
@@ -702,6 +781,61 @@
               </form>
             </section>
 
+            <section class="composer-card settings-card" aria-labelledby="password-title">
+              <div class="section-heading">
+                <div>
+                  <p class="step-label">Security</p>
+                  <h2 id="password-title">Password</h2>
+                </div>
+                <p class="section-note">Changing your password signs out every other device.</p>
+              </div>
+              <form id="password-form" novalidate>
+                <div class="field">
+                  <label for="current-password-input">Current password</label>
+                  <input id="current-password-input" type="password" autocomplete="current-password" required>
+                </div>
+                <div class="setup-grid setup-grid--two">
+                  <div class="field">
+                    <label for="new-password-input">New password</label>
+                    <input id="new-password-input" type="password" autocomplete="new-password" required aria-describedby="new-password-help">
+                    <p id="new-password-help" class="field-note">8–128 characters.</p>
+                  </div>
+                  <div class="field">
+                    <label for="new-password-confirm">Confirm new password</label>
+                    <input id="new-password-confirm" type="password" autocomplete="new-password" required>
+                  </div>
+                </div>
+                <section id="password-error" class="notice notice--error notice--compact" role="alert" tabindex="-1" hidden>
+                  <span class="notice-icon" aria-hidden="true">!</span>
+                  <p id="password-error-message"></p>
+                </section>
+                <div class="form-actions form-actions--end">
+                  <button id="password-save-button" class="button button--primary" type="submit">
+                    <span class="button-label">Change password</span>
+                    <span class="button-spinner" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </form>
+            </section>
+
+            <section class="composer-card settings-card" aria-labelledby="sessions-title">
+              <div class="section-heading">
+                <div>
+                  <p class="step-label">Security</p>
+                  <h2 id="sessions-title">Active sessions</h2>
+                </div>
+                <p class="section-note">Every browser currently signed in to your account.</p>
+              </div>
+              <p id="sessions-status" class="list-status" role="status" hidden>Loading sessions…</p>
+              <div id="sessions-list" class="sessions-list"></div>
+              <div class="form-actions form-actions--end">
+                <button id="sessions-revoke-all" class="button button--secondary" type="button">
+                  <span class="button-label">Sign out other devices</span>
+                  <span class="button-spinner" aria-hidden="true"></span>
+                </button>
+              </div>
+            </section>
+
             <section class="composer-card settings-card" aria-labelledby="account-title">
               <div class="section-heading">
                 <div>
@@ -709,6 +843,16 @@
                   <h2 id="account-title">Your account</h2>
                 </div>
               </div>
+              <section id="verify-banner" class="notice notice--warning notice--compact" hidden>
+                <span class="notice-icon" aria-hidden="true">!</span>
+                <p>
+                  <span id="verify-banner-message">Your email address isn’t verified yet.</span>
+                  <button id="verify-send-button" class="button button--secondary button--small" type="button">
+                    <span class="button-label">Send verification email</span>
+                    <span class="button-spinner" aria-hidden="true"></span>
+                  </button>
+                </p>
+              </section>
               <form id="account-form" novalidate>
                 <div class="setup-grid setup-grid--two">
                   <div class="field">
