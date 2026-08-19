@@ -147,6 +147,16 @@ def new_session_token() -> str:
     return secrets.token_urlsafe(32)
 
 
+def new_one_time_token() -> str:
+    """256-bit URL-safe token for password reset / email verification links.
+
+    Same strength and storage rule as a session token (only the SHA-256 hash is
+    persisted), but minted separately so the two purposes never share a value.
+    """
+
+    return secrets.token_urlsafe(32)
+
+
 def hash_token(token: str) -> str:
     """SHA-256 hex digest — the only representation ever stored server-side."""
 

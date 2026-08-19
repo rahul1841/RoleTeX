@@ -216,6 +216,10 @@ class UserOut(StrictModel):
     default_model: Optional[str] = None
     created_at: Optional[datetime] = None
     providers_with_keys: List[str] = Field(default_factory=list)
+    email_verified: bool = False
+    #: True when the server is configured to gate features on verification, so
+    #: the UI knows whether an unverified account is merely untidy or blocked.
+    verification_required: bool = False
 
 
 class RegisterRequest(StrictModel):
@@ -237,6 +241,59 @@ class UpdateMeRequest(StrictModel):
 
 class DeleteMeRequest(StrictModel):
     password: str = Field(..., min_length=1, max_length=1_000)
+
+
+# --- Account lifecycle: password change/reset, verification, sessions --------
+
+
+class ChangePasswordRequest(StrictModel):
+    current_password: str = Field(..., min_length=1, max_length=1_000)
+    new_password: str = Field(..., min_length=1, max_length=1_000)
+
+
+class ForgotPasswordRequest(StrictModel):
+    email: str = Field(..., min_length=1, max_length=254)
+
+
+class ResetPasswordRequest(StrictModel):
+    token: str = Field(..., min_length=1, max_length=512)
+    new_password: str = Field(..., min_length=1, max_length=1_000)
+
+
+class VerifyEmailRequest(StrictModel):
+    token: str = Field(..., min_length=1, max_length=512)
+
+
+class MailDispatchResponse(StrictModel):
+    """Enumeration-safe result for the two mail-sending routes.
+
+    ``ok`` is always True for ``forgot``: revealing whether the address had an
+    account would turn the endpoint into an account oracle. ``delivered``
+    reports only whether the configured transport actually delivers mail, which
+    is a property of the server, not of the requested address.
+    """
+
+    ok: bool = True
+    delivered: bool = False
+
+
+class SessionInfo(StrictModel):
+    id: str
+    created_at: Optional[datetime] = None
+    last_seen_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    user_agent: str = ""
+    client_ip: str = ""
+    current: bool = False
+
+
+class SessionListResponse(StrictModel):
+    sessions: List[SessionInfo] = Field(default_factory=list)
+
+
+class RevokedResponse(StrictModel):
+    ok: bool = True
+    revoked: int = 0
 
 
 class UserResponse(StrictModel):
