@@ -487,3 +487,139 @@ async def test_run_server_controls_identity_fields(db: Database) -> None:
     stored = await db.runs.get(USER_A, run_id)
     assert stored is not None
     assert stored["user_id"] == USER_A
+
+
+# ---------------------------------------------------------------------------
+# Auth tokens (password reset / email verification)
+# ---------------------------------------------------------------------------
+
+
+def _future(minutes: int = 30) -> datetime:
+    return datetime.now(timezone.utc) + timedelta(minutes=minutes)
+
+
+async def test_auth_token_consume_succeeds_exactly_once(db: Database) -> None:
+    """The single-use guard lives in the conditional update, not the caller."""
+
+    from app.db import AuthTokenStore
+
+    await db.auth_tokens.create(
+        USER_A, AuthTokenStore.PURPOSE_PASSWORD_RESET, "hash-1", _future()
+    )
+
+    first = await db.auth_tokens.consume(
+        AuthTokenStore.PURPOSE_PASSWORD_RESET, "hash-1"
+    )
+    assert first is not None
+    assert first["user_id"] == USER_A
+
+    replay = await db.auth_tokens.consume(
+        AuthTokenStore.PURPOSE_PASSWORD_RESET, "hash-1"
+    )
+    assert replay is None
+
+
+async def test_auth_token_consume_rejects_wrong_purpose_and_expiry(db: Database) -> None:
+    from app.db import AuthTokenStore
+
+    await db.auth_tokens.create(
+        USER_A, AuthTokenStore.PURPOSE_EMAIL_VERIFY, "hash-verify", _future()
+    )
+    # A verification token must not redeem a password reset.
+    assert (
+        await db.auth_tokens.consume(
+            AuthTokenStore.PURPOSE_PASSWORD_RESET, "hash-verify"
+        )
+        is None
+    )
+
+    await db.auth_tokens.create(
+        USER_A,
+        AuthTokenStore.PURPOSE_PASSWORD_RESET,
+        "hash-stale",
+        datetime.now(timezone.utc) - timedelta(minutes=1),
+    )
+    assert (
+        await db.auth_tokens.consume(
+            AuthTokenStore.PURPOSE_PASSWORD_RESET, "hash-stale"
+        )
+        is None
+    )
+
+
+async def test_auth_token_delete_for_user_can_target_one_purpose(db: Database) -> None:
+    from app.db import AuthTokenStore
+
+    await db.auth_tokens.create(
+        USER_A, AuthTokenStore.PURPOSE_PASSWORD_RESET, "reset-a", _future()
+    )
+    await db.auth_tokens.create(
+        USER_A, AuthTokenStore.PURPOSE_EMAIL_VERIFY, "verify-a", _future()
+    )
+    await db.auth_tokens.create(
+        USER_B, AuthTokenStore.PURPOSE_PASSWORD_RESET, "reset-b", _future()
+    )
+
+    await db.auth_tokens.delete_for_user(
+        USER_A, AuthTokenStore.PURPOSE_PASSWORD_RESET
+    )
+
+    assert (
+        await db.auth_tokens.consume(
+            AuthTokenStore.PURPOSE_PASSWORD_RESET, "reset-a"
+        )
+        is None
+    )
+    # Other purposes and other users are untouched.
+    assert (
+        await db.auth_tokens.consume(AuthTokenStore.PURPOSE_EMAIL_VERIFY, "verify-a")
+        is not None
+    )
+    assert (
+        await db.auth_tokens.consume(
+            AuthTokenStore.PURPOSE_PASSWORD_RESET, "reset-b"
+        )
+        is not None
+    )
+
+
+# ---------------------------------------------------------------------------
+# Session listing and revocation
+# ---------------------------------------------------------------------------
+
+
+async def test_session_list_excludes_expired_and_other_users(db: Database) -> None:
+    await db.sessions.create(USER_A, "live", _future(60))
+    await db.sessions.create(
+        USER_A, "dead", datetime.now(timezone.utc) - timedelta(minutes=1)
+    )
+    await db.sessions.create(USER_B, "other", _future(60))
+
+    listed = await db.sessions.list_for_user(USER_A)
+
+    assert [doc["token_hash"] for doc in listed] == ["live"]
+
+
+async def test_session_delete_by_id_is_scoped_to_its_owner(db: Database) -> None:
+    victim_id = await db.sessions.create(USER_A, "victim", _future(60))
+
+    assert await db.sessions.delete_by_id(USER_B, victim_id) is False
+    assert len(await db.sessions.list_for_user(USER_A)) == 1
+
+    assert await db.sessions.delete_by_id(USER_A, victim_id) is True
+    assert await db.sessions.list_for_user(USER_A) == []
+
+
+async def test_session_delete_for_user_except_keeps_one(db: Database) -> None:
+    await db.sessions.create(USER_A, "keep", _future(60))
+    await db.sessions.create(USER_A, "drop-1", _future(60))
+    await db.sessions.create(USER_A, "drop-2", _future(60))
+    await db.sessions.create(USER_B, "untouched", _future(60))
+
+    revoked = await db.sessions.delete_for_user_except(USER_A, "keep")
+
+    assert revoked == 2
+    assert [doc["token_hash"] for doc in await db.sessions.list_for_user(USER_A)] == [
+        "keep"
+    ]
+    assert len(await db.sessions.list_for_user(USER_B)) == 1
