@@ -61,6 +61,8 @@ from .resume import (
     render_template_text,
     validate_proposal,
 )
+from .mailer import Mailer, optional_mailer
+from .routes_account import register_account_routes
 from .routes_jds import register_jds_routes
 from .routes_keys import register_keys_routes
 from .routes_resumes import register_resumes_routes
@@ -113,8 +115,10 @@ class ApplicationServices:
     rate_limiter_llm: security.RateLimiter
     rate_limiter_llm_ip: security.RateLimiter
     rate_limiter_general: security.RateLimiter
+    rate_limiter_email: security.RateLimiter
     login_throttle: security.LoginThrottle
     pdf_extractor: Callable[[bytes], str]
+    mailer: Mailer
 
 
 def _validation_issue(exc: Exception) -> str:
@@ -353,6 +357,7 @@ def create_app(
     database: Optional[Database] = None,
     config: Optional[AppConfig] = None,
     pdf_extractor: Optional[Callable[[bytes], str]] = None,
+    mailer: Optional[Mailer] = None,
 ) -> FastAPI:
     """Create an app with injectable filesystem, LLM, compiler, and DB dependencies."""
 
@@ -384,9 +389,17 @@ def create_app(
             app_config.rate_limit_general_calls,
             app_config.rate_limit_general_window_seconds,
         ),
+        # Password-reset and verification mails get their own much tighter
+        # budget: the general limiter (120/min by default) would happily let a
+        # caller drive 120 SMTP sends a minute at someone else's address.
+        rate_limiter_email=security.RateLimiter(
+            app_config.rate_limit_email_calls,
+            app_config.rate_limit_email_window_seconds,
+        ),
         login_throttle=security.LoginThrottle(
             app_config.login_max_attempts, app_config.login_window_seconds
         ),
+        mailer=optional_mailer(mailer, app_config),
         pdf_extractor=pdf_extractor
         or (
             lambda pdf_bytes: pdftext.extract_pdf_text(
@@ -887,6 +900,7 @@ def create_app(
         )
 
     register_auth_routes(application, services)
+    register_account_routes(application, services)
     register_keys_routes(application, services)
     register_resumes_routes(application, services)
     register_jds_routes(application, services)
