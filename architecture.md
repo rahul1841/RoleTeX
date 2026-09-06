@@ -32,6 +32,7 @@ FastAPI app  (app/main.py — create_app() factory, DI-friendly)
 | `app/resume.py` | Load/validate locked resume data; `build_llm_resume_payload` (identity excluded); `validate_proposal` (safety contract); `escape_latex`; `redact_identity`; deterministic token rendering incl. `sectioned=True` mode; change list + unified diff |
 | `app/compiler.py` | `CompileService`: unique temp dir per compile, `tectonic -X compile --untrusted [--only-cached]`, timeout + POSIX rlimits, per-event-loop `asyncio.Semaphore`, `pdfinfo` page count, `pdftotext` extraction, log sanitization |
 | `app/importer.py` | Normalize LLM extraction into `ResumeData` (backend-assigned positional stable IDs), clamp style hints to whitelists, assemble a fully server-controlled `template.tex` |
+| `app/builder.py` | The same boundary for the *other* untrusted author — a person using the editor. Validates a draft into field-addressed errors, prunes blank rows, reuses the importer's normalization and template assembly, renders the untailored baseline. No LLM involved |
 | `app/config.py` | `AppConfig` dataclass; `load_config()` reads env with clamped, documented bounds |
 | `app/security.py` | Password hashing (PBKDF2-HMAC-SHA256), session token issue/hash, Fernet secret encryption + key hints, `RateLimiter`/`LoginThrottle`, CSRF origin check |
 | `app/db.py` | `Database` wrapper over Motor with per-collection stores; every query is `user_id`-scoped (ownership enforced at the query level) |
@@ -52,11 +53,13 @@ FastAPI app  (app/main.py — create_app() factory, DI-friendly)
 | `POST /api/auth/register` / `login` / `logout`, `GET/PATCH/DELETE /api/me` | Accounts and sessions (HttpOnly `rt_session` cookie or `Authorization: Bearer`) |
 | `GET /api/providers`, `GET /api/keys`, `PUT/DELETE /api/keys/{provider}` | Per-user provider keys, Fernet-encrypted at rest, masked hint only in responses |
 | `GET/POST /api/resumes`, `POST /api/resumes/pdf`, `GET/PATCH/DELETE /api/resumes/{id}`, `.../versions[/pdf]`, `.../versions/{n}/source` | Resume library: LaTeX paste or PDF upload → LLM extraction → versioned storage |
+| `POST /api/resumes/manual`, `PUT /api/resumes/{id}/content` | Write a resume in the app and edit it afterwards: structured draft → `app/builder.py` → versioned storage. No provider key needed |
+| `POST /api/resumes/preview` | Compile a draft as typed, or a stored resume, with no job description and no model call. Returns `pdf_base64` + the rendered LaTeX |
 | `GET/POST /api/jds`, `GET/PUT/DELETE /api/jds/{id}`, `.../versions` | JD library with version history |
 | `GET /api/runs`, `GET/DELETE /api/runs/{id}`, `POST /api/runs/{id}/compile` | Tailor history; on-demand recompile of stored LaTeX (no LLM) |
 | `GET /` + `/static` | Serve the SPA (inline HTML fallback if `static/index.html` is missing) |
 
-Middleware (one combined handler): declared-`Content-Length` body-size guard (PDF uploads `MAX_PDF_UPLOAD_BYTES`+64KB, LaTeX import routes 260KB, other `/api/*` 64KB) → CSRF origin check for cookie-authenticated state-changing requests → sliding-window rate limiting (LLM bucket for tailor/imports/recompile, general bucket for other authed calls; keyed by user id, `Retry-After` on 429). *Known gap: a request omitting `Content-Length` (chunked) bypasses the size guard.*
+Middleware (one combined handler): declared-`Content-Length` body-size guard (PDF uploads `MAX_PDF_UPLOAD_BYTES`+64KB, LaTeX import *and* structured-resume routes 260KB — a whole resume authored in the editor arrives as one JSON document — other `/api/*` 64KB) → CSRF origin check for cookie-authenticated state-changing requests → sliding-window rate limiting (LLM bucket for tailor/imports/recompile *and* `/api/resumes/preview`, which spends a Tectonic compile rather than a model call; general bucket for other authed calls, so writing and saving a resume is never charged against the LLM budget; keyed by user id, `Retry-After` on 429). *Known gap: a request omitting `Content-Length` (chunked) bypasses the size guard.*
 
 ## 4. Tailor request flow
 
@@ -117,6 +120,33 @@ POST /api/resumes (latex)          POST /api/resumes/pdf (multipart)
         ▼
    Mongo: resumes + resume_versions {data, template_tex, source_text, style, ...}
 ```
+
+### 5.1 Manual authoring flow
+
+```text
+POST /api/resumes/manual            PUT /api/resumes/{id}/content
+POST /api/resumes/preview {resume}  (same draft shape, different destination)
+        │
+        ▼
+   ResumeDraft (Pydantic, extra="forbid"): lenient on emptiness, strict on
+   shape — a client-supplied `id` is rejected outright
+        ▼
+   builder.validate_draft → field-addressed errors, or nothing
+        (blank rows are dropped, partially filled rows are reported by the
+         position the author sees)
+        ▼
+   builder.prune_draft → importer.normalize_extracted_resume
+        (identical normalization to import: backend positional stable IDs)
+        ▼
+   sanitize_style → assemble_template → render (sectioned, escape_latex)
+        ▼
+   manual: ResumeStore.create / add_version, source_type="manual",
+           source_text = the rendered .tex (there is no original document)
+   preview: CompileService → PDF bytes, nothing stored
+```
+
+No LLM participates in any of these three routes, so a user with no provider key
+can own and compile a resume; the model is only involved once they tailor it.
 
 ## 6. Trust boundaries & threat model
 

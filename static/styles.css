@@ -1898,6 +1898,232 @@ select:focus-visible,
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* ------------------------------------------------------------ resume editor */
+
+.build-pitch {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  padding: 22px 24px;
+  background: var(--mint);
+  border: 1px solid rgba(49, 88, 54, 0.16);
+  border-radius: var(--radius-medium);
+}
+
+.build-pitch h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.build-pitch p {
+  max-width: 62ch;
+  margin: 0;
+  color: var(--mint-ink);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.build-pitch .button {
+  margin-top: 6px;
+}
+
+.editor-name-field {
+  max-width: 420px;
+  margin-bottom: 26px;
+}
+
+.editor-group {
+  margin: 0 0 26px;
+  padding: 20px 22px;
+  background: #faf9f4;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-medium);
+}
+
+.editor-group > legend {
+  padding: 0 8px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.editor-group > .field-note {
+  max-width: 70ch;
+  margin: 0 0 16px;
+}
+
+.editor-group .setup-grid {
+  margin-bottom: 0;
+}
+
+.editor-subgroup {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--line);
+}
+
+.editor-subhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.editor-subhead h4 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.editor-rows {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.editor-rows:empty {
+  margin-bottom: 0;
+}
+
+.editor-row {
+  padding: 16px 18px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.editor-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.editor-row-title {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.editor-row-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.editor-row-controls .button[disabled] {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.editor-row-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.editor-row-grid .field--wide {
+  grid-column: 1 / -1;
+}
+
+.composer-textarea--short {
+  min-height: 92px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.accent-field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.accent-field input[type="color"] {
+  width: 52px;
+  height: 40px;
+  padding: 3px;
+  background: #faf9f4;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.checkbox-inline input {
+  width: auto;
+}
+
+.field input[type="range"] {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  accent-color: var(--accent-dark);
+  cursor: pointer;
+}
+
+#editor-margin-value {
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.preview-card {
+  margin-top: 30px;
+  padding-top: 26px;
+  border-top: 1px solid var(--line);
+}
+
+.preview-card .pdf-frame-wrap {
+  margin: 16px 0 0;
+  min-height: 560px;
+}
+
+.preview-card .pdf-frame-wrap iframe {
+  min-height: 560px;
+}
+
+.preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.preview-card .preview-help {
+  margin-top: 10px;
+}
+
+@media (max-width: 760px) {
+  .editor-row-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .editor-group {
+    padding: 16px 14px;
+  }
+
+  .editor-row {
+    padding: 14px;
+  }
+}
+
 /* -------------------------------------------------------------- responsive */
 
 @media (max-width: 1080px) {

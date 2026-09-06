@@ -1,6 +1,6 @@
 # PRD — JD Resume Builder ("RoleTeX")
 
-> **Status:** Living document. Reflects the codebase as of 2026-08-19 (single-user MVP ~85%, multi-user product ~75% after the account-lifecycle work; 313 tests passing + 1 Tectonic-gated skip).
+> **Status:** Living document. Reflects the codebase as of 2026-09-06 (single-user MVP ~85%, multi-user product ~80% after the in-app resume builder; 333 tests passing offline + 2 Tectonic-gated real-compile tests that pass when the binary is present).
 > Earlier headline figures in this file's history ("~80% / 87 tests", and the differing counts in `architecture.md` and `memory.md`) were stale snapshots stated in the present tense — treat any test count here as of its dated revision only.
 > **Companion docs:** [architecture.md](architecture.md) · [design.md](design.md) · [rules.md](rules.md) · [memory.md](memory.md) · [plan.md](plan.md) (original validated feasibility plan)
 
@@ -27,6 +27,7 @@ Paste a job description → an LLM proposes structured, fact-preserving edits (s
 | G5 | Compile untrusted output safely: unique temp dir, `--untrusted`, `--only-cached`, timeouts, resource limits |
 | G6 | Run at ~$0: free-tier LLM providers (Groq recommended; the code default is the offline `mock` provider), free compiler (Tectonic), free hosting (private Hugging Face Docker Space) |
 | G7 | Let a user import their own LaTeX resume as a private per-user profile and tailor against it (multi-user extension) |
+| G8 | Let a user with no resume file **write one in the app** and get a compiled PDF, without an AI provider key and without touching the repository's seed data |
 
 ## 4. Non-goals
 
@@ -39,7 +40,8 @@ Paste a job description → an LLM proposes structured, fact-preserving edits (s
 ## 5. Users
 
 - **Primary:** the repo owner running a private instance with their own seed resume (`resume/data.json` + `resume/template.tex`; demo mode).
-- **Secondary (2026-07 revamp):** registered users (email+password accounts with self-service password change/reset, optional email verification, and session revocation — MongoDB-backed) who import their own resumes via `POST /api/resumes` (LaTeX paste) or `POST /api/resumes/pdf` (PDF upload) into a private, versioned, per-user library, manage saved JDs and tailor history, and bring their own provider API keys (encrypted at rest).
+- **Secondary (2026-07 revamp):** registered users (email+password accounts with self-service password change/reset, optional email verification, and session revocation — MongoDB-backed) who build a resume in the app (`POST /api/resumes/manual`) or import one via `POST /api/resumes` (LaTeX paste) or `POST /api/resumes/pdf` (PDF upload) into a private, versioned, per-user library, manage saved JDs and tailor history, and bring their own provider API keys (encrypted at rest).
+- A user who only wants a typeset resume — no tailoring — is a supported case as of 2026-09-06: authoring, editing, previewing, and downloading a PDF need no provider key at all.
 
 ## 6. User flows
 
@@ -59,6 +61,13 @@ Paste a job description → an LLM proposes structured, fact-preserving edits (s
 4. The resume is persisted to MongoDB (`resumes` + `resume_versions`, quota-checked); re-importing adds a new version. Raw source text is stored but never compiled.
 5. Subsequent tailor requests pass `resume_id` (and optionally a saved `jd_id`) to use the library resume (sectioned rendering); each run is saved to tailor history.
 
+### 6.3 Build from scratch (multi-user flow)
+1. A signed-in user opens the resume library and starts the editor (it is the first of the three ways in, ahead of LaTeX paste and PDF upload).
+2. They fill in contact details, a one-line headline, and any of experience / projects / education / skills / achievements, plus four bounded layout knobs.
+3. **Preview** posts the draft to `POST /api/resumes/preview`; the server validates it, renders it into the locked template, compiles it with sandboxed Tectonic, and returns the PDF — nothing is stored and no model is called.
+4. **Save** posts to `POST /api/resumes/manual`; the resume enters the same library as an imported one (`source_type: "manual"`), and the editor switches to editing it, so the next save is `PUT /api/resumes/{id}/content` — a new version.
+5. The resume is then tailorable exactly like an imported one, and editable again later; editing an *imported* resume is the same flow and is how an extraction mistake gets corrected.
+
 ## 7. Functional requirements
 
 | ID | Requirement | Status |
@@ -67,7 +76,7 @@ Paste a job description → an LLM proposes structured, fact-preserving edits (s
 | FR-2 | `POST /api/resumes` / `POST /api/resumes/pdf` — LaTeX paste or PDF upload in, private versioned resume out | ✅ Done, tested (replaced legacy `POST /api/import`) |
 | FR-3 | `GET /api/health` — mode, resume validity, compiler/database/secret-key/pdftotext checks | ✅ Done, tested |
 | FR-4 | Resume library routes (`GET/PATCH/DELETE /api/resumes/{id}`, versions, source download) | ✅ Done, tested |
-| FR-5 | Web UI: auth, tailor, resume library, JD library, history, settings views; diff cards, PDF preview, downloads | ✅ Done, **no automated coverage in repo suite** |
+| FR-5 | Web UI: auth, tailor, resume library, JD library, history, settings views; diff cards, PDF preview, downloads | ✅ Done. Only the resume editor has automated coverage (`tests/ui/resume_editor.mjs`, Node + jsdom, outside pytest); the rest of the SPA still has none |
 | FR-6 | Provider adapter: mock, groq, cerebras, gemini, openrouter, mistral, openai, anthropic, custom | ✅ Implemented; real-provider path **unexercised by tests** |
 | FR-7 | One shared repair budget per request (semantic OR compile/page repair, never both) | ✅ Done, tested |
 | FR-8 | Deterministic mock provider for offline dev/tests | ✅ Done, tested |
@@ -77,6 +86,7 @@ Paste a job description → an LLM proposes structured, fact-preserving edits (s
 | FR-10 | Evaluation harness (compile success, fact preservation, keyword coverage across JDs) | ❌ Not built |
 | FR-11 | Automatic provider failover | ❌ Not built (providers selectable, no fallback chain) |
 | FR-13 | Cover letter generation | ❌ Not built |
+| FR-16 | In-app resume builder: create (`POST /api/resumes/manual`), edit as a new version (`PUT /api/resumes/{id}/content`), and untailored preview/compile (`POST /api/resumes/preview`) | ✅ Done, tested (2026-09-06, D-19). 20 API tests + a real-Tectonic compile test + a jsdom UI harness; no LLM on any of the three routes |
 | FR-15 | Admin/operator surface for the `disabled` flag | ❌ Not built — set the field directly in MongoDB (G-20) |
 
 ## 8. Non-functional requirements
@@ -107,10 +117,10 @@ Paste a job description → an LLM proposes structured, fact-preserving edits (s
 
 ## 10. Current status & remaining work
 
-**~80% of the MVP is complete.** The security-critical core (validation, rendering, sandboxed compile, PII handling) is built and tested; both the tailor and import flows have been verified end-to-end locally with a real Tectonic compile producing a valid one-page PDF.
+**~80% of the MVP is complete.** The security-critical core (validation, rendering, sandboxed compile, PII handling) is built and tested; the tailor, import, and manual-authoring flows have each been verified end-to-end locally with a real Tectonic compile producing a valid one-page PDF.
 
 Biggest remaining items, in priority order:
-1. Prove the real-provider LLM path (Groq et al.) with at least one integration/eval run.
+1. Prove the real-provider LLM path (Groq et al.) with at least one integration/eval run — still the one path where *nothing* has ever run for real. Note that as of the builder work this is no longer on the critical path for a new user: authoring, previewing, and downloading a resume never call a model.
 2. ~~A Tectonic-gated real-compile test~~ ✅ done — `tests/test_compile_integration.py` (2026-07-16).
 3. Frontend coverage (or at minimum a scripted browser smoke test).
 4. Verified Docker build + HF deployment (cold start, cached compile, secrets, privacy).

@@ -415,25 +415,37 @@
               <p class="eyebrow">Library</p>
               <h1 id="resumes-title" class="view-title" tabindex="-1">Your resumes</h1>
             </div>
-            <p class="view-note">Import by pasting LaTeX or uploading a PDF. Re-importing into a resume adds a new version.</p>
+            <p class="view-note">Build one here field by field, or import a resume you already have. Every save keeps the previous version.</p>
           </header>
 
           <section class="composer-card" id="resume-add-panel" aria-labelledby="resume-add-title">
             <div class="section-heading">
               <div>
                 <p id="resume-add-step" class="step-label">Add a resume</p>
-                <h2 id="resume-add-title">Import your resume</h2>
+                <h2 id="resume-add-title">Start a resume</h2>
               </div>
               <button id="resume-add-cancel" class="button button--quiet" type="button" hidden>Cancel new version</button>
             </div>
 
-            <div class="tab-row" role="tablist" aria-label="Import source">
-              <button id="resume-tab-latex" type="button" role="tab" aria-selected="true" aria-controls="resume-panel-latex">Paste LaTeX</button>
+            <div class="tab-row" role="tablist" aria-label="How to add a resume">
+              <button id="resume-tab-build" type="button" role="tab" aria-selected="true" aria-controls="resume-panel-build">Build from scratch</button>
+              <button id="resume-tab-latex" type="button" role="tab" aria-selected="false" aria-controls="resume-panel-latex" tabindex="-1">Paste LaTeX</button>
               <button id="resume-tab-pdf" type="button" role="tab" aria-selected="false" aria-controls="resume-panel-pdf" tabindex="-1">Upload PDF</button>
             </div>
 
             <form id="resume-add-form" novalidate>
-              <div id="resume-panel-latex" role="tabpanel" aria-labelledby="resume-tab-latex">
+              <div id="resume-panel-build" role="tabpanel" aria-labelledby="resume-tab-build">
+                <div class="build-pitch">
+                  <h3>No resume file yet? Write one here.</h3>
+                  <p>Fill in your details section by section. The server typesets them with the same locked LaTeX template it uses for tailored resumes, so you end up with a real one-page PDF — nothing to upload, and no AI provider key needed.</p>
+                  <button id="resume-build-start" class="button button--primary" type="button">
+                    <span class="button-label">Start building</span>
+                    <span class="button-arrow" aria-hidden="true">↗</span>
+                  </button>
+                </div>
+              </div>
+
+              <div id="resume-panel-latex" role="tabpanel" aria-labelledby="resume-tab-latex" hidden>
                 <label class="sr-only" for="resume-latex-input">Resume LaTeX source</label>
                 <div class="textarea-wrap">
                   <textarea
@@ -465,7 +477,7 @@
                 </div>
               </div>
 
-              <div class="setup-grid resume-add-grid">
+              <div class="setup-grid resume-add-grid" id="resume-add-grid">
                 <div class="field" id="resume-name-field">
                   <label for="resume-name-input">Resume name <span class="optional-tag">optional</span></label>
                   <input id="resume-name-input" type="text" maxlength="120" placeholder="e.g. Backend-focused">
@@ -497,7 +509,7 @@
                 </div>
               </section>
 
-              <div class="form-footer">
+              <div class="form-footer" id="resume-add-footer">
                 <p class="privacy-note">
                   <span aria-hidden="true">✓</span>
                   Import sends your document to your chosen AI provider once, to extract it. Tailoring never sends contact details.
@@ -513,7 +525,182 @@
             </form>
           </section>
 
-          <section class="list-section" aria-labelledby="resumes-list-title">
+          <section id="resume-editor" class="composer-card" aria-labelledby="resume-editor-title" hidden>
+            <div class="section-heading">
+              <div>
+                <p id="resume-editor-step" class="step-label">Build from scratch</p>
+                <h2 id="resume-editor-title" tabindex="-1">Your resume</h2>
+              </div>
+              <button id="resume-editor-close" class="button button--quiet" type="button">Cancel</button>
+            </div>
+
+            <form id="resume-editor-form" novalidate>
+              <div class="field editor-name-field" id="editor-name-field">
+                <label for="editor-resume-name">Resume name <span class="optional-tag">optional</span></label>
+                <input id="editor-resume-name" type="text" maxlength="120" placeholder="e.g. Backend-focused" aria-describedby="editor-resume-name-help">
+                <p id="editor-resume-name-help" class="field-note">Only you see this — it labels the resume in your library.</p>
+              </div>
+
+              <fieldset class="editor-group">
+                <legend>Contact details</legend>
+                <p class="field-note">Printed at the top of the resume. These are never sent to an AI provider — the server fills them in when it typesets the page.</p>
+                <div class="setup-grid">
+                  <div class="field">
+                    <label for="editor-name">Full name</label>
+                    <input id="editor-name" type="text" maxlength="160" autocomplete="name" placeholder="Ada Lovelace">
+                  </div>
+                  <div class="field">
+                    <label for="editor-email">Email</label>
+                    <input id="editor-email" type="email" maxlength="254" autocomplete="email" placeholder="you@example.com">
+                  </div>
+                  <div class="field">
+                    <label for="editor-phone">Phone</label>
+                    <input id="editor-phone" type="tel" maxlength="80" autocomplete="tel" placeholder="+91 98765 43210">
+                  </div>
+                  <div class="field">
+                    <label for="editor-location">Location</label>
+                    <input id="editor-location" type="text" maxlength="180" placeholder="Bengaluru, India">
+                  </div>
+                </div>
+                <div class="editor-subgroup">
+                  <div class="editor-subhead">
+                    <h4>Links <span class="optional-tag">optional</span></h4>
+                    <button id="editor-links-add" class="button button--secondary button--small" type="button">Add a link</button>
+                  </div>
+                  <div id="editor-links" class="editor-rows"></div>
+                </div>
+              </fieldset>
+
+              <fieldset class="editor-group">
+                <legend>Headline</legend>
+                <div class="field">
+                  <label for="editor-summary">One line under your name</label>
+                  <input id="editor-summary" type="text" maxlength="120" placeholder="Backend engineer building reliable payment systems" aria-describedby="editor-summary-help editor-summary-count">
+                  <div class="textarea-meta">
+                    <p id="editor-summary-help" class="field-note">Up to 12 words. Tailoring rewrites this line for each job description.</p>
+                    <output id="editor-summary-count" for="editor-summary" aria-label="Headline length">0 / 120</output>
+                  </div>
+                </div>
+              </fieldset>
+
+              <fieldset class="editor-group">
+                <legend>Experience</legend>
+                <p class="field-note">Tailoring may only rewrite bullets that already exist here, so write them as you would say them in an interview.</p>
+                <div id="editor-experience" class="editor-rows"></div>
+                <button id="editor-experience-add" class="button button--secondary button--small" type="button">Add a role</button>
+              </fieldset>
+
+              <fieldset class="editor-group">
+                <legend>Projects <span class="optional-tag">optional</span></legend>
+                <div id="editor-projects" class="editor-rows"></div>
+                <button id="editor-projects-add" class="button button--secondary button--small" type="button">Add a project</button>
+              </fieldset>
+
+              <fieldset class="editor-group">
+                <legend>Education</legend>
+                <div id="editor-education" class="editor-rows"></div>
+                <button id="editor-education-add" class="button button--secondary button--small" type="button">Add an entry</button>
+              </fieldset>
+
+              <fieldset class="editor-group">
+                <legend>Skills</legend>
+                <p class="field-note">Group them the way you want them printed. Tailoring reorders skills by relevance but never invents one.</p>
+                <div id="editor-skills" class="editor-rows"></div>
+                <button id="editor-skills-add" class="button button--secondary button--small" type="button">Add a group</button>
+              </fieldset>
+
+              <fieldset class="editor-group">
+                <legend>Achievements <span class="optional-tag">optional</span></legend>
+                <div class="field">
+                  <label for="editor-achievements">One per line</label>
+                  <textarea id="editor-achievements" class="composer-textarea composer-textarea--short" rows="3" placeholder="Winner, Smart India Hackathon 2023"></textarea>
+                </div>
+              </fieldset>
+
+              <fieldset class="editor-group">
+                <legend>Layout</legend>
+                <div class="setup-grid">
+                  <div class="field">
+                    <label for="editor-paper">Paper size</label>
+                    <select id="editor-paper">
+                      <option value="a4paper">A4</option>
+                      <option value="letterpaper">US Letter</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="editor-font-size">Font size</label>
+                    <select id="editor-font-size">
+                      <option value="10pt">10 pt</option>
+                      <option value="11pt">11 pt</option>
+                      <option value="12pt">12 pt</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="editor-margin">Margin <output id="editor-margin-value" for="editor-margin">2 cm</output></label>
+                    <input id="editor-margin" type="range" min="1" max="3" step="0.1" value="2">
+                  </div>
+                  <div class="field">
+                    <label for="editor-accent">Accent colour</label>
+                    <div class="accent-field">
+                      <input id="editor-accent" type="color" value="#1F3A8A" aria-describedby="editor-accent-help">
+                      <label class="checkbox-inline" for="editor-accent-on">
+                        <input id="editor-accent-on" type="checkbox">
+                        Use it
+                      </label>
+                    </div>
+                    <p id="editor-accent-help" class="field-note">Colours your name and section headings.</p>
+                  </div>
+                </div>
+              </fieldset>
+
+              <section id="resume-editor-error" class="notice notice--error" role="alert" tabindex="-1" hidden>
+                <span class="notice-icon" aria-hidden="true">!</span>
+                <div>
+                  <h3 id="resume-editor-error-title">A few fields still need attention</h3>
+                  <p id="resume-editor-error-message"></p>
+                  <ul id="resume-editor-error-list"></ul>
+                </div>
+              </section>
+
+              <div class="form-footer">
+                <p class="privacy-note">
+                  <span aria-hidden="true">✓</span>
+                  Nothing here is sent to an AI provider. Saving and previewing stay on this server.
+                </p>
+                <div class="form-actions">
+                  <button id="resume-editor-preview" class="button button--secondary" type="button">
+                    <span class="button-label">Preview PDF</span>
+                    <span class="button-spinner" aria-hidden="true"></span>
+                  </button>
+                  <button id="resume-editor-save" class="button button--primary" type="submit">
+                    <span class="button-label">Save resume</span>
+                    <span class="button-arrow" aria-hidden="true">↗</span>
+                    <span class="button-spinner" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </div>
+            </form>
+
+            <section id="editor-preview-panel" class="preview-card" aria-labelledby="editor-preview-title" hidden>
+              <div class="section-heading">
+                <div>
+                  <p class="step-label">Preview</p>
+                  <h3 id="editor-preview-title">Compiled PDF</h3>
+                </div>
+                <span id="editor-preview-meta" class="file-chip"></span>
+              </div>
+              <div class="pdf-frame-wrap">
+                <iframe id="editor-preview-frame" title="Resume PDF preview" referrerpolicy="no-referrer"></iframe>
+              </div>
+              <div class="preview-actions">
+                <a id="editor-preview-download" class="button button--secondary button--small" href="#" download>Download PDF</a>
+                <a id="editor-preview-tex" class="button button--quiet button--small" href="#" download>Download .tex</a>
+              </div>
+              <p class="preview-help">This is your resume as written, with no job description applied — tailoring happens on the Tailor tab.</p>
+            </section>
+          </section>
+
+          <section id="resumes-list-section" class="list-section" aria-labelledby="resumes-list-title">
             <div class="list-header">
               <h2 id="resumes-list-title">Saved resumes</h2>
               <span id="resumes-count" class="count-badge">0</span>
@@ -528,7 +715,7 @@
             </section>
             <div id="resumes-empty" class="empty-state" hidden>
               <strong>No resumes yet</strong>
-              <span>Import your first resume above — paste LaTeX or upload a PDF.</span>
+              <span>Build your first one above, or import a resume you already have.</span>
             </div>
             <div id="resumes-list" class="card-list"></div>
           </section>

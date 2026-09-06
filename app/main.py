@@ -99,8 +99,16 @@ RUN_JD_EXCERPT_CHARACTERS = 300
 
 _PDF_UPLOAD_PATH = re.compile(r"^/api/resumes(?:/[^/]+/versions)?/pdf$")
 _LATEX_IMPORT_PATH = re.compile(r"^/api/resumes(?:/[^/]+/versions)?$")
+# A whole resume authored in the editor arrives as one JSON document, so these
+# routes need the import ceiling rather than the 64KB API default.
+_STRUCTURED_RESUME_PATH = re.compile(
+    r"^/api/resumes(?:/manual|/preview|/[^/]+/content)$"
+)
+# Routes that spend a scarce resource — a provider call, a Tectonic compile, or
+# both. ``/api/resumes/preview`` calls no model but does compile.
 _LLM_BUCKET_PATH = re.compile(
-    r"^/api/(?:tailor|resumes(?:/pdf|/[^/]+/versions(?:/pdf)?)?|runs/[^/]+/compile)$"
+    r"^/api/(?:tailor|resumes(?:/pdf|/preview|/[^/]+/versions(?:/pdf)?)?"
+    r"|runs/[^/]+/compile)$"
 )
 _STATE_CHANGING_METHODS = ("POST", "PUT", "PATCH", "DELETE")
 
@@ -172,7 +180,7 @@ async def _generate_valid_proposal(
 def _body_size_limit(path: str, config: AppConfig) -> int:
     if _PDF_UPLOAD_PATH.match(path):
         return config.max_pdf_upload_bytes + MULTIPART_OVERHEAD_BYTES
-    if _LATEX_IMPORT_PATH.match(path):
+    if _LATEX_IMPORT_PATH.match(path) or _STRUCTURED_RESUME_PATH.match(path):
         return MAX_IMPORT_BODY_BYTES
     return MAX_HTTP_BODY_BYTES
 

@@ -49,6 +49,8 @@
     key_not_found: "No key is stored for that provider.",
     resume_not_found: "That resume could not be found. It may have been deleted.",
     resume_quota_exceeded: "You’ve reached your resume limit. Delete one to add another.",
+    incomplete_resume: "A few fields still need attention before this resume can be saved.",
+    preview_target_required: "Choose what to preview — the resume you’re editing, or a saved one.",
     version_quota_exceeded: "This resume has reached its version limit.",
     jd_not_found: "That job description could not be found. It may have been deleted.",
     jd_quota_exceeded: "You’ve reached your saved-JD limit. Delete one to add another.",
@@ -61,6 +63,9 @@
     pdf_support_unavailable: "PDF import isn’t available on this server right now. Paste LaTeX instead.",
     pdf_extract_timeout: "Reading that PDF took too long. Try a smaller or simpler file.",
     invalid_llm_proposal: "The AI response did not pass the resume safety checks. Please try again.",
+    latex_compile_failed: "The typesetter could not build that resume. Check for unusual characters and try again.",
+    compile_timeout: "Compiling took too long. Try again in a moment.",
+    compiler_not_found: "The PDF compiler isn’t available on this server right now.",
     password_unchanged: "Choose a password different from your current one.",
     invalid_token: "That link is invalid, already used, or expired. Request a new one.",
     already_verified: "This email address is already verified.",
@@ -244,6 +249,54 @@
   const resumesRetry = $("resumes-retry");
   const resumesEmpty = $("resumes-empty");
   const resumesList = $("resumes-list");
+  const resumesListSection = $("resumes-list-section");
+
+  // Resume editor (build from scratch / edit a saved resume)
+  const resumeTabBuild = $("resume-tab-build");
+  const resumePanelBuild = $("resume-panel-build");
+  const resumeBuildStart = $("resume-build-start");
+  const resumeAddGrid = $("resume-add-grid");
+  const resumeAddFooter = $("resume-add-footer");
+  const resumeEditor = $("resume-editor");
+  const resumeEditorStep = $("resume-editor-step");
+  const resumeEditorTitle = $("resume-editor-title");
+  const resumeEditorClose = $("resume-editor-close");
+  const resumeEditorForm = $("resume-editor-form");
+  const editorNameField = $("editor-name-field");
+  const editorResumeName = $("editor-resume-name");
+  const editorName = $("editor-name");
+  const editorEmail = $("editor-email");
+  const editorPhone = $("editor-phone");
+  const editorLocation = $("editor-location");
+  const editorLinks = $("editor-links");
+  const editorLinksAdd = $("editor-links-add");
+  const editorSummary = $("editor-summary");
+  const editorSummaryCount = $("editor-summary-count");
+  const editorExperience = $("editor-experience");
+  const editorExperienceAdd = $("editor-experience-add");
+  const editorProjects = $("editor-projects");
+  const editorProjectsAdd = $("editor-projects-add");
+  const editorEducation = $("editor-education");
+  const editorEducationAdd = $("editor-education-add");
+  const editorSkills = $("editor-skills");
+  const editorSkillsAdd = $("editor-skills-add");
+  const editorAchievements = $("editor-achievements");
+  const editorPaper = $("editor-paper");
+  const editorFontSize = $("editor-font-size");
+  const editorMargin = $("editor-margin");
+  const editorMarginValue = $("editor-margin-value");
+  const editorAccent = $("editor-accent");
+  const editorAccentOn = $("editor-accent-on");
+  const resumeEditorError = $("resume-editor-error");
+  const resumeEditorErrorMessage = $("resume-editor-error-message");
+  const resumeEditorErrorList = $("resume-editor-error-list");
+  const resumeEditorPreview = $("resume-editor-preview");
+  const resumeEditorSave = $("resume-editor-save");
+  const editorPreviewPanel = $("editor-preview-panel");
+  const editorPreviewFrame = $("editor-preview-frame");
+  const editorPreviewMeta = $("editor-preview-meta");
+  const editorPreviewDownload = $("editor-preview-download");
+  const editorPreviewTex = $("editor-preview-tex");
 
   // JDs
   const jdForm = $("jd-form");
@@ -350,6 +403,19 @@
       listVersion: 0,
       addMode: { type: "create", resumeId: "", resumeName: "" },
       pendingFile: null,
+    },
+    builder: {
+      open: false,
+      mode: "create",
+      resumeId: "",
+      resumeName: "",
+      version: 0,
+      saved: false,
+      // Serialized form state as of the last open or save, so Cancel can tell
+      // an untouched form from one with work in it.
+      snapshot: "",
+      pdfUrl: null,
+      texUrl: null,
     },
     jds: {
       items: [],
@@ -516,8 +582,7 @@
     }
   }
 
-  function downloadTextFile(text, filename) {
-    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  function downloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -526,6 +591,10 @@
     link.click();
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  }
+
+  function downloadTextFile(text, filename) {
+    downloadBlob(new Blob([text], { type: "text/plain;charset=utf-8" }), filename);
   }
 
   function startTimeout(controller, ms) {
@@ -541,12 +610,15 @@
   /* --------------------------------------------------------------- fetch */
 
   class ApiError extends Error {
-    constructor(message, status, code, retryAfter) {
+    constructor(message, status, code, retryAfter, errors) {
       super(message);
       this.name = "ApiError";
       this.status = status || 0;
       this.code = code || "";
       this.retryAfter = retryAfter || null;
+      // Field-addressed reasons, when the route sends them (the resume editor
+      // and the importer both do). Always the server's own strings.
+      this.errors = Array.isArray(errors) ? errors : [];
     }
   }
 
@@ -570,10 +642,14 @@
   function extractErrorParts(payload) {
     let code = "";
     let message = "";
+    let errors = [];
     const detail = payload && payload.detail;
     if (detail && typeof detail === "object" && !Array.isArray(detail)) {
       code = typeof detail.code === "string" ? detail.code : "";
       message = typeof detail.message === "string" ? detail.message : "";
+      if (Array.isArray(detail.errors)) {
+        errors = detail.errors.map((item) => readableValue(item)).filter(Boolean);
+      }
     } else if (typeof detail === "string") {
       message = detail;
     } else if (Array.isArray(detail)) {
@@ -586,7 +662,7 @@
     if (!message && payload && typeof payload === "object") {
       message = readableValue(payload.message !== undefined ? payload.message : payload.error).trim();
     }
-    return { code, message };
+    return { code, message, errors };
   }
 
   function fallbackByStatus(status) {
@@ -653,7 +729,8 @@
         friendlyMessage(parts.code, parts.message, response.status, retryAfter),
         response.status,
         parts.code,
-        retryAfter
+        retryAfter,
+        parts.errors
       );
       if (response.status === 401 && parts.code === "not_authenticated" && !opts.quiet401) {
         handleSessionLost();
@@ -811,10 +888,27 @@
     { tab: jdTabSaved, panel: jdPanelSaved },
     { tab: jdTabPaste, panel: jdPanelPaste },
   ]);
-  const resumeTabs = setupTabs([
-    { tab: resumeTabLatex, panel: resumePanelLatex },
-    { tab: resumeTabPdf, panel: resumePanelPdf },
-  ]);
+  const RESUME_TAB_BUILD = 0;
+  const RESUME_TAB_LATEX = 1;
+  const RESUME_TAB_PDF = 2;
+  const resumeTabs = setupTabs(
+    [
+      { tab: resumeTabBuild, panel: resumePanelBuild },
+      { tab: resumeTabLatex, panel: resumePanelLatex },
+      { tab: resumeTabPdf, panel: resumePanelPdf },
+    ],
+    {
+      onChange(index) {
+        // The provider/model row and the Import button belong to the two
+        // import tabs; building a resume here needs neither.
+        const building = index === RESUME_TAB_BUILD;
+        resumeAddGrid.hidden = building;
+        resumeAddFooter.hidden = building;
+      },
+    }
+  );
+  resumeAddGrid.hidden = true;
+  resumeAddFooter.hidden = true;
 
 
   /* --------------------------------------------------- account lifecycle */
@@ -1316,6 +1410,7 @@
     state.tailor.preselectJdId = "";
     state.tailor.lastRunId = "";
     releaseRunAssets();
+    closeBuilder({ focus: false });
     resetWorkspace({ focus: false });
   }
 
@@ -2160,7 +2255,7 @@
     const titleWrap = el("div", "item-title-wrap");
     const title = el("h3", "item-title", resume.name);
     const badges = el("div", "badge-row");
-    badges.append(el("span", "badge badge--accent", resume.source_type === "pdf" ? "PDF" : "LaTeX"));
+    badges.append(el("span", "badge badge--accent", sourceTypeLabel(resume.source_type)));
     badges.append(el("span", "badge", "v" + resume.version));
     titleWrap.append(title, badges);
     head.append(titleWrap);
@@ -2177,6 +2272,8 @@
 
     const actions = el("div", "item-actions");
     const tailorBtn = smallButton("Tailor", "button--primary");
+    const editBtn = smallButton("Edit");
+    const pdfBtn = smallButton("PDF");
     const renameBtn = smallButton("Rename");
     const newVersionBtn = smallButton("New version");
     const versionsBtn = smallButton("Versions");
@@ -2184,7 +2281,18 @@
     const deleteBtn = smallButton("Delete", "button--quiet button--danger-quiet");
     versionsBtn.setAttribute("aria-expanded", "false");
     detailsBtn.setAttribute("aria-expanded", "false");
-    actions.append(tailorBtn, renameBtn, newVersionBtn, versionsBtn, detailsBtn, deleteBtn);
+    editBtn.title = "Edit the fields by hand and save a new version";
+    pdfBtn.title = "Compile this resume as it is, with no job description";
+    actions.append(
+      tailorBtn,
+      editBtn,
+      pdfBtn,
+      renameBtn,
+      newVersionBtn,
+      versionsBtn,
+      detailsBtn,
+      deleteBtn
+    );
     card.append(actions);
 
     const expandArea = el("div");
@@ -2210,6 +2318,9 @@
       state.tailor.preselectResumeId = resume.id;
       navigate("tailor");
     });
+
+    editBtn.addEventListener("click", () => openBuilderForResume(resume, editBtn));
+    pdfBtn.addEventListener("click", () => downloadResumePdf(resume, pdfBtn));
 
     renameBtn.addEventListener("click", () => {
       if (openKind === "rename") {
@@ -2285,7 +2396,7 @@
           const main = el("div", "version-row-main");
           const strong = el("strong", "", "v" + versionInfo.version);
           main.append(strong);
-          main.append(el("span", "badge", versionInfo.source_type === "pdf" ? "PDF" : "LaTeX"));
+          main.append(el("span", "badge", sourceTypeLabel(versionInfo.source_type)));
           const subParts = [];
           if (versionInfo.provider) {
             subParts.push(providerLabel(versionInfo.provider) + (versionInfo.model ? " · " + versionInfo.model : ""));
@@ -2376,6 +2487,16 @@
     return card;
   }
 
+  function sourceTypeLabel(value) {
+    if (value === "pdf") {
+      return "PDF";
+    }
+    if (value === "manual") {
+      return "Written here";
+    }
+    return "LaTeX";
+  }
+
   function countLabel(list, singular, plural) {
     const count = Array.isArray(list) ? list.length : 0;
     if (!count) {
@@ -2406,6 +2527,13 @@
 
   /* ---------------------------------------------------- resumes: importer */
 
+  function setBuildStartLabel(labelText) {
+    const label = resumeBuildStart.querySelector(".button-label");
+    if (label) {
+      label.textContent = labelText;
+    }
+  }
+
   function enterVersionMode(resume) {
     state.resumes.addMode = { type: "version", resumeId: resume.id, resumeName: resume.name };
     resumeAddStep.textContent = "New version";
@@ -2416,25 +2544,31 @@
     if (label) {
       label.textContent = "Import new version";
     }
+    // In this mode the third tab is not "start a new resume" but "write this
+    // resume's next version by hand", which is the same editor on the same id.
+    setBuildStartLabel("Edit this resume by hand");
     hideResumeAddError();
     resumeAddPanel.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
-    if (resumeTabs.current === 0) {
+    if (resumeTabs.current === RESUME_TAB_PDF) {
+      pdfBrowseButton.focus({ preventScroll: true });
+    } else if (resumeTabs.current === RESUME_TAB_LATEX) {
       resumeLatexInput.focus({ preventScroll: true });
     } else {
-      pdfBrowseButton.focus({ preventScroll: true });
+      resumeBuildStart.focus({ preventScroll: true });
     }
   }
 
   function exitVersionMode() {
     state.resumes.addMode = { type: "create", resumeId: "", resumeName: "" };
     resumeAddStep.textContent = "Add a resume";
-    resumeAddTitle.textContent = "Import your resume";
+    resumeAddTitle.textContent = "Start a resume";
     resumeNameField.hidden = false;
     resumeAddCancel.hidden = true;
     const label = resumeAddButton.querySelector(".button-label");
     if (label) {
       label.textContent = "Import resume";
     }
+    setBuildStartLabel("Start building");
   }
 
   function showResumeAddError(message) {
@@ -2495,7 +2629,7 @@
 
     const mode = state.resumes.addMode;
     const isVersion = mode.type === "version" && mode.resumeId;
-    const isPdf = resumeTabs.current === 1;
+    const isPdf = resumeTabs.current === RESUME_TAB_PDF;
     const provider = resumeProviderSelect.value;
     const model = resumeModelInput.value.trim();
     const name = resumeNameInput.value.trim();
@@ -2588,6 +2722,709 @@
       timeoutToken.clear();
       setBusy(resumeAddButton, false);
       resumeAddForm.setAttribute("aria-busy", "false");
+    }
+  }
+
+  /* ------------------------------------------------------ resumes: builder */
+  /*
+   * The editor is the second way to own a resume: type it in, no document and
+   * no provider key. It posts a plain draft; the server assigns every stable
+   * ID, escapes the text, and typesets it — so nothing here is trusted, and
+   * the field-addressed 422 it can return is rendered verbatim below the form.
+   */
+
+  const BUILDER_SECTIONS = {
+    links: {
+      title: "Link",
+      limit: 12,
+      fields: [
+        { key: "label", label: "Label", maxLength: 100, placeholder: "GitHub" },
+        { key: "url", label: "Address", maxLength: 500, placeholder: "https://github.com/you" },
+      ],
+      lists: [],
+    },
+    experience: {
+      title: "Role",
+      limit: 30,
+      fields: [
+        { key: "role", label: "Job title", maxLength: 200, placeholder: "Senior Backend Engineer", wide: true },
+        { key: "company", label: "Company", maxLength: 200, placeholder: "Acme Payments" },
+        { key: "location", label: "Location", maxLength: 180, placeholder: "Bengaluru, India" },
+        { key: "start", label: "Start", maxLength: 80, placeholder: "Mar 2021" },
+        { key: "end", label: "End", maxLength: 80, placeholder: "Present" },
+      ],
+      lists: [
+        {
+          key: "bullets",
+          kind: "lines",
+          label: "What you did — one bullet per line",
+          rows: 4,
+          placeholder: "Cut checkout latency 38% by rewriting the settlement path",
+        },
+      ],
+    },
+    projects: {
+      title: "Project",
+      limit: 30,
+      fields: [
+        { key: "name", label: "Project name", maxLength: 200, placeholder: "Ledger reconciler", wide: true },
+        { key: "url", label: "Link", maxLength: 500, placeholder: "https://github.com/you/project" },
+      ],
+      lists: [
+        { key: "technologies", kind: "commas", label: "Technologies — comma separated", placeholder: "Python, Postgres, Redis" },
+        { key: "bullets", kind: "lines", label: "What it does — one bullet per line", rows: 3, placeholder: "Matches 50k daily transactions against bank statements" },
+      ],
+    },
+    education: {
+      title: "Education",
+      limit: 20,
+      fields: [
+        { key: "institution", label: "School", maxLength: 250, placeholder: "Indian Institute of Technology", wide: true },
+        { key: "degree", label: "Degree", maxLength: 250, placeholder: "B.Tech, Computer Science" },
+        { key: "location", label: "Location", maxLength: 180, placeholder: "Chennai, India" },
+        { key: "start", label: "Start", maxLength: 80, placeholder: "2018" },
+        { key: "end", label: "End", maxLength: 80, placeholder: "2022" },
+      ],
+      lists: [
+        { key: "details", kind: "commas", label: "Details — comma separated", placeholder: "CGPA 8.7, Dean’s list" },
+      ],
+    },
+    skills: {
+      title: "Skill group",
+      limit: 30,
+      fields: [
+        { key: "category", label: "Group name", maxLength: 120, placeholder: "Languages", wide: true },
+      ],
+      lists: [
+        { key: "items", kind: "commas", label: "Skills — comma separated", placeholder: "Python, Go, SQL" },
+      ],
+    },
+  };
+
+  let builderFieldSequence = 0;
+
+  function linesToList(value) {
+    return String(value || "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }
+
+  function commasToList(value) {
+    return String(value || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  function builderControl(config, multiline) {
+    const field = el("div", "field" + (config.wide ? " field--wide" : ""));
+    const control = document.createElement(multiline ? "textarea" : "input");
+    builderFieldSequence += 1;
+    control.id = "editor-input-" + builderFieldSequence;
+    if (multiline) {
+      control.rows = config.rows || 3;
+      control.className = "composer-textarea composer-textarea--short";
+    } else {
+      control.type = "text";
+      control.className = "inline-input";
+    }
+    if (config.maxLength) {
+      control.maxLength = config.maxLength;
+    }
+    if (config.placeholder) {
+      control.placeholder = config.placeholder;
+    }
+    const label = el("label", "", config.label);
+    label.htmlFor = control.id;
+    field.append(label, control);
+    return { field, control };
+  }
+
+  function createBuilderRow(spec, values, handlers) {
+    const row = el("div", "editor-row");
+    const head = el("div", "editor-row-head");
+    const title = el("h5", "editor-row-title", spec.title);
+    const controls = el("div", "editor-row-controls");
+    const up = smallButton("↑", "button--quiet");
+    const down = smallButton("↓", "button--quiet");
+    const remove = smallButton("Remove", "button--quiet button--danger-quiet");
+    up.title = "Move up";
+    down.title = "Move down";
+    controls.append(up, down, remove);
+    head.append(title, controls);
+
+    const grid = el("div", "editor-row-grid");
+    const fieldControls = spec.fields.map((config) => {
+      const built = builderControl(config, false);
+      built.control.value = (values && values[config.key]) || "";
+      grid.append(built.field);
+      return built.control;
+    });
+
+    const listControls = spec.lists.map((config) => {
+      const built = builderControl(config, config.kind === "lines");
+      const raw = (values && values[config.key]) || [];
+      built.control.value = config.kind === "lines" ? raw.join("\n") : raw.join(", ");
+      built.field.classList.add("field--wide");
+      grid.append(built.field);
+      return built.control;
+    });
+
+    row.append(head, grid);
+
+    const controller = {
+      node: row,
+      title,
+      up,
+      down,
+      first: fieldControls[0] || listControls[0] || null,
+      read() {
+        const collected = {};
+        spec.fields.forEach((config, index) => {
+          collected[config.key] = fieldControls[index].value.trim();
+        });
+        spec.lists.forEach((config, index) => {
+          const raw = listControls[index].value;
+          collected[config.key] =
+            config.kind === "lines" ? linesToList(raw) : commasToList(raw);
+        });
+        return collected;
+      },
+    };
+
+    up.addEventListener("click", () => handlers.move(controller, -1, up));
+    down.addEventListener("click", () => handlers.move(controller, 1, down));
+    remove.addEventListener("click", () => handlers.remove(controller));
+    return controller;
+  }
+
+  function sectionEditor(sectionKey, container, addButton) {
+    const spec = BUILDER_SECTIONS[sectionKey];
+    const rows = [];
+
+    function renumber() {
+      rows.forEach((row, index) => {
+        row.title.textContent = spec.title + " " + (index + 1);
+        row.up.disabled = index === 0;
+        row.down.disabled = index === rows.length - 1;
+      });
+      addButton.disabled = rows.length >= spec.limit;
+    }
+
+    const handlers = {
+      move(row, delta, button) {
+        const index = rows.indexOf(row);
+        const target = index + delta;
+        if (index < 0 || target < 0 || target >= rows.length) {
+          return;
+        }
+        rows.splice(index, 1);
+        rows.splice(target, 0, row);
+        container.replaceChildren.apply(
+          container,
+          rows.map((item) => item.node)
+        );
+        renumber();
+        button.focus();
+      },
+      remove(row) {
+        const index = rows.indexOf(row);
+        if (index < 0) {
+          return;
+        }
+        rows.splice(index, 1);
+        row.node.remove();
+        renumber();
+        addButton.focus();
+      },
+    };
+
+    function add(values, focus) {
+      if (rows.length >= spec.limit) {
+        toast("You can add up to " + spec.limit + " of these.", "error");
+        return null;
+      }
+      const row = createBuilderRow(spec, values, handlers);
+      rows.push(row);
+      container.append(row.node);
+      renumber();
+      if (focus && row.first) {
+        row.first.focus();
+      }
+      return row;
+    }
+
+    function load(items) {
+      rows.length = 0;
+      container.replaceChildren();
+      (items || []).forEach((item) => add(item, false));
+      renumber();
+    }
+
+    addButton.addEventListener("click", () => add(null, true));
+    renumber();
+    return {
+      add,
+      load,
+      read: () => rows.map((row) => row.read()),
+      get count() {
+        return rows.length;
+      },
+    };
+  }
+
+  const builderSections = {
+    links: sectionEditor("links", editorLinks, editorLinksAdd),
+    experience: sectionEditor("experience", editorExperience, editorExperienceAdd),
+    projects: sectionEditor("projects", editorProjects, editorProjectsAdd),
+    education: sectionEditor("education", editorEducation, editorEducationAdd),
+    skills: sectionEditor("skills", editorSkills, editorSkillsAdd),
+  };
+
+  function valuesFromStored(sectionKey, item) {
+    const spec = BUILDER_SECTIONS[sectionKey];
+    const values = {};
+    spec.fields.forEach((config) => {
+      values[config.key] = readableValue(item && item[config.key]);
+    });
+    spec.lists.forEach((config) => {
+      const raw = item && Array.isArray(item[config.key]) ? item[config.key] : [];
+      values[config.key] = raw
+        .map((entry) =>
+          readableValue(entry && typeof entry === "object" ? entry.text : entry)
+        )
+        .filter(Boolean);
+    });
+    return values;
+  }
+
+  function updateSummaryCounter() {
+    const value = editorSummary.value.trim();
+    const words = value ? value.split(/\s+/).length : 0;
+    editorSummaryCount.textContent = words + " / 12 words";
+    editorSummaryCount.classList.toggle(
+      "is-near-limit",
+      words > 12 || value.length > 120
+    );
+  }
+
+  function updateMarginLabel() {
+    const margin = Number(editorMargin.value);
+    editorMarginValue.textContent =
+      (Number.isFinite(margin) ? margin.toFixed(1).replace(/\.0$/, "") : "2") + " cm";
+  }
+
+  function applyBuilderStyle(style) {
+    const paper = style && style.paper === "letterpaper" ? "letterpaper" : "a4paper";
+    editorPaper.value = paper;
+    const size = readableValue(style && style.font_size);
+    editorFontSize.value = size === "11pt" || size === "12pt" ? size : "10pt";
+    const margin = Number(style && style.margin_cm);
+    editorMargin.value = String(
+      Number.isFinite(margin) ? Math.min(3, Math.max(1, margin)) : 2
+    );
+    const accent = readableValue(style && style.accent_hex);
+    const usable = /^[0-9A-Fa-f]{6}$/.test(accent);
+    editorAccentOn.checked = usable;
+    editorAccent.value = usable ? "#" + accent : "#1F3A8A";
+    updateMarginLabel();
+  }
+
+  function collectBuilderStyle() {
+    return {
+      paper: editorPaper.value,
+      font_size: editorFontSize.value,
+      margin_cm: Number(editorMargin.value) || 2,
+      accent_hex: editorAccentOn.checked ? editorAccent.value : null,
+    };
+  }
+
+  function collectBuilderDraft() {
+    return {
+      identity: {
+        name: editorName.value.trim(),
+        email: editorEmail.value.trim(),
+        phone: editorPhone.value.trim(),
+        location: editorLocation.value.trim(),
+        links: builderSections.links.read(),
+      },
+      summary: editorSummary.value.trim(),
+      experience: builderSections.experience.read(),
+      projects: builderSections.projects.read(),
+      education: builderSections.education.read(),
+      skills: builderSections.skills.read(),
+      achievements: linesToList(editorAchievements.value),
+    };
+  }
+
+  function builderSnapshot() {
+    return JSON.stringify({
+      name: editorResumeName.value.trim(),
+      draft: collectBuilderDraft(),
+      style: collectBuilderStyle(),
+    });
+  }
+
+  function rowHasContent(values) {
+    return Object.keys(values).some((key) => {
+      const value = values[key];
+      return Array.isArray(value) ? value.length > 0 : Boolean(value);
+    });
+  }
+
+  function builderDraftProblems(draft) {
+    const problems = [];
+    if (!draft.identity.name) {
+      problems.push("Your name is required.");
+    }
+    if (!draft.identity.email) {
+      problems.push("Your email address is required.");
+    } else if (!EMAIL_PATTERN.test(draft.identity.email)) {
+      problems.push("Your email address does not look like an email address.");
+    }
+    if (!draft.identity.phone) {
+      problems.push("Your phone number is required.");
+    }
+    if (!draft.identity.location) {
+      problems.push("Your location is required.");
+    }
+    if (!draft.summary) {
+      problems.push("A headline is required — one short line under your name.");
+    } else if (draft.summary.split(/\s+/).length > 12) {
+      problems.push("The headline is longer than 12 words.");
+    }
+    const filled = ["experience", "projects", "education", "skills"].reduce(
+      (total, key) => total + draft[key].filter(rowHasContent).length,
+      draft.achievements.length
+    );
+    if (!filled) {
+      problems.push(
+        "Add at least one section — experience, a project, education, skills, or an achievement."
+      );
+    }
+    return problems;
+  }
+
+  function showBuilderErrors(message, details) {
+    resumeEditorErrorMessage.textContent = message || "";
+    resumeEditorErrorList.replaceChildren();
+    const items = (details || []).slice(0, 20);
+    items.forEach((item) => {
+      resumeEditorErrorList.append(el("li", "", readableValue(item)));
+    });
+    resumeEditorErrorList.hidden = items.length === 0;
+    resumeEditorError.hidden = false;
+    resumeEditorError.focus({ preventScroll: true });
+    resumeEditorError.scrollIntoView({
+      behavior: prefersReducedMotion() ? "auto" : "smooth",
+      block: "center",
+    });
+  }
+
+  function showBuilderApiError(error, fallback) {
+    const details = error && Array.isArray(error.errors) ? error.errors : [];
+    showBuilderErrors(errorText(error, fallback), details);
+  }
+
+  function hideBuilderErrors() {
+    resumeEditorError.hidden = true;
+    resumeEditorErrorMessage.textContent = "";
+    resumeEditorErrorList.replaceChildren();
+  }
+
+  function revokeBuilderUrl(key) {
+    if (state.builder[key]) {
+      URL.revokeObjectURL(state.builder[key]);
+      state.builder[key] = null;
+    }
+  }
+
+  function clearBuilderPreview() {
+    editorPreviewFrame.removeAttribute("src");
+    editorPreviewDownload.removeAttribute("href");
+    editorPreviewTex.removeAttribute("href");
+    revokeBuilderUrl("pdfUrl");
+    revokeBuilderUrl("texUrl");
+    editorPreviewPanel.hidden = true;
+  }
+
+  function setBuilderVisible(open) {
+    state.builder.open = open;
+    resumeEditor.hidden = !open;
+    resumeAddPanel.hidden = open;
+    resumesListSection.hidden = open;
+  }
+
+  function describeBuilderTarget() {
+    if (state.builder.mode !== "edit") {
+      resumeEditorStep.textContent = "Build from scratch";
+      resumeEditorTitle.textContent = "Your resume";
+      resumeEditorClose.textContent = "Cancel";
+      editorNameField.hidden = false;
+      const label = resumeEditorSave.querySelector(".button-label");
+      if (label) {
+        label.textContent = "Save resume";
+      }
+      return;
+    }
+    resumeEditorStep.textContent =
+      state.builder.version > 0 ? "Editing · v" + state.builder.version : "Editing";
+    resumeEditorTitle.textContent = state.builder.resumeName || "Your resume";
+    resumeEditorClose.textContent = state.builder.saved ? "Done" : "Cancel";
+    editorNameField.hidden = true;
+    const label = resumeEditorSave.querySelector(".button-label");
+    if (label) {
+      label.textContent = "Save new version";
+    }
+  }
+
+  function openBuilder(options) {
+    const opts = options || {};
+    const detail = opts.resume || null;
+    const data = detail && detail.data ? detail.data : null;
+    const identity = (data && data.identity) || {};
+
+    state.builder.mode = detail ? "edit" : "create";
+    state.builder.resumeId = detail ? readableValue(detail.id) : "";
+    state.builder.resumeName = detail ? readableValue(detail.name) : "";
+    state.builder.version = detail ? Number(detail.version) || 0 : 0;
+    state.builder.saved = Boolean(detail);
+
+    clearBuilderPreview();
+    hideBuilderErrors();
+
+    const account = state.user || {};
+    editorResumeName.value = "";
+    editorName.value = data ? readableValue(identity.name) : readableValue(account.name);
+    editorEmail.value = data ? readableValue(identity.email) : readableValue(account.email);
+    editorPhone.value = data ? readableValue(identity.phone) : "";
+    editorLocation.value = data ? readableValue(identity.location) : "";
+    editorSummary.value = data ? readableValue(data.summary) : "";
+    editorAchievements.value = data
+      ? (data.achievements || [])
+          .map((item) => readableValue(item && item.text))
+          .filter(Boolean)
+          .join("\n")
+      : "";
+
+    builderSections.links.load(
+      ((identity && identity.links) || []).map((link) => ({
+        label: readableValue(link && link.label),
+        url: readableValue(link && link.url),
+      }))
+    );
+    ["experience", "projects", "education", "skills"].forEach((key) => {
+      const items = data && Array.isArray(data[key]) ? data[key] : [];
+      builderSections[key].load(items.map((item) => valuesFromStored(key, item)));
+    });
+    if (!data) {
+      // A blank form is intimidating; one row of each expected section is not.
+      builderSections.experience.add(null, false);
+      builderSections.education.add(null, false);
+      builderSections.skills.add(null, false);
+    }
+
+    applyBuilderStyle(detail ? detail.style : null);
+    updateSummaryCounter();
+    describeBuilderTarget();
+    state.builder.snapshot = builderSnapshot();
+    setBuilderVisible(true);
+    resumeEditorTitle.focus({ preventScroll: true });
+    resumeEditor.scrollIntoView({
+      behavior: prefersReducedMotion() ? "auto" : "smooth",
+      block: "start",
+    });
+  }
+
+  function closeBuilder(options) {
+    const opts = options || {};
+    clearBuilderPreview();
+    hideBuilderErrors();
+    setBuilderVisible(false);
+    state.builder.mode = "create";
+    state.builder.resumeId = "";
+    state.builder.resumeName = "";
+    state.builder.version = 0;
+    state.builder.saved = false;
+    state.builder.snapshot = "";
+    if (opts.focus !== false) {
+      resumeTabBuild.focus({ preventScroll: true });
+    }
+  }
+
+  async function requestBuilderClose() {
+    if (state.builder.snapshot && state.builder.snapshot !== builderSnapshot()) {
+      const confirmed = await openConfirm({
+        title: "Discard your changes?",
+        message:
+          "This resume has edits that have not been saved. Closing the editor loses them.",
+        confirmLabel: "Discard changes",
+      });
+      if (!confirmed) {
+        return;
+      }
+    }
+    closeBuilder();
+  }
+
+  function handleBuildStart() {
+    const mode = state.resumes.addMode;
+    if (mode.type === "version" && mode.resumeId) {
+      const known = state.resumes.items.filter((item) => item.id === mode.resumeId)[0];
+      openBuilderForResume(known || { id: mode.resumeId }, resumeBuildStart);
+      exitVersionMode();
+      return;
+    }
+    openBuilder();
+  }
+
+  async function openBuilderForResume(summary, button) {
+    if (button) {
+      button.disabled = true;
+    }
+    try {
+      const payload = await api("/api/resumes/" + encodeURIComponent(summary.id));
+      openBuilder({ resume: payload.resume });
+    } catch (error) {
+      toast(errorText(error, "Could not open that resume for editing."), "error");
+    } finally {
+      if (button) {
+        button.disabled = false;
+      }
+    }
+  }
+
+  async function handleBuilderSave(event) {
+    event.preventDefault();
+    hideBuilderErrors();
+    const draft = collectBuilderDraft();
+    const problems = builderDraftProblems(draft);
+    if (problems.length) {
+      showBuilderErrors("Fix these and save again:", problems);
+      return;
+    }
+    const body = { resume: draft, style: collectBuilderStyle() };
+    const editing = state.builder.mode === "edit" && state.builder.resumeId;
+    if (!editing) {
+      const name = editorResumeName.value.trim();
+      if (name) {
+        body.name = name;
+      }
+    }
+    setBusy(resumeEditorSave, true, "Saving…");
+    let detail = null;
+    try {
+      const payload = editing
+        ? await api("/api/resumes/" + encodeURIComponent(state.builder.resumeId) + "/content", {
+            method: "PUT",
+            body,
+          })
+        : await api("/api/resumes/manual", { method: "POST", body });
+      detail = payload.resume || {};
+    } catch (error) {
+      showBuilderApiError(error, "Could not save this resume.");
+    } finally {
+      // Restore the idle label before relabelling: setBusy puts back the label
+      // it captured, which would otherwise undo the retitling below.
+      setBusy(resumeEditorSave, false);
+    }
+    if (!detail) {
+      return;
+    }
+    // Saving a new resume turns the form into that resume's editor, so the
+    // next save adds a version instead of creating a second copy.
+    state.builder.mode = "edit";
+    state.builder.resumeId = readableValue(detail.id);
+    state.builder.resumeName = readableValue(detail.name);
+    state.builder.version = Number(detail.version) || 0;
+    state.builder.saved = true;
+    describeBuilderTarget();
+    state.builder.snapshot = builderSnapshot();
+    toast(
+      editing
+        ? "Saved as version " + state.builder.version + "."
+        : "Saved “" + state.builder.resumeName + "”.",
+      "success"
+    );
+    loadResumes();
+  }
+
+  async function handleBuilderPreview() {
+    hideBuilderErrors();
+    const draft = collectBuilderDraft();
+    const problems = builderDraftProblems(draft);
+    if (problems.length) {
+      showBuilderErrors("Fill these in first, then preview:", problems);
+      return;
+    }
+    setBusy(resumeEditorPreview, true, "Compiling…");
+    try {
+      const payload = await api("/api/resumes/preview", {
+        method: "POST",
+        body: { resume: draft, style: collectBuilderStyle() },
+      });
+      renderBuilderPreview(payload);
+    } catch (error) {
+      showBuilderApiError(error, "Could not compile a preview.");
+    } finally {
+      setBusy(resumeEditorPreview, false);
+    }
+  }
+
+  function renderBuilderPreview(payload) {
+    clearBuilderPreview();
+    const filename = sanitizeFilename(payload.filename, "resume.pdf");
+    const blob = base64ToPdfBlob(payload.pdf_base64);
+    if (!blob) {
+      showBuilderErrors("The server compiled the resume but returned no PDF.", []);
+      return;
+    }
+    state.builder.pdfUrl = URL.createObjectURL(blob);
+    editorPreviewFrame.src = state.builder.pdfUrl + "#view=FitH";
+    editorPreviewDownload.href = state.builder.pdfUrl;
+    editorPreviewDownload.download = filename;
+    const pages = Number(payload.page_count);
+    const pageText =
+      Number.isFinite(pages) && pages > 0
+        ? pages + (pages === 1 ? " page · " : " pages · ")
+        : "";
+    editorPreviewMeta.textContent = pageText + filename;
+    const latex = readableValue(payload.latex_source);
+    if (latex) {
+      const texBlob = new Blob([latex], { type: "text/plain;charset=utf-8" });
+      state.builder.texUrl = URL.createObjectURL(texBlob);
+      editorPreviewTex.href = state.builder.texUrl;
+      editorPreviewTex.download = filename.replace(/\.pdf$/i, ".tex");
+      editorPreviewTex.hidden = false;
+    } else {
+      editorPreviewTex.hidden = true;
+    }
+    editorPreviewPanel.hidden = false;
+    editorPreviewPanel.scrollIntoView({
+      behavior: prefersReducedMotion() ? "auto" : "smooth",
+      block: "start",
+    });
+  }
+
+  async function downloadResumePdf(resume, button) {
+    button.disabled = true;
+    try {
+      const payload = await api("/api/resumes/preview", {
+        method: "POST",
+        body: { resume_id: resume.id },
+      });
+      const blob = base64ToPdfBlob(payload.pdf_base64);
+      if (!blob) {
+        toast("The server returned no PDF for that resume.", "error");
+        return;
+      }
+      downloadBlob(blob, sanitizeFilename(payload.filename, slugify(resume.name) + ".pdf"));
+      toast("Compiled “" + resume.name + "”.", "success");
+    } catch (error) {
+      toast(errorText(error, "Could not compile that resume."), "error");
+    } finally {
+      button.disabled = false;
     }
   }
 
@@ -3470,6 +4307,17 @@
 
   resumeAddForm.addEventListener("submit", handleResumeAdd);
   resumeAddCancel.addEventListener("click", exitVersionMode);
+  resumeBuildStart.addEventListener("click", handleBuildStart);
+  resumeEditorForm.addEventListener("submit", handleBuilderSave);
+  resumeEditorPreview.addEventListener("click", handleBuilderPreview);
+  resumeEditorClose.addEventListener("click", requestBuilderClose);
+  editorSummary.addEventListener("input", updateSummaryCounter);
+  editorMargin.addEventListener("input", updateMarginLabel);
+  editorAccent.addEventListener("input", () => {
+    editorAccentOn.checked = true;
+  });
+  updateSummaryCounter();
+  updateMarginLabel();
   resumesRetry.addEventListener("click", loadResumes);
   pdfBrowseButton.addEventListener("click", () => pdfFileInput.click());
   pdfFileInput.addEventListener("change", () => {
@@ -3563,6 +4411,7 @@
   window.addEventListener("beforeunload", () => {
     clearGeneratedFiles();
     releaseRunAssets();
+    clearBuilderPreview();
   });
 
   // authTabs is only exercised through the click/keyboard handlers that

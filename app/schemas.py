@@ -393,6 +393,117 @@ class ResumeVersionSourceResponse(StrictModel):
     template_tex: str = ""
 
 
+# --- Manual authoring (the in-app resume builder) ---------------------------
+#
+# Draft models are deliberately lenient: every field defaults to empty and only
+# maximum lengths are enforced here, so a half-filled form reaches the route and
+# comes back with field-addressed guidance from ``app/builder.py`` instead of a
+# schema dump. ``extra="forbid"`` still applies, so the stable IDs the server
+# owns cannot be smuggled in from the browser.
+
+
+class ResumeDraftLink(StrictModel):
+    label: str = Field(default="", max_length=100)
+    url: str = Field(default="", max_length=500)
+
+
+class ResumeDraftIdentity(StrictModel):
+    name: str = Field(default="", max_length=160)
+    email: str = Field(default="", max_length=254)
+    phone: str = Field(default="", max_length=80)
+    location: str = Field(default="", max_length=180)
+    links: List[ResumeDraftLink] = Field(default_factory=list, max_length=12)
+
+
+class ResumeDraftExperience(StrictModel):
+    role: str = Field(default="", max_length=200)
+    company: str = Field(default="", max_length=200)
+    location: str = Field(default="", max_length=180)
+    start: str = Field(default="", max_length=80)
+    end: str = Field(default="", max_length=80)
+    bullets: List[str] = Field(default_factory=list, max_length=30)
+
+
+class ResumeDraftProject(StrictModel):
+    name: str = Field(default="", max_length=200)
+    url: str = Field(default="", max_length=500)
+    technologies: List[str] = Field(default_factory=list, max_length=40)
+    bullets: List[str] = Field(default_factory=list, max_length=30)
+
+
+class ResumeDraftEducation(StrictModel):
+    institution: str = Field(default="", max_length=250)
+    degree: str = Field(default="", max_length=250)
+    location: str = Field(default="", max_length=180)
+    start: str = Field(default="", max_length=80)
+    end: str = Field(default="", max_length=80)
+    details: List[str] = Field(default_factory=list, max_length=20)
+
+
+class ResumeDraftSkillCategory(StrictModel):
+    category: str = Field(default="", max_length=120)
+    items: List[str] = Field(default_factory=list, max_length=100)
+
+
+class ResumeDraft(StrictModel):
+    """A resume as typed into the editor, before the server owns it."""
+
+    identity: ResumeDraftIdentity = Field(default_factory=ResumeDraftIdentity)
+    #: One short line under the name. The renderer holds it to a headline
+    #: (12 words / 120 characters); the cap here only bounds the request.
+    summary: str = Field(default="", max_length=1000)
+    experience: List[ResumeDraftExperience] = Field(default_factory=list, max_length=30)
+    projects: List[ResumeDraftProject] = Field(default_factory=list, max_length=30)
+    education: List[ResumeDraftEducation] = Field(default_factory=list, max_length=20)
+    skills: List[ResumeDraftSkillCategory] = Field(default_factory=list, max_length=30)
+    achievements: List[str] = Field(default_factory=list, max_length=50)
+
+
+class ResumeStyleInput(StrictModel):
+    """Requested layout knobs; ``sanitize_style`` clamps them to the whitelist.
+
+    Looser than :class:`ResumeStyle` on purpose — an out-of-range margin or a
+    ``#RRGGBB`` accent is normalized rather than rejected, because these are
+    presentation preferences, not facts.
+    """
+
+    paper: str = Field(default="a4paper", max_length=20)
+    font_size: str = Field(default="10pt", max_length=8)
+    margin_cm: float = Field(default=2.0)
+    accent_hex: Optional[str] = Field(default=None, max_length=7)
+
+
+class ResumeManualCreateRequest(StrictModel):
+    resume: ResumeDraft
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    style: Optional[ResumeStyleInput] = None
+
+
+class ResumeContentUpdateRequest(StrictModel):
+    resume: ResumeDraft
+    style: Optional[ResumeStyleInput] = None
+
+
+class ResumePreviewRequest(StrictModel):
+    """Compile a draft as typed, or the stored current version of one resume.
+
+    Exactly one of ``resume`` / ``resume_id`` is accepted; the route enforces
+    that pairing so the mistake gets its own error code.
+    """
+
+    resume: Optional[ResumeDraft] = None
+    resume_id: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    style: Optional[ResumeStyleInput] = None
+
+
+class ResumePreviewResponse(StrictModel):
+    pdf_base64: str
+    page_count: Optional[int] = None
+    filename: str = "resume.pdf"
+    latex_source: str = ""
+    compiler: CompilerReport
+
+
 class JdSummary(StrictModel):
     id: str
     title: str

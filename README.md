@@ -11,10 +11,15 @@ model returns structured text changes; the server validates them, renders them
 into a locked LaTeX template, and compiles a PDF with Tectonic.
 
 With `MONGODB_URI` set the app runs in **multi-user mode**: email+password
-accounts, per-user resume libraries (LaTeX paste or PDF upload, with versions),
-saved job descriptions, tailor history, and per-user encrypted provider API
-keys. Without it the app boots in **demo mode**: no accounts, seed-resume
-tailoring only.
+accounts, per-user resume libraries (write one in the app, or import a LaTeX
+paste or PDF, all with versions), saved job descriptions, tailor history, and
+per-user encrypted provider API keys. Without it the app boots in **demo mode**:
+no accounts, seed-resume tailoring only.
+
+A new account starts empty and stays that way until the user adds a resume.
+Nothing user-facing is derived from the repository's seed resume: in multi-user
+mode `/api/tailor` requires a resume the caller owns, and the seed is reachable
+only in demo mode.
 
 Account management covers the full lifecycle: password change, emailed password
 reset, email verification (optionally enforced), a list of active sessions with
@@ -35,6 +40,33 @@ deployments private (the seed resume is exposed to anyone with access).
 - Every compile runs in a unique temporary directory with Tectonic's untrusted,
   cached-only mode and a timeout.
 - The browser shows the proposed changes before the user accepts a result.
+
+### Building a resume in the app (multi-user)
+
+A signed-in user with no document to import can write a resume here: contact
+details, a headline, roles with bullets, projects, education, skills, and
+achievements, plus four bounded layout knobs (paper size, font size, margin,
+accent colour). The server assembles the same locked template it uses for
+imports and compiles the same one-page PDF.
+
+| Flow | Route | Notes |
+|---|---|---|
+| Create | `POST /api/resumes/manual` | Structured draft in, stored resume out. **No LLM call and no provider key** — nothing is sent to a model |
+| Edit | `PUT /api/resumes/{id}/content` | Saves edited facts as the resume's next version. Works on imported resumes too, which is how an extraction mistake gets fixed |
+| Preview | `POST /api/resumes/preview` | Compiles a draft as typed (`resume`) or a stored resume (`resume_id`), with no job description; returns the PDF and the rendered `.tex` |
+
+The safety contract is unchanged, because the draft is treated exactly like an
+LLM extraction: `app/builder.py` discards anything resembling an ID, assigns its
+own positional stable IDs, clamps the style values, and renders through
+`escape_latex` — so a bullet containing `\input{...}` is typeset as text, never
+executed. What differs is the error shape: an incomplete draft comes back as
+`422 incomplete_resume` with field-addressed messages ("Your phone number is
+required."), which name the field and never echo the submitted value.
+
+Two limits worth knowing while writing: the headline is one line (12 words /
+120 characters, because tailoring rewrites it), and a resume needs a name,
+email, phone, location and at least one non-empty section before it can be
+saved.
 
 ### Importing a resume (multi-user)
 
@@ -92,6 +124,7 @@ become an account oracle.
 ```text
 app/                  FastAPI application, validation, rendering, and compiler
 app/importer.py       LaTeX-extraction normalization and template assembly
+app/builder.py        User-authored draft validation and normalization (no LLM)
 app/db.py             MongoDB (Motor) stores: users, sessions, auth tokens, keys, resumes, JDs, runs
 app/routes_account.py Password change/reset, email verification, session management
 app/mailer.py         Pluggable outbound mail: SMTP driver plus a console driver
@@ -102,6 +135,7 @@ resume/template.tex   Locked Tectonic-compatible LaTeX template
 resume/assets/        Approved local images/fonts, if the template needs them
 static/               Browser UI
 tests/                Validation, rendering, compiler, and API tests
+tests/ui/             Node + jsdom harness driving the resume editor
 Dockerfile            Hugging Face-compatible production image
 docker-compose.yml    Local MongoDB for multi-user development
 ```
@@ -163,6 +197,18 @@ pytest -q
 
 Tests that need the Tectonic executable may skip when it is unavailable. The
 Docker build always renders the configured baseline and performs a real compile.
+
+The resume editor has a browser-side harness that runs outside pytest, because
+it needs Node rather than Python:
+
+```bash
+npm install jsdom          # once, anywhere on the machine
+node tests/ui/resume_editor.mjs
+```
+
+It loads `static/index.html` and `static/app.js` into jsdom, drives the editor
+against a recording fake server, and checks what the browser would actually
+send.
 
 ## Configuration
 

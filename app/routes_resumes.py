@@ -1,4 +1,4 @@
-"""Per-user resume library routes: import (LaTeX paste or PDF upload), versions.
+"""Per-user resume library routes: import, manual authoring, versions, preview.
 
 Security rationale:
 - Import is the one sanctioned flow where a user's full document (identity
@@ -9,6 +9,11 @@ Security rationale:
 - Uploaded PDFs are never parsed in-process: magic/size checks happen here and
   text extraction runs through the injected ``pdf_extractor`` (a sandboxed
   ``pdftotext`` subprocess in production).
+- Manually authored resumes (``/api/resumes/manual``, ``PUT .../content``)
+  reach the same storage through ``app/builder.py``, which is the import
+  boundary's twin for a human author: the server still assigns every stable ID
+  and still assembles the template, so no LLM and no provider key is involved
+  in owning a resume here.
 - Every store call is scoped by the authenticated user id; missing and
   non-owned resumes are indistinguishable (404 ``resume_not_found``).
 """
@@ -16,6 +21,8 @@ Security rationale:
 from __future__ import annotations
 
 import asyncio
+import base64
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -23,6 +30,12 @@ from fastapi import FastAPI, File, Form, Request, UploadFile
 from pydantic import ValidationError
 
 from .auth import _api_error, require_user, resolve_llm_selection
+from .builder import (
+    ResumeDraftError,
+    baseline_proposal,
+    build_manual_artifacts,
+    render_baseline,
+)
 from .importer import assemble_template, build_resume_data, sanitize_style
 from .llm import (
     LLMConfigurationError,
@@ -31,30 +44,32 @@ from .llm import (
     LLMResponseError,
 )
 from .pdftext import PdfExtractionError
-from .resume import (
-    ProposalValidationError,
-    ResumeError,
-    flattened_skills,
-    render_template_text,
-)
+from .resume import ProposalValidationError, ResumeError, render_template_text
+from .routes_runs import compile_report, compiler_failure
 from .schemas import (
     OkResponse,
+    ResumeContentUpdateRequest,
     ResumeCreateRequest,
     ResumeCreateResponse,
     ResumeData,
     ResumeDetail,
     ResumeListResponse,
+    ResumeManualCreateRequest,
+    ResumePreviewRequest,
+    ResumePreviewResponse,
     ResumeRenameRequest,
     ResumeResponse,
     ResumeSummary,
     ResumeVersionSourceResponse,
     ResumeVersionSummary,
     ResumeVersionsResponse,
-    TailorProposal,
     dump_model,
     validate_model,
 )
 
+
+#: ``source_type`` for a resume typed into the editor rather than imported.
+MANUAL_SOURCE_TYPE = "manual"
 
 IMPORT_REVIEW_WARNING = (
     "Review the imported fields; the AI extraction may have missed or "
@@ -99,10 +114,15 @@ def _default_resume_name(resume: ResumeData) -> str:
     return "{0} — {1}".format(resume.identity.name, today)[:120]
 
 
+def _pdf_filename(label: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", str(label).lower()).strip("-")[:60]
+    return (slug or "resume") + ".pdf"
+
+
 def register_resumes_routes(app: FastAPI, services: Any) -> None:
-    async def _resume_detail(
-        user_id: str, doc: Dict[str, Any]
-    ) -> ResumeDetail:
+    async def _current_content(user_id: str, doc: Dict[str, Any]) -> Tuple[ResumeData, str]:
+        """Validated facts plus the stored template for a resume's live version."""
+
         version = await services.database.resumes.get_version(
             user_id, doc["_id"], int(doc.get("current_version", 1))
         )
@@ -116,6 +136,12 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
             raise _api_error(
                 500, "resume_configuration_error", "The stored resume is invalid."
             ) from exc
+        return data, version.get("template_tex", "") or ""
+
+    async def _resume_detail(
+        user_id: str, doc: Dict[str, Any]
+    ) -> ResumeDetail:
+        data, _template = await _current_content(user_id, doc)
         summary = _resume_summary(doc)
         return ResumeDetail(
             style=sanitize_style(doc.get("style")),
@@ -160,12 +186,9 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
             template = assemble_template(style)
             # Confirm the extraction actually renders into the locked template
             # before anything is stored.
-            baseline = TailorProposal(
-                summary=resume.summary,
-                bullet_rewrites=[],
-                skills_order=flattened_skills(resume),
+            render_template_text(
+                template, resume, baseline_proposal(resume), sectioned=True
             )
-            render_template_text(template, resume, baseline, sectioned=True)
         except (ResumeError, ProposalValidationError, ValidationError) as exc:
             raise _api_error(
                 422,
@@ -208,6 +231,40 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
             )
             raise _api_error(status_code, code, str(exc)) from exc
 
+    async def _check_resume_quota(user: Dict[str, Any]) -> None:
+        count = await services.database.resumes.count_for_user(user["_id"])
+        if count >= services.config.max_resumes_per_user:
+            raise _api_error(
+                409,
+                "resume_quota_exceeded",
+                "You already have {0} resumes; delete one to add another.".format(count),
+            )
+
+    def _check_version_quota(existing: Dict[str, Any]) -> None:
+        if int(existing.get("current_version", 1)) >= services.config.max_versions_per_resume:
+            raise _api_error(
+                409,
+                "version_quota_exceeded",
+                "This resume already has {0} versions.".format(
+                    existing.get("current_version")
+                ),
+            )
+
+    def _manual_artifacts(draft: Any, style: Any) -> Tuple[ResumeData, Any, str, str]:
+        """Draft -> stored artifacts, with draft problems as field-addressed 422s."""
+
+        try:
+            return build_manual_artifacts(
+                dump_model(draft), dump_model(style) if style is not None else None
+            )
+        except ResumeDraftError as exc:
+            raise _api_error(
+                422,
+                "incomplete_resume",
+                "This resume is not ready yet — a few fields still need attention.",
+                errors=exc.errors,
+            ) from exc
+
     async def _create_resume(
         user: Dict[str, Any],
         source_text: str,
@@ -216,13 +273,7 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
         provider: Optional[str],
         model: Optional[str],
     ) -> ResumeCreateResponse:
-        count = await services.database.resumes.count_for_user(user["_id"])
-        if count >= services.config.max_resumes_per_user:
-            raise _api_error(
-                409,
-                "resume_quota_exceeded",
-                "You already have {0} resumes; delete one to import another.".format(count),
-            )
+        await _check_resume_quota(user)
         resume, style, template, extraction, warnings = await _extract_validated_import(
             user, source_text, source_kind, provider, model
         )
@@ -253,14 +304,7 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
         existing = await services.database.resumes.get(user["_id"], resume_id)
         if existing is None:
             raise _resume_not_found()
-        if int(existing.get("current_version", 1)) >= services.config.max_versions_per_resume:
-            raise _api_error(
-                409,
-                "version_quota_exceeded",
-                "This resume already has {0} versions.".format(
-                    existing.get("current_version")
-                ),
-            )
+        _check_version_quota(existing)
         resume, style, template, extraction, warnings = await _extract_validated_import(
             user, source_text, source_kind, provider, model
         )
@@ -312,6 +356,128 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
         user = await require_user(request, services)
         text = await _read_pdf_upload(file)
         return await _create_resume(user, text, "text", name, provider, model)
+
+    @app.post(
+        "/api/resumes/manual", response_model=ResumeCreateResponse, status_code=201
+    )
+    async def create_manual_resume(
+        payload: ResumeManualCreateRequest, request: Request
+    ) -> ResumeCreateResponse:
+        """Author a resume in the app: no document to import, no LLM, no key."""
+
+        user = await require_user(request, services)
+        await _check_resume_quota(user)
+        resume, style, template, latex_source = _manual_artifacts(
+            payload.resume, payload.style
+        )
+        doc = await services.database.resumes.create(
+            user["_id"],
+            (payload.name or "").strip() or _default_resume_name(resume),
+            MANUAL_SOURCE_TYPE,
+            dump_model(resume),
+            template,
+            # Imports keep the document they came from; a resume written here
+            # has no such original, so the version stores the LaTeX the server
+            # rendered from it — which is what "download the source" should mean.
+            latex_source,
+            dump_model(style),
+            "",
+            "",
+        )
+        return ResumeCreateResponse(resume=await _resume_detail(user["_id"], doc))
+
+    @app.put(
+        "/api/resumes/{resume_id}/content", response_model=ResumeCreateResponse
+    )
+    async def update_resume_content(
+        resume_id: str, payload: ResumeContentUpdateRequest, request: Request
+    ) -> ResumeCreateResponse:
+        """Save edited facts as the resume's next version.
+
+        Editing is version-additive like re-importing, so the previous wording
+        survives an experiment. It works on imported resumes too: the first save
+        turns that version into a manually authored one.
+        """
+
+        user = await require_user(request, services)
+        existing = await services.database.resumes.get(user["_id"], resume_id)
+        if existing is None:
+            raise _resume_not_found()
+        _check_version_quota(existing)
+        resume, style, template, latex_source = _manual_artifacts(
+            payload.resume, payload.style
+        )
+        doc = await services.database.resumes.add_version(
+            user["_id"],
+            resume_id,
+            MANUAL_SOURCE_TYPE,
+            dump_model(resume),
+            template,
+            latex_source,
+            dump_model(style),
+            "",
+            "",
+        )
+        if doc is None:
+            raise _resume_not_found()
+        return ResumeCreateResponse(resume=await _resume_detail(user["_id"], doc))
+
+    @app.post("/api/resumes/preview", response_model=ResumePreviewResponse)
+    async def preview_resume(
+        payload: ResumePreviewRequest, request: Request
+    ) -> ResumePreviewResponse:
+        """Compile a resume as written — an unsaved draft, or a stored one.
+
+        No job description and no model: this is the untailored document, so the
+        editor can show the real PDF between edits and a user can download their
+        base resume without spending an LLM call.
+        """
+
+        user = await require_user(request, services)
+        if (payload.resume is None) == (payload.resume_id is None):
+            raise _api_error(
+                422,
+                "preview_target_required",
+                "Provide exactly one of resume or resume_id.",
+            )
+
+        if payload.resume is not None:
+            resume, _style, _template, latex_source = _manual_artifacts(
+                payload.resume, payload.style
+            )
+            filename = _pdf_filename(resume.identity.name)
+        else:
+            doc = await services.database.resumes.get(user["_id"], payload.resume_id)
+            if doc is None:
+                raise _resume_not_found()
+            resume, template = await _current_content(user["_id"], doc)
+            if payload.style is not None:
+                # A style override previews a different look without touching
+                # what is stored; saving is what makes it permanent.
+                template = assemble_template(sanitize_style(dump_model(payload.style)))
+            try:
+                latex_source = render_baseline(template, resume)
+            except ResumeDraftError as exc:
+                raise _api_error(
+                    500,
+                    "resume_configuration_error",
+                    "The stored resume could not be rendered.",
+                    errors=exc.errors,
+                ) from exc
+            filename = _pdf_filename(doc.get("name") or resume.identity.name)
+
+        result = await services.compiler.compile(
+            latex_source, services.repository.assets_dir
+        )
+        if not result.success:
+            raise compiler_failure(result)
+        return ResumePreviewResponse(
+            pdf_base64=base64.b64encode(result.pdf_bytes or b"").decode("ascii"),
+            page_count=result.page_count,
+            filename=filename,
+            latex_source=latex_source,
+            compiler=compile_report(result),
+        )
 
     @app.get("/api/resumes/{resume_id}", response_model=ResumeResponse)
     async def get_resume(resume_id: str, request: Request) -> ResumeResponse:
