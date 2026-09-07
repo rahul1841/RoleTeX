@@ -78,6 +78,22 @@ source text, and a version history (re-import to evolve). Tailoring targets a
 library entry with `resume_id`; in demo mode (no database) the seed resume is
 used instead.
 
+Uploads are bounded at `MAX_PDF_UPLOAD_BYTES` (5 MB) and `MAX_IMPORT_PDF_PAGES`
+(3 pages). The page count is read with `pdfinfo` before any text is extracted,
+so an oversized document is rejected (`422 pdf_too_many_pages`) rather than
+billed as LLM input; the check fails open when `pdfinfo` is missing and
+`/api/health` reports that.
+
+A scanned PDF has no text layer, so `pdftotext` finds nothing. Instead of
+failing, the importer renders the pages to PNG with `pdftoppm` and sends them to
+a multimodal model (`source_kind="image"`, stored as `source_type` `pdf_scanned`
+with no `source_text`, since there is no original text to keep). The response
+carries a warning to check names, contacts, and figures, because that path
+transcribes from pixels. Providers whose models are text-only (`groq`,
+`cerebras`) reject it up front with a clear message rather than a provider
+error, and a server without `pdftoppm` falls back to the original
+`422 pdf_no_text`.
+
 Two deliberate boundaries keep this safe:
 
 - **Only the import request sends the whole resume — including contact details —
@@ -157,8 +173,9 @@ tests.
 
 ## Local development
 
-Use Python 3.9 or newer. Tectonic 0.16.9 and Poppler (`pdfinfo` and
-`pdftotext`) must also be available on `PATH` for real PDF compilation.
+Use Python 3.9 or newer. Tectonic 0.16.9 and Poppler (`pdfinfo`, `pdftotext`,
+and `pdftoppm`) must also be available on `PATH` for real PDF compilation and
+resume import. All three poppler binaries ship in `poppler-utils`.
 
 On macOS with Homebrew:
 
@@ -268,8 +285,11 @@ send.
 | `MAX_VERSIONS_PER_JD` | No | `20` | Archived JD revisions kept per JD, bounded 1–100; oldest pruned |
 | `MAX_JDS_PER_USER` | No | `50` | Bounded 1–500 |
 | `MAX_RUNS_PER_USER` | No | `200` | Bounded 10–2000; oldest runs pruned |
-| `MAX_PDF_UPLOAD_BYTES` | No | `10000000` | PDF upload cap, bounded 1–20 MB |
+| `MAX_PDF_UPLOAD_BYTES` | No | `5000000` | PDF upload cap, bounded 1–20 MB |
+| `MAX_IMPORT_PDF_PAGES` | No | `3` | Page cap for an imported resume, bounded 1–20 |
 | `PDFTOTEXT_BIN` | No | `pdftotext` | poppler binary for PDF text extraction |
+| `PDFINFO_BIN` | No | `pdfinfo` | poppler binary for the import page-count check |
+| `PDFTOPPM_BIN` | No | `pdftoppm` | poppler binary for rendering scanned PDFs |
 | `PDF_EXTRACT_TIMEOUT_SECONDS` | No | `30` | Extraction subprocess timeout, bounded 10–120 |
 
 See `.env.example` for a commented template, and `docker-compose.yml` for a

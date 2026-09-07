@@ -126,6 +126,8 @@ class ApplicationServices:
     rate_limiter_email: security.RateLimiter
     login_throttle: security.LoginThrottle
     pdf_extractor: Callable[[bytes], str]
+    #: Rasterizes a scanned PDF to PNG pages for the vision import fallback.
+    pdf_renderer: Callable[[bytes], List[bytes]]
     mailer: Mailer
 
 
@@ -365,6 +367,7 @@ def create_app(
     database: Optional[Database] = None,
     config: Optional[AppConfig] = None,
     pdf_extractor: Optional[Callable[[bytes], str]] = None,
+    pdf_renderer: Optional[Callable[[bytes], List[bytes]]] = None,
     mailer: Optional[Mailer] = None,
 ) -> FastAPI:
     """Create an app with injectable filesystem, LLM, compiler, and DB dependencies."""
@@ -415,6 +418,18 @@ def create_app(
                 bin_path=app_config.pdftotext_bin,
                 timeout_seconds=app_config.pdf_extract_timeout_seconds,
                 max_bytes=app_config.max_pdf_upload_bytes,
+                max_pages=app_config.max_import_pdf_pages,
+                pdfinfo_bin=app_config.pdfinfo_bin,
+            )
+        ),
+        pdf_renderer=pdf_renderer
+        or (
+            lambda pdf_bytes: pdftext.render_pdf_pages(
+                pdf_bytes,
+                bin_path=app_config.pdftoppm_bin,
+                timeout_seconds=app_config.pdf_extract_timeout_seconds,
+                max_bytes=app_config.max_pdf_upload_bytes,
+                max_pages=app_config.max_import_pdf_pages,
             )
         ),
     )
@@ -617,6 +632,20 @@ def create_app(
         checks["pdftotext"] = (
             "ok"
             if pdftext.is_pdftotext_available(services.config.pdftotext_bin)
+            else "not_found"
+        )
+        # The page cap fails open, so a missing pdfinfo is a degraded state
+        # worth surfacing rather than an outage.
+        checks["pdfinfo"] = (
+            "ok"
+            if pdftext.is_pdfinfo_available(services.config.pdfinfo_bin)
+            else "not_found"
+        )
+        # Only the scanned-PDF fallback needs this one; its absence degrades
+        # that path to the plain pdf_no_text error rather than breaking import.
+        checks["pdftoppm"] = (
+            "ok"
+            if pdftext.is_pdftoppm_available(services.config.pdftoppm_bin)
             else "not_found"
         )
 

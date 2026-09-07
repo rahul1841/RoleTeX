@@ -7,8 +7,12 @@ Security rationale:
   clamped style) and re-rendered into the locked template before anything is
   stored, so raw model output can never reach the compiler (rules R-3/R-5).
 - Uploaded PDFs are never parsed in-process: magic/size checks happen here and
-  text extraction runs through the injected ``pdf_extractor`` (a sandboxed
-  ``pdftotext`` subprocess in production).
+  extraction runs through the injected ``pdf_extractor`` (a sandboxed
+  ``pdftotext`` subprocess in production, page-gated by ``pdfinfo``). A scan
+  with no text layer falls back to ``pdf_renderer`` (``pdftoppm``) and a
+  multimodal model; the rendered pages are the LLM payload, and the resume is
+  stored as ``pdf_scanned`` with a warning that the facts were read from
+  pixels.
 - Manually authored resumes (``/api/resumes/manual``, ``PUT .../content``)
   reach the same storage through ``app/builder.py``, which is the import
   boundary's twin for a human author: the server still assigns every stable ID
@@ -79,11 +83,34 @@ IMPORT_REVIEW_WARNING = (
 _PDF_ERROR_STATUS = {
     "invalid_pdf": (422, "invalid_pdf"),
     "pdf_too_large": (413, "pdf_too_large"),
+    "pdf_too_many_pages": (422, "pdf_too_many_pages"),
     "pdf_no_text": (422, "pdf_no_text"),
     "pdftotext_missing": (503, "pdf_support_unavailable"),
     "pdf_extract_timeout": (504, "pdf_extract_timeout"),
     "pdf_extract_failed": (422, "pdf_extract_failed"),
+    "pdftoppm_missing": (503, "pdf_support_unavailable"),
+    "pdf_render_failed": (422, "pdf_extract_failed"),
+    "pdf_render_timeout": (504, "pdf_extract_timeout"),
 }
+
+
+def _import_source_type(source_kind: str) -> str:
+    """Map an extraction kind to the stored ``source_type``.
+
+    A scanned import keeps its own label: it has no stored source text to fall
+    back on, and the UI is clearer for saying where the facts came from.
+    """
+
+    if source_kind == "text":
+        return "pdf"
+    if source_kind == "image":
+        return "pdf_scanned"
+    return "latex"
+
+
+def _pdf_error(exc: PdfExtractionError) -> Exception:
+    status_code, code = _PDF_ERROR_STATUS.get(exc.code, (422, "pdf_extract_failed"))
+    return _api_error(status_code, code, str(exc))
 
 
 def _resume_not_found() -> Exception:
@@ -155,6 +182,7 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
         source_kind: str,
         requested_provider: Optional[str],
         requested_model: Optional[str],
+        images: Optional[List[bytes]] = None,
     ) -> Tuple[ResumeData, Any, str, LLMExtractResult, List[str]]:
         """Shared import pipeline: LLM extraction -> importer -> render check."""
 
@@ -166,6 +194,15 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
             llm_kwargs["api_key"] = api_key
         if source_kind != "latex":
             llm_kwargs["source_kind"] = source_kind
+        if source_kind == "image":
+            llm_kwargs["images"] = images or []
+            # Transcription from pixels is the one import path that can silently
+            # misread a digit, so the user is told to check rather than trust.
+            warnings.append(
+                "This looked like a scanned PDF, so its pages were read as "
+                "images. Double-check your name, email, phone number, and any "
+                "figures before sending it anywhere."
+            )
         try:
             extraction = await services.llm.extract_resume(source_text, **llm_kwargs)
         except LLMConfigurationError as exc:
@@ -205,7 +242,16 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
         warnings = warnings + [IMPORT_REVIEW_WARNING]
         return resume, style, template, extraction, warnings
 
-    async def _read_pdf_upload(file: UploadFile) -> str:
+    async def _read_pdf_upload(file: UploadFile) -> Tuple[str, str, List[bytes]]:
+        """Return ``(source_text, source_kind, page_images)`` for an upload.
+
+        A text-based PDF yields ``("...", "text", [])``. A scanned one has no
+        text layer to read, so its pages are rasterized instead and returned as
+        ``("", "image", [png, ...])`` for the vision extraction path. When
+        rendering is also unavailable the original ``pdf_no_text`` error stands,
+        which is the behaviour that predates the fallback.
+        """
+
         cap = services.config.max_pdf_upload_bytes
         # Read one byte past the cap rather than the whole part: an oversized
         # upload must not be materialized in memory just to be rejected.
@@ -224,12 +270,20 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
             )
         loop = asyncio.get_running_loop()
         try:
-            return await loop.run_in_executor(None, services.pdf_extractor, data)
+            text = await loop.run_in_executor(None, services.pdf_extractor, data)
         except PdfExtractionError as exc:
-            status_code, code = _PDF_ERROR_STATUS.get(
-                exc.code, (422, "pdf_extract_failed")
-            )
-            raise _api_error(status_code, code, str(exc)) from exc
+            if exc.code != "pdf_no_text":
+                raise _pdf_error(exc) from exc
+            try:
+                images = await loop.run_in_executor(
+                    None, services.pdf_renderer, data
+                )
+            except PdfExtractionError:
+                # Surface the original diagnosis: the upload is a scan, and this
+                # server could not render it either.
+                raise _pdf_error(exc) from exc
+            return "", "image", images
+        return text, "text", []
 
     async def _check_resume_quota(user: Dict[str, Any]) -> None:
         count = await services.database.resumes.count_for_user(user["_id"])
@@ -272,12 +326,13 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
         name: Optional[str],
         provider: Optional[str],
         model: Optional[str],
+        images: Optional[List[bytes]] = None,
     ) -> ResumeCreateResponse:
         await _check_resume_quota(user)
         resume, style, template, extraction, warnings = await _extract_validated_import(
-            user, source_text, source_kind, provider, model
+            user, source_text, source_kind, provider, model, images
         )
-        source_type = "pdf" if source_kind == "text" else "latex"
+        source_type = _import_source_type(source_kind)
         doc = await services.database.resumes.create(
             user["_id"],
             (name or "").strip() or _default_resume_name(resume),
@@ -300,15 +355,16 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
         source_kind: str,
         provider: Optional[str],
         model: Optional[str],
+        images: Optional[List[bytes]] = None,
     ) -> ResumeCreateResponse:
         existing = await services.database.resumes.get(user["_id"], resume_id)
         if existing is None:
             raise _resume_not_found()
         _check_version_quota(existing)
         resume, style, template, extraction, warnings = await _extract_validated_import(
-            user, source_text, source_kind, provider, model
+            user, source_text, source_kind, provider, model, images
         )
-        source_type = "pdf" if source_kind == "text" else "latex"
+        source_type = _import_source_type(source_kind)
         doc = await services.database.resumes.add_version(
             user["_id"],
             resume_id,
@@ -354,8 +410,8 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
         model: Optional[str] = Form(default=None),
     ) -> ResumeCreateResponse:
         user = await require_user(request, services)
-        text = await _read_pdf_upload(file)
-        return await _create_resume(user, text, "text", name, provider, model)
+        text, kind, images = await _read_pdf_upload(file)
+        return await _create_resume(user, text, kind, name, provider, model, images)
 
     @app.post(
         "/api/resumes/manual", response_model=ResumeCreateResponse, status_code=201
@@ -536,8 +592,10 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
         model: Optional[str] = Form(default=None),
     ) -> ResumeCreateResponse:
         user = await require_user(request, services)
-        text = await _read_pdf_upload(file)
-        return await _add_resume_version(user, resume_id, text, "text", provider, model)
+        text, kind, images = await _read_pdf_upload(file)
+        return await _add_resume_version(
+            user, resume_id, text, kind, provider, model, images
+        )
 
     @app.get(
         "/api/resumes/{resume_id}/versions", response_model=ResumeVersionsResponse

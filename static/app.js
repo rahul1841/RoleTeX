@@ -14,7 +14,10 @@
    * ------------------------------------------------------------------ */
 
   const REQUEST_TIMEOUT_MS = 180_000;
-  const MAX_PDF_BYTES = 10_000_000;
+  // Mirrors MAX_PDF_UPLOAD_BYTES / MAX_IMPORT_PDF_PAGES on the server. The
+  // server re-checks both; these only avoid a pointless upload.
+  const MAX_PDF_BYTES = 5_000_000;
+  const MAX_PDF_PAGES = 3;
   const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
   const ROUTES = [
     "auth",
@@ -58,8 +61,12 @@
     resume_required: "Pick one of your resumes to tailor.",
     run_not_found: "That history entry could not be found. It may have been deleted.",
     invalid_pdf: "That file doesn’t look like a valid PDF.",
-    pdf_too_large: "That PDF is too large — the limit is 10 MB.",
-    pdf_no_text: "No selectable text was found in that PDF — it may be scanned images. Try pasting your LaTeX instead.",
+    pdf_too_large: "That PDF is too large — the limit is 5 MB.",
+    pdf_too_many_pages:
+      "That PDF has too many pages — a resume import is limited to "
+      + MAX_PDF_PAGES
+      + " pages.",
+    pdf_no_text: "No selectable text was found in that PDF, and this server can’t read it as images. Try a text-based PDF, or paste your LaTeX instead.",
     pdf_support_unavailable: "PDF import isn’t available on this server right now. Paste LaTeX instead.",
     pdf_extract_timeout: "Reading that PDF took too long. Try a smaller or simpler file.",
     invalid_llm_proposal: "The AI response did not pass the resume safety checks. Please try again.",
@@ -2491,6 +2498,9 @@
     if (value === "pdf") {
       return "PDF";
     }
+    if (value === "pdf_scanned") {
+      return "Scanned PDF";
+    }
     if (value === "manual") {
       return "Written here";
     }
@@ -2598,7 +2608,7 @@
       return "That file is empty.";
     }
     if (file.size > MAX_PDF_BYTES) {
-      return "That PDF is larger than 10 MB. Export a smaller copy and try again.";
+      return "That PDF is larger than 5 MB. Export a smaller copy and try again.";
     }
     return "";
   }

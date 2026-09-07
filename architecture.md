@@ -19,7 +19,7 @@ FastAPI app  (app/main.py — create_app() factory, DI-friendly)
         ├── Security         (app/security.py)── PBKDF2 passwords, session tokens, Fernet key encryption, rate/login limiting, origin checks
         ├── LLM adapter      (app/llm.py)     ── OpenAI-compatible chat completions (8 providers + mock, per-user key overrides)
         ├── Importer         (app/importer.py)── extraction normalization + template assembly
-        ├── PDF text         (app/pdftext.py) ── bounded poppler pdftotext extraction for PDF imports
+        ├── PDF text         (app/pdftext.py) ── bounded poppler extraction (pdftotext/pdfinfo/pdftoppm) for PDF imports
         └── CompileService   (app/compiler.py)── Tectonic in a per-request sandbox + poppler checks
 ```
 
@@ -37,7 +37,7 @@ FastAPI app  (app/main.py — create_app() factory, DI-friendly)
 | `app/security.py` | Password hashing (PBKDF2-HMAC-SHA256), session token issue/hash, Fernet secret encryption + key hints, `RateLimiter`/`LoginThrottle`, CSRF origin check |
 | `app/db.py` | `Database` wrapper over Motor with per-collection stores; every query is `user_id`-scoped (ownership enforced at the query level) |
 | `app/auth.py` | Session dependency (`require_user`), auth routes, provider/key resolution for user LLM requests |
-| `app/pdftext.py` | Bounded `pdftotext` subprocess extraction (`%PDF-` magic check, size/timeout caps, no shell) |
+| `app/pdftext.py` | Bounded poppler subprocess work (`%PDF-` magic check, size/page/timeout caps, no shell): `pdftotext` extraction, `pdfinfo` page gate, `pdftoppm` rasterization for the scanned fallback |
 | `app/routes_keys.py` / `routes_resumes.py` / `routes_jds.py` / `routes_runs.py` | Route groups for per-user API keys, resume library, JD library, and tailor-run history |
 | `app/schemas.py` | All Pydantic models (`StrictModel` base, `extra="forbid"`), Pydantic v1/v2 compatibility helpers (`validate_model`, `dump_model`) |
 | `static/` | Vanilla JS SPA: hash routing (auth/tailor/resumes/jds/history/settings), diff cards, PDF iframe preview, downloads, abort + request versioning; no localStorage |
@@ -103,9 +103,13 @@ The **single repair budget** is the key orchestration invariant: at most one LLM
 ```text
 POST /api/resumes (latex)          POST /api/resumes/pdf (multipart)
         │                                  │ magic/size checks →
+        │                                  │ pdfinfo page gate (> MAX_IMPORT_PDF_PAGES → 422,
+        │                                  │   fails open when pdfinfo is absent) →
         │                                  │ pdftext.extract_pdf_text (bounded subprocess)
+        │                                  │   └─ no text layer? pdftext.render_pdf_pages
+        │                                  │      (pdftoppm → PNG pages, vision path)
         ▼                                  ▼
-   llm.extract_resume(source_kind="latex"|"text")
+   llm.extract_resume(source_kind="latex"|"text"|"image")
         (FULL document incl. identity — deliberate, import-only
          exception; see rules.md R-2)
         ▼

@@ -108,7 +108,10 @@ class AppConfig:
     max_versions_per_jd: int
     max_runs_per_user: int
     max_pdf_upload_bytes: int
+    max_import_pdf_pages: int
     pdftotext_bin: str
+    pdfinfo_bin: str
+    pdftoppm_bin: str
     pdf_extract_timeout_seconds: int
 
     @property
@@ -173,8 +176,13 @@ def load_config() -> AppConfig:
         max_versions_per_jd=_bounded_int("MAX_VERSIONS_PER_JD", 20, 1, 100),
         max_runs_per_user=_bounded_int("MAX_RUNS_PER_USER", 200, 10, 2_000),
         max_pdf_upload_bytes=_bounded_int(
-            "MAX_PDF_UPLOAD_BYTES", 10_000_000, 1_000_000, 20_000_000
+            "MAX_PDF_UPLOAD_BYTES", 5_000_000, 1_000_000, 20_000_000
         ),
+        # A resume is a short document. The bound keeps a mistaken upload (or a
+        # deliberate one) from being billed as LLM input; see app/pdftext.py.
+        max_import_pdf_pages=_bounded_int("MAX_IMPORT_PDF_PAGES", 3, 1, 20),
         pdftotext_bin=os.getenv("PDFTOTEXT_BIN", "pdftotext").strip() or "pdftotext",
+        pdfinfo_bin=os.getenv("PDFINFO_BIN", "pdfinfo").strip() or "pdfinfo",
+        pdftoppm_bin=os.getenv("PDFTOPPM_BIN", "pdftoppm").strip() or "pdftoppm",
         pdf_extract_timeout_seconds=_bounded_int("PDF_EXTRACT_TIMEOUT_SECONDS", 30, 10, 120),
     )
