@@ -289,7 +289,8 @@
   const editorSkills = $("editor-skills");
   const editorSkillsAdd = $("editor-skills-add");
   const editorAchievements = $("editor-achievements");
-  const editorPaper = $("editor-paper");
+  const editorCustom = $("editor-custom");
+  const editorCustomAdd = $("editor-custom-add");
   const editorFontSize = $("editor-font-size");
   const editorMargin = $("editor-margin");
   const editorMarginValue = $("editor-margin-value");
@@ -301,8 +302,16 @@
   const resumeEditorPreview = $("resume-editor-preview");
   const resumeEditorSave = $("resume-editor-save");
   const editorPreviewPanel = $("editor-preview-panel");
-  const editorPreviewFrame = $("editor-preview-frame");
-  const editorPreviewMeta = $("editor-preview-meta");
+  const editorPdfPages = $("editor-pdf-pages");
+  const editorPdfError = $("editor-pdf-error");
+  const editorPdfPage = $("editor-pdf-page");
+  const editorPdfCount = $("editor-pdf-count");
+  const editorPdfPrev = $("editor-pdf-prev");
+  const editorPdfNext = $("editor-pdf-next");
+  const editorPdfZoom = $("editor-pdf-zoom");
+  const editorPdfZoomIn = $("editor-pdf-zoom-in");
+  const editorPdfZoomOut = $("editor-pdf-zoom-out");
+  const editorPreviewEmpty = $("editor-preview-empty");
   const editorPreviewDownload = $("editor-preview-download");
   const editorPreviewTex = $("editor-preview-tex");
 
@@ -2081,7 +2090,7 @@
     };
   }
 
-  function base64ToPdfBlob(value) {
+  function base64ToPdfBytes(value) {
     const commaIndex = value.indexOf(",");
     const encoded = value.startsWith("data:") && commaIndex >= 0 ? value.slice(commaIndex + 1) : value;
     const clean = encoded.replace(/\s/g, "");
@@ -2098,7 +2107,12 @@
     for (let index = 0; index < binary.length; index += 1) {
       bytes[index] = binary.charCodeAt(index);
     }
-    return new Blob([bytes], { type: "application/pdf" });
+    return bytes;
+  }
+
+  function base64ToPdfBlob(value) {
+    const bytes = base64ToPdfBytes(value);
+    return bytes ? new Blob([bytes], { type: "application/pdf" }) : null;
   }
 
   function appendChangeBlock(card, kind, text) {
@@ -2803,6 +2817,16 @@
         { key: "details", kind: "commas", label: "Details — comma separated", placeholder: "CGPA 8.7, Dean’s list" },
       ],
     },
+    custom_sections: {
+      title: "Section",
+      limit: 10,
+      fields: [
+        { key: "title", label: "Heading", maxLength: 80, placeholder: "Certifications", wide: true },
+      ],
+      lists: [
+        { key: "bullets", kind: "lines", label: "Lines — one per line", rows: 3, placeholder: "AWS Certified Solutions Architect – Associate (2025)" },
+      ],
+    },
     skills: {
       title: "Skill group",
       limit: 30,
@@ -2994,6 +3018,7 @@
     projects: sectionEditor("projects", editorProjects, editorProjectsAdd),
     education: sectionEditor("education", editorEducation, editorEducationAdd),
     skills: sectionEditor("skills", editorSkills, editorSkillsAdd),
+    custom_sections: sectionEditor("custom_sections", editorCustom, editorCustomAdd),
   };
 
   function valuesFromStored(sectionKey, item) {
@@ -3030,8 +3055,6 @@
   }
 
   function applyBuilderStyle(style) {
-    const paper = style && style.paper === "letterpaper" ? "letterpaper" : "a4paper";
-    editorPaper.value = paper;
     const size = readableValue(style && style.font_size);
     editorFontSize.value = size === "11pt" || size === "12pt" ? size : "10pt";
     const margin = Number(style && style.margin_cm);
@@ -3047,7 +3070,6 @@
 
   function collectBuilderStyle() {
     return {
-      paper: editorPaper.value,
       font_size: editorFontSize.value,
       margin_cm: Number(editorMargin.value) || 2,
       accent_hex: editorAccentOn.checked ? editorAccent.value : null,
@@ -3069,6 +3091,7 @@
       education: builderSections.education.read(),
       skills: builderSections.skills.read(),
       achievements: linesToList(editorAchievements.value),
+      custom_sections: builderSections.custom_sections.read(),
     };
   }
 
@@ -3087,7 +3110,8 @@
     });
   }
 
-  function builderDraftProblems(draft) {
+  function builderDraftProblems(draft, options) {
+    const requireContent = !(options && options.requireContent === false);
     const problems = [];
     if (!draft.identity.name) {
       problems.push("Your name is required.");
@@ -3097,22 +3121,16 @@
     } else if (!EMAIL_PATTERN.test(draft.identity.email)) {
       problems.push("Your email address does not look like an email address.");
     }
-    if (!draft.identity.phone) {
-      problems.push("Your phone number is required.");
-    }
-    if (!draft.identity.location) {
-      problems.push("Your location is required.");
-    }
-    if (!draft.summary) {
-      problems.push("A headline is required — one short line under your name.");
-    } else if (draft.summary.split(/\s+/).length > 12) {
+    // Location and headline are optional: plenty of resumes carry neither, and
+    // the renderer drops the line rather than leaving a dangling separator.
+    if (draft.summary && draft.summary.split(/\s+/).length > 12) {
       problems.push("The headline is longer than 12 words.");
     }
-    const filled = ["experience", "projects", "education", "skills"].reduce(
+    const filled = ["experience", "projects", "education", "skills", "custom_sections"].reduce(
       (total, key) => total + draft[key].filter(rowHasContent).length,
       draft.achievements.length
     );
-    if (!filled) {
+    if (requireContent && !filled) {
       problems.push(
         "Add at least one section — experience, a project, education, skills, or an achievement."
       );
@@ -3154,16 +3172,189 @@
     }
   }
 
+
+  /* ------------------------------------------------------ pdf viewer */
+  // The browser's built-in PDF plugin brings its own toolbar, sidebar and
+  // print/annotate affordances, none of which belong here. PDF.js is vendored
+  // under /static/vendor so the pane is ours: pages as canvases, plus the four
+  // controls that actually matter for checking a resume.
+
+  const PDF_ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+  const pdfViewer = {
+    doc: null,
+    pages: [],
+    zoom: 1,
+    page: 1,
+    token: 0,
+    lib: null,
+    libPromise: null,
+  };
+
+  function loadPdfLibrary() {
+    if (pdfViewer.lib) {
+      return Promise.resolve(pdfViewer.lib);
+    }
+    if (!pdfViewer.libPromise) {
+      pdfViewer.libPromise = import("/static/vendor/pdfjs/pdf.min.mjs")
+        .then((lib) => {
+          lib.GlobalWorkerOptions.workerSrc = "/static/vendor/pdfjs/pdf.worker.min.mjs";
+          pdfViewer.lib = lib;
+          return lib;
+        })
+        .catch((error) => {
+          pdfViewer.libPromise = null;
+          throw error;
+        });
+    }
+    return pdfViewer.libPromise;
+  }
+
+  function resetPdfViewer() {
+    editorPdfError.hidden = true;
+    // Bump the token so any in-flight render for the old document is dropped.
+    pdfViewer.token += 1;
+    if (pdfViewer.doc) {
+      pdfViewer.doc.destroy();
+      pdfViewer.doc = null;
+    }
+    pdfViewer.pages = [];
+    pdfViewer.page = 1;
+    editorPdfPages.replaceChildren();
+    editorPdfPage.textContent = "1";
+    editorPdfCount.textContent = "1";
+    editorPdfPrev.disabled = true;
+    editorPdfNext.disabled = true;
+  }
+
+  function updatePdfZoomLabel() {
+    editorPdfZoom.textContent = Math.round(pdfViewer.zoom * 100) + "%";
+    editorPdfZoomOut.disabled = pdfViewer.zoom <= PDF_ZOOM_STEPS[0];
+    editorPdfZoomIn.disabled = pdfViewer.zoom >= PDF_ZOOM_STEPS[PDF_ZOOM_STEPS.length - 1];
+  }
+
+  function setPdfPageIndicator(page) {
+    const total = pdfViewer.pages.length || 1;
+    const clamped = Math.min(Math.max(page, 1), total);
+    pdfViewer.page = clamped;
+    editorPdfPage.textContent = String(clamped);
+    editorPdfCount.textContent = String(total);
+    editorPdfPrev.disabled = clamped <= 1;
+    editorPdfNext.disabled = clamped >= total;
+  }
+
+  async function renderPdfPages(token) {
+    const doc = pdfViewer.doc;
+    if (!doc) {
+      return;
+    }
+    // Match the device's pixel density so text stays crisp when zoomed.
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    for (let number = 1; number <= doc.numPages; number += 1) {
+      const page = await doc.getPage(number);
+      if (token !== pdfViewer.token) {
+        return;
+      }
+      const viewport = page.getViewport({ scale: pdfViewer.zoom * ratio });
+      const canvas = pdfViewer.pages[number - 1];
+      if (!canvas) {
+        return;
+      }
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+      canvas.style.width = Math.floor(viewport.width / ratio) + "px";
+      canvas.style.height = Math.floor(viewport.height / ratio) + "px";
+      await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+      if (token !== pdfViewer.token) {
+        return;
+      }
+    }
+  }
+
+  async function showPdf(bytes) {
+    const lib = await loadPdfLibrary();
+    resetPdfViewer();
+    const token = pdfViewer.token;
+    // PDF.js takes ownership of the buffer it is handed, so give it a copy and
+    // keep ours intact for the download link.
+    const doc = await lib.getDocument({ data: bytes.slice(0) }).promise;
+    if (token !== pdfViewer.token) {
+      doc.destroy();
+      return;
+    }
+    pdfViewer.doc = doc;
+    for (let number = 1; number <= doc.numPages; number += 1) {
+      const wrap = el("div", "pdf-page");
+      const canvas = document.createElement("canvas");
+      wrap.append(canvas);
+      editorPdfPages.append(wrap);
+      pdfViewer.pages.push(canvas);
+    }
+    setPdfPageIndicator(1);
+    updatePdfZoomLabel();
+    await renderPdfPages(token);
+  }
+
+  function scrollToPdfPage(number) {
+    const canvas = pdfViewer.pages[number - 1];
+    if (!canvas) {
+      return;
+    }
+    editorPdfPages.scrollTo({
+      top: canvas.parentElement.offsetTop - editorPdfPages.offsetTop,
+      behavior: prefersReducedMotion() ? "auto" : "smooth",
+    });
+    setPdfPageIndicator(number);
+  }
+
+  function stepPdfZoom(direction) {
+    const index = PDF_ZOOM_STEPS.indexOf(pdfViewer.zoom);
+    const next = index === -1 ? 2 : index + direction;
+    if (next < 0 || next >= PDF_ZOOM_STEPS.length) {
+      return;
+    }
+    pdfViewer.zoom = PDF_ZOOM_STEPS[next];
+    updatePdfZoomLabel();
+    renderPdfPages(pdfViewer.token);
+  }
+
+  editorPdfPrev.addEventListener("click", () => scrollToPdfPage(pdfViewer.page - 1));
+  editorPdfNext.addEventListener("click", () => scrollToPdfPage(pdfViewer.page + 1));
+  editorPdfZoomIn.addEventListener("click", () => stepPdfZoom(1));
+  editorPdfZoomOut.addEventListener("click", () => stepPdfZoom(-1));
+  editorPdfZoom.addEventListener("click", () => {
+    pdfViewer.zoom = 1;
+    updatePdfZoomLabel();
+    renderPdfPages(pdfViewer.token);
+  });
+  editorPdfPages.addEventListener("scroll", () => {
+    // Whichever page covers the top third of the viewport is the one you are
+    // reading, which is what the indicator should say.
+    const mark = editorPdfPages.scrollTop + editorPdfPages.clientHeight / 3;
+    let current = 1;
+    pdfViewer.pages.forEach((canvas, index) => {
+      if (canvas.parentElement.offsetTop - editorPdfPages.offsetTop <= mark) {
+        current = index + 1;
+      }
+    });
+    setPdfPageIndicator(current);
+  });
+
   function clearBuilderPreview() {
-    editorPreviewFrame.removeAttribute("src");
+    resetPdfViewer();
     editorPreviewDownload.removeAttribute("href");
     editorPreviewTex.removeAttribute("href");
     revokeBuilderUrl("pdfUrl");
     revokeBuilderUrl("texUrl");
     editorPreviewPanel.hidden = true;
+    // The right pane is always on screen now, so it says what it is for
+    // instead of collapsing to nothing.
+    editorPreviewEmpty.hidden = false;
   }
 
   function setBuilderVisible(open) {
+    if (!open) {
+      builderPreviewSerial += 1;
+    }
     state.builder.open = open;
     resumeEditor.hidden = !open;
     resumeAddPanel.hidden = open;
@@ -3228,7 +3419,7 @@
         url: readableValue(link && link.url),
       }))
     );
-    ["experience", "projects", "education", "skills"].forEach((key) => {
+    ["experience", "projects", "education", "skills", "custom_sections"].forEach((key) => {
       const items = data && Array.isArray(data[key]) ? data[key] : [];
       builderSections[key].load(items.map((item) => valuesFromStored(key, item)));
     });
@@ -3244,6 +3435,7 @@
     describeBuilderTarget();
     state.builder.snapshot = builderSnapshot();
     setBuilderVisible(true);
+    autoPreviewBuilder();
     resumeEditorTitle.focus({ preventScroll: true });
     resumeEditor.scrollIntoView({
       behavior: prefersReducedMotion() ? "auto" : "smooth",
@@ -3362,48 +3554,83 @@
       "success"
     );
     loadResumes();
+    // What is on the right must be what was just saved, not an older compile.
+    requestBuilderPreview({ resume_id: state.builder.resumeId }, true);
   }
 
   async function handleBuilderPreview() {
     hideBuilderErrors();
     const draft = collectBuilderDraft();
-    const problems = builderDraftProblems(draft);
+    // Previewing never demands a body: an empty page is a fair answer.
+    const problems = builderDraftProblems(draft, { requireContent: false });
     if (problems.length) {
       showBuilderErrors("Fill these in first, then preview:", problems);
       return;
     }
+    await requestBuilderPreview({ resume: draft, style: collectBuilderStyle() }, false);
+  }
+
+  let builderPreviewSerial = 0;
+
+  async function requestBuilderPreview(body, quiet) {
+    // Opening a resume, pressing the button, and saving can each start a
+    // compile; only the newest result may land in the pane.
+    const serial = ++builderPreviewSerial;
     setBusy(resumeEditorPreview, true, "Compiling…");
     try {
-      const payload = await api("/api/resumes/preview", {
-        method: "POST",
-        body: { resume: draft, style: collectBuilderStyle() },
-      });
-      renderBuilderPreview(payload);
+      const payload = await api("/api/resumes/preview", { method: "POST", body });
+      if (serial === builderPreviewSerial && state.builder.open) {
+        renderBuilderPreview(payload);
+      }
     } catch (error) {
-      showBuilderApiError(error, "Could not compile a preview.");
+      // An automatic preview of a half-empty draft failing is not the user's
+      // mistake, so it leaves the placeholder rather than raising an alarm.
+      if (!quiet && serial === builderPreviewSerial) {
+        showBuilderApiError(error, "Could not compile a preview.");
+      }
     } finally {
-      setBusy(resumeEditorPreview, false);
+      if (serial === builderPreviewSerial) {
+        setBusy(resumeEditorPreview, false);
+      }
     }
+  }
+
+  function autoPreviewBuilder() {
+    if (state.builder.mode === "edit" && state.builder.resumeId) {
+      // Stored content: what the library holds right now, no validation needed.
+      requestBuilderPreview({ resume_id: state.builder.resumeId }, true);
+      return;
+    }
+    const draft = collectBuilderDraft();
+    if (builderDraftProblems(draft, { requireContent: false }).length) {
+      return;
+    }
+    requestBuilderPreview({ resume: draft, style: collectBuilderStyle() }, true);
   }
 
   function renderBuilderPreview(payload) {
     clearBuilderPreview();
     const filename = sanitizeFilename(payload.filename, "resume.pdf");
-    const blob = base64ToPdfBlob(payload.pdf_base64);
-    if (!blob) {
+    const bytes = base64ToPdfBytes(payload.pdf_base64);
+    if (!bytes || !bytes.length) {
       showBuilderErrors("The server compiled the resume but returned no PDF.", []);
       return;
     }
-    state.builder.pdfUrl = URL.createObjectURL(blob);
-    editorPreviewFrame.src = state.builder.pdfUrl + "#view=FitH";
+    state.builder.pdfUrl = URL.createObjectURL(
+      new Blob([bytes], { type: "application/pdf" })
+    );
     editorPreviewDownload.href = state.builder.pdfUrl;
     editorPreviewDownload.download = filename;
-    const pages = Number(payload.page_count);
-    const pageText =
-      Number.isFinite(pages) && pages > 0
-        ? pages + (pages === 1 ? " page · " : " pages · ")
-        : "";
-    editorPreviewMeta.textContent = pageText + filename;
+    // A viewer failure is not a resume problem: the PDF compiled and the
+    // download beside it works, so it is reported inside the pane rather than
+    // as a form error the user cannot act on.
+    editorPdfError.hidden = true;
+    showPdf(bytes).catch(() => {
+      editorPdfPages.replaceChildren();
+      editorPdfError.textContent =
+        "This browser could not display the PDF inline. Use the download button above — the file itself is fine.";
+      editorPdfError.hidden = false;
+    });
     const latex = readableValue(payload.latex_source);
     if (latex) {
       const texBlob = new Blob([latex], { type: "text/plain;charset=utf-8" });
@@ -3415,10 +3642,16 @@
       editorPreviewTex.hidden = true;
     }
     editorPreviewPanel.hidden = false;
-    editorPreviewPanel.scrollIntoView({
-      behavior: prefersReducedMotion() ? "auto" : "smooth",
-      block: "start",
-    });
+    editorPreviewEmpty.hidden = true;
+    // Only worth scrolling to when the pane is stacked under the fields; in the
+    // two-pane layout it is already beside them.
+    const sideBySide = window.matchMedia && window.matchMedia("(min-width: 1101px)").matches;
+    if (!sideBySide) {
+      editorPreviewPanel.scrollIntoView({
+        behavior: prefersReducedMotion() ? "auto" : "smooth",
+        block: "start",
+      });
+    }
   }
 
   async function downloadResumePdf(resume, button) {

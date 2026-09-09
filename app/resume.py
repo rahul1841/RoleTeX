@@ -34,6 +34,11 @@ REQUIRED_TEMPLATE_TOKENS: Tuple[str, ...] = (
     "@@SKILLS@@",
     "@@ACHIEVEMENTS@@",
 )
+#: Tokens a template may carry but need not. ``@@CUSTOM@@`` was added after
+#: templates were already stored per user, so requiring it would invalidate
+#: every existing row; a template without it simply renders no custom sections,
+#: and editing a resume regenerates the template with the slot present.
+OPTIONAL_TEMPLATE_TOKENS: Tuple[str, ...] = ("@@CUSTOM@@",)
 TOKEN_PATTERN = re.compile(r"@@[A-Z][A-Z0-9_]*@@")
 NUMBER_PATTERN = re.compile(
     r"(?<![A-Za-z0-9])(?:[$₹€£]\s*)?\d[\d,.]*(?:\s*%|\+)?"
@@ -132,6 +137,9 @@ def _validate_resume_ids(resume: ResumeData) -> None:
         bullet_ids.extend(bullet.id for bullet in project.bullets)
     section_ids.extend(item.id for item in resume.education)
     bullet_ids.extend(item.id for item in resume.achievements)
+    for section in resume.custom_sections:
+        section_ids.append(section.id)
+        bullet_ids.extend(bullet.id for bullet in section.bullets)
 
     duplicate_sections = sorted(key for key, count in Counter(section_ids).items() if count > 1)
     duplicate_bullets = sorted(key for key, count in Counter(bullet_ids).items() if count > 1)
@@ -155,7 +163,12 @@ def validate_template(template_text: str) -> None:
         count = template_text.count(token)
         if count != 1:
             errors.append("{0} must appear exactly once (found {1})".format(token, count))
-    unknown = sorted(set(TOKEN_PATTERN.findall(template_text)).difference(REQUIRED_TEMPLATE_TOKENS))
+    for token in OPTIONAL_TEMPLATE_TOKENS:
+        count = template_text.count(token)
+        if count > 1:
+            errors.append("{0} may appear at most once (found {1})".format(token, count))
+    known = set(REQUIRED_TEMPLATE_TOKENS).union(OPTIONAL_TEMPLATE_TOKENS)
+    unknown = sorted(set(TOKEN_PATTERN.findall(template_text)).difference(known))
     if unknown:
         errors.append("unknown locked-template tokens: {0}".format(", ".join(unknown)))
     if errors:
@@ -172,6 +185,9 @@ def all_bullets(resume: ResumeData) -> Dict[str, ResumeBullet]:
             bullets[bullet.id] = bullet
     for achievement in resume.achievements:
         bullets[achievement.id] = achievement
+    for section in resume.custom_sections:
+        for bullet in section.bullets:
+            bullets[bullet.id] = bullet
     return bullets
 
 
@@ -262,8 +278,6 @@ def validate_proposal(resume: ResumeData, proposal: TailorProposal) -> TailorPro
     if unknown_ids:
         errors.append("unknown bullet IDs: {0}".format(", ".join(unknown_ids)))
 
-    if not proposal.summary.strip():
-        errors.append("summary must not be blank")
     if len(proposal.summary.split()) > MAX_SUMMARY_WORDS:
         errors.append("summary exceeds {0} words".format(MAX_SUMMARY_WORDS))
     if len(proposal.summary.strip()) > MAX_SUMMARY_CHARACTERS:
@@ -417,7 +431,10 @@ def _render_contact(resume: ResumeData) -> str:
         first_line.append(
             r"\href{" + escape_latex("tel:" + phone_href) + "}{" + escape_latex(identity.phone) + "}"
         )
-    first_line.append(escape_latex(identity.location))
+    # Optional: plenty of resumes carry no city, and an empty entry here would
+    # leave a trailing " | " on the contact line.
+    if identity.location.strip():
+        first_line.append(escape_latex(identity.location))
     contact_lines = [(r" \textbar{} ").join(first_line)]
     if identity.links:
         links = [
@@ -513,6 +530,24 @@ def _render_achievements(resume: ResumeData, rewrites: Mapping[str, str]) -> str
     return "\n".join(_render_bullets(resume.achievements, rewrites))
 
 
+def _render_custom_sections(resume: ResumeData, rewrites: Mapping[str, str]) -> str:
+    """Render each user-defined section with its own header.
+
+    The whole block occupies one template slot, so a resume may add sections the
+    fixed template never named without the template growing a token per section.
+    """
+
+    blocks = [
+        _section(
+            section.title,
+            "\n".join(_render_bullets(section.bullets, rewrites)),
+            prefix="\\vspace{1mm}\n",
+        )
+        for section in resume.custom_sections
+    ]
+    return "\n\n".join(block for block in blocks if block)
+
+
 def ordered_skill_categories(
     categories: Sequence[ResumeSkillCategory], skills_order: Sequence[str]
 ) -> List[Tuple[str, List[str]]]:
@@ -587,6 +622,7 @@ def _sectioned_replacements(
         "@@ACHIEVEMENTS@@": _section(
             "Achievements", _render_achievements(resume, rewrites), prefix="\\vspace{1mm}\n"
         ),
+        "@@CUSTOM@@": _render_custom_sections(resume, rewrites),
     }
 
 
@@ -622,6 +658,8 @@ def render_template_text(
     rendered = template_text
     for token in REQUIRED_TEMPLATE_TOKENS:
         rendered = rendered.replace(token, replacements[token], 1)
+    for token in OPTIONAL_TEMPLATE_TOKENS:
+        rendered = rendered.replace(token, replacements.get(token, ""), 1)
     leftovers = TOKEN_PATTERN.findall(rendered)
     if leftovers:
         raise ResumeError("Rendered resume contains unresolved template tokens")

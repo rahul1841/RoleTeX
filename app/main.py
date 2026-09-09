@@ -128,6 +128,8 @@ class ApplicationServices:
     pdf_extractor: Callable[[bytes], str]
     #: Rasterizes a scanned PDF to PNG pages for the vision import fallback.
     pdf_renderer: Callable[[bytes], List[bytes]]
+    #: Recovers hyperlink targets, which live in annotations rather than text.
+    pdf_link_extractor: Callable[[bytes], List[Dict[str, str]]]
     mailer: Mailer
 
 
@@ -368,6 +370,7 @@ def create_app(
     config: Optional[AppConfig] = None,
     pdf_extractor: Optional[Callable[[bytes], str]] = None,
     pdf_renderer: Optional[Callable[[bytes], List[bytes]]] = None,
+    pdf_link_extractor: Optional[Callable[[bytes], List[Dict[str, str]]]] = None,
     mailer: Optional[Mailer] = None,
 ) -> FastAPI:
     """Create an app with injectable filesystem, LLM, compiler, and DB dependencies."""
@@ -430,6 +433,15 @@ def create_app(
                 timeout_seconds=app_config.pdf_extract_timeout_seconds,
                 max_bytes=app_config.max_pdf_upload_bytes,
                 max_pages=app_config.max_import_pdf_pages,
+            )
+        ),
+        pdf_link_extractor=pdf_link_extractor
+        or (
+            lambda pdf_bytes: pdftext.extract_pdf_links(
+                pdf_bytes,
+                bin_path=app_config.pdftohtml_bin,
+                timeout_seconds=app_config.pdf_extract_timeout_seconds,
+                max_bytes=app_config.max_pdf_upload_bytes,
             )
         ),
     )
@@ -646,6 +658,12 @@ def create_app(
         checks["pdftoppm"] = (
             "ok"
             if pdftext.is_pdftoppm_available(services.config.pdftoppm_bin)
+            else "not_found"
+        )
+        # Without this, imported resumes keep their link labels but lose the URLs.
+        checks["pdftohtml"] = (
+            "ok"
+            if pdftext.is_pdftohtml_available(services.config.pdftohtml_bin)
             else "not_found"
         )
 

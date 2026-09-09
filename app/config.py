@@ -112,6 +112,7 @@ class AppConfig:
     pdftotext_bin: str
     pdfinfo_bin: str
     pdftoppm_bin: str
+    pdftohtml_bin: str
     pdf_extract_timeout_seconds: int
 
     @property
@@ -184,5 +185,6 @@ def load_config() -> AppConfig:
         pdftotext_bin=os.getenv("PDFTOTEXT_BIN", "pdftotext").strip() or "pdftotext",
         pdfinfo_bin=os.getenv("PDFINFO_BIN", "pdfinfo").strip() or "pdfinfo",
         pdftoppm_bin=os.getenv("PDFTOPPM_BIN", "pdftoppm").strip() or "pdftoppm",
+        pdftohtml_bin=os.getenv("PDFTOHTML_BIN", "pdftohtml").strip() or "pdftohtml",
         pdf_extract_timeout_seconds=_bounded_int("PDF_EXTRACT_TIMEOUT_SECONDS", 30, 10, 120),
     )

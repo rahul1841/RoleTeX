@@ -17,29 +17,32 @@ from .resume import MAX_SUMMARY_CHARACTERS, MAX_SUMMARY_WORDS, validate_template
 from .schemas import ResumeData, ResumeStyle, validate_model
 
 
-ALLOWED_PAPER = ("a4paper", "letterpaper")
+#: Paper size is no longer a user choice — every resume is A4. The field
+#: survives on ``ResumeStyle`` so styles stored before this still validate.
+PAPER = "a4paper"
 ALLOWED_FONT_SIZE = ("10pt", "11pt", "12pt")
 _HEX_PATTERN = re.compile(r"^[0-9A-Fa-f]{6}$")
 
 
 def clamp_headline(value: str) -> str:
-    """Force the extracted summary into the single-line headline contract."""
+    """Trim an extracted summary to the single-line headline contract.
+
+    Returns "" when the document has no summary. Plenty of resumes carry none,
+    and inventing a headline would put a sentence on the page that its owner
+    never wrote.
+    """
 
     words = str(value or "").split()
     headline = " ".join(words[:MAX_SUMMARY_WORDS]).strip()
     if len(headline) > MAX_SUMMARY_CHARACTERS:
         headline = headline[:MAX_SUMMARY_CHARACTERS].rstrip()
-    return headline or "Professional summary"
+    return headline
 
 
 def sanitize_style(raw: Optional[Dict[str, Any]]) -> ResumeStyle:
     """Coerce untrusted style hints into a bounded, whitelisted ``ResumeStyle``."""
 
     data = raw if isinstance(raw, dict) else {}
-
-    paper = str(data.get("paper", "")).strip().lower()
-    if paper not in ALLOWED_PAPER:
-        paper = "a4paper"
 
     font_size = str(data.get("font_size", "")).strip().lower()
     if font_size not in ALLOWED_FONT_SIZE:
@@ -59,7 +62,7 @@ def sanitize_style(raw: Optional[Dict[str, Any]]) -> ResumeStyle:
             accent_hex = candidate.upper()
 
     return ResumeStyle(
-        paper=paper, font_size=font_size, margin_cm=margin_cm, accent_hex=accent_hex
+        paper=PAPER, font_size=font_size, margin_cm=margin_cm, accent_hex=accent_hex
     )
 
 
@@ -179,6 +182,22 @@ def normalize_extracted_resume(raw: Dict[str, Any]) -> Dict[str, Any]:
         if category and items:
             skills.append({"category": category, "items": items[:100]})
 
+    custom_sections: List[Dict[str, Any]] = []
+    for index, item in enumerate(raw.get("custom_sections") or [], start=1):
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title", "")).strip()
+        bullets = [
+            {"id": "cus_{0}_b{1}".format(index, b_index), "text": text}
+            for b_index, text in enumerate(_as_text_items(item.get("bullets")), start=1)
+        ]
+        # A section with no title or nothing in it would render as a bare rule.
+        if not title or not bullets:
+            continue
+        custom_sections.append(
+            {"id": "cus_{0}".format(index), "title": title[:80], "bullets": bullets}
+        )
+
     achievements = [
         {"id": "ach_{0}".format(index), "text": text}
         for index, text in enumerate(_as_text_items(raw.get("achievements")), start=1)
@@ -192,6 +211,7 @@ def normalize_extracted_resume(raw: Dict[str, Any]) -> Dict[str, Any]:
         "education": education,
         "skills": skills,
         "achievements": achievements,
+        "custom_sections": custom_sections,
     }
 
 
@@ -228,8 +248,12 @@ _MACRO_BLOCK = r"""\textheight=10in
   \begin{center}
     {\Huge \scshape {\ResumeAccent #1}}\\
     \vspace*{2pt}
-    {\ResumeHeadline}\\
-    \vspace*{2pt}
+    % A resume with no headline is normal; an empty \\ inside center is a
+    % "no line here to end" error, so the whole line is dropped instead.
+    \edef\ResumeArg{\ResumeHeadline}\ifx\ResumeArg\empty\else
+      {\ResumeHeadline}\\
+      \vspace*{2pt}
+    \fi
     #2
   \end{center}
   \vspace*{-8pt}
@@ -237,7 +261,7 @@ _MACRO_BLOCK = r"""\textheight=10in
 
 % Renderer order: role, date range, company, location.
 \newcommand{\ResumeEntry}[4]{%
-  \textbf{#3}\textbf{ | #1}\hfill #4 | #2\\
+  \textbf{#3}\textbf{ | #1}\hfill \def\ResumeArg{#4}\ifx\ResumeArg\empty\else#4 | \fi#2\\
   \vspace{-2mm}
 }
 
@@ -291,6 +315,8 @@ _DOCUMENT_BODY = r"""
 @@PROJECTS@@
 
 @@ACHIEVEMENTS@@
+
+@@CUSTOM@@
 % AI_EDITABLE_END
 
 \end{document}
@@ -313,8 +339,7 @@ def _accent_setup(style: ResumeStyle) -> str:
 def assemble_template(style: ResumeStyle) -> str:
     """Build a Tectonic-compatible template from bounded style hints.
 
-    Only ``paper``, ``font_size``, ``margin_cm``, and the optional accent color
-    vary; the ``style`` values are already whitelisted by :func:`sanitize_style`.
+    Only ``font_size``, ``margin_cm``, and the optional accent color vary; the ``style`` values are already whitelisted by :func:`sanitize_style`.
     """
 
     margin = "{0:g}".format(style.margin_cm)
@@ -323,7 +348,7 @@ def assemble_template(style: ResumeStyle) -> str:
             "% This template is immutable application code generated from a bounded",
             "% style profile. The backend replaces each named placeholder exactly once.",
             "% PROTECTED_PREAMBLE_START",
-            r"\documentclass[" + style.paper + "," + style.font_size + r"]{article}",
+            r"\documentclass[" + PAPER + "," + style.font_size + r"]{article}",
             "",
             r"\usepackage{fullpage}",
             r"\usepackage{amsmath}",

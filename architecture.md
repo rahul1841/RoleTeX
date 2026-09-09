@@ -37,7 +37,7 @@ FastAPI app  (app/main.py — create_app() factory, DI-friendly)
 | `app/security.py` | Password hashing (PBKDF2-HMAC-SHA256), session token issue/hash, Fernet secret encryption + key hints, `RateLimiter`/`LoginThrottle`, CSRF origin check |
 | `app/db.py` | `Database` wrapper over Motor with per-collection stores; every query is `user_id`-scoped (ownership enforced at the query level) |
 | `app/auth.py` | Session dependency (`require_user`), auth routes, provider/key resolution for user LLM requests |
-| `app/pdftext.py` | Bounded poppler subprocess work (`%PDF-` magic check, size/page/timeout caps, no shell): `pdftotext` extraction, `pdfinfo` page gate, `pdftoppm` rasterization for the scanned fallback |
+| `app/pdftext.py` | Bounded poppler subprocess work (`%PDF-` magic check, size/page/timeout caps, no shell): `pdftotext` extraction, `pdfinfo` page gate, `pdftoppm` rasterization, `pdftohtml` link-annotation recovery |
 | `app/routes_keys.py` / `routes_resumes.py` / `routes_jds.py` / `routes_runs.py` | Route groups for per-user API keys, resume library, JD library, and tailor-run history |
 | `app/schemas.py` | All Pydantic models (`StrictModel` base, `extra="forbid"`), Pydantic v1/v2 compatibility helpers (`validate_model`, `dump_model`) |
 | `static/` | Vanilla JS SPA: hash routing (auth/tailor/resumes/jds/history/settings), diff cards, PDF iframe preview, downloads, abort + request versioning; no localStorage |
@@ -105,10 +105,13 @@ POST /api/resumes (latex)          POST /api/resumes/pdf (multipart)
         │                                  │ pdfinfo page gate (> MAX_IMPORT_PDF_PAGES → 422,
         │                                  │   fails open when pdfinfo is absent) →
         │                                  │ pdftext.extract_pdf_text (bounded subprocess)
-        │                                  │   └─ no text layer? pdftext.render_pdf_pages
-        │                                  │      (pdftoppm → PNG pages, vision path)
+        │                                  │ pdftext.render_pdf_pages (pdftoppm → PNG)
+        │                                  │ pdftext.extract_pdf_links (pdftohtml → label/URL)
+        │                                  │   text + pages, provider sees images → "text_and_image"
+        │                                  │   text only, provider is text-only  → "text" (+ warning)
+        │                                  │   no text layer at all (a scan)     → "image"
         ▼                                  ▼
-   llm.extract_resume(source_kind="latex"|"text"|"image")
+   llm.extract_resume(source_kind="latex"|"text"|"image"|"text_and_image")
         (FULL document incl. identity — deliberate, import-only
          exception; see rules.md R-2)
         ▼
@@ -163,7 +166,7 @@ Private, single-owner deployment. Five enforced safety goals:
 
 ## 7. Data model
 
-- **Seed resume:** `resume/data.json` → `ResumeData` (identity, summary, experience[], projects[], education[], skills[], achievements[]) with stable string IDs on every editable node. `resume/template.tex` contains each token exactly once: `@@CONTACT@@ @@SUMMARY@@ @@EXPERIENCE@@ @@PROJECTS@@ @@EDUCATION@@ @@SKILLS@@ @@ACHIEVEMENTS@@`.
+- **Seed resume:** `resume/data.json` → `ResumeData` (identity, summary, experience[], projects[], education[], skills[], achievements[]) with stable string IDs on every editable node. `resume/template.tex` contains each token exactly once: `@@CONTACT@@ @@SUMMARY@@ @@EXPERIENCE@@ @@PROJECTS@@ @@EDUCATION@@ @@SKILLS@@ @@ACHIEVEMENTS@@, plus the optional @@CUSTOM@@`.
 - **Per-user profile:** `data/<uuid32>/` — `data.json` (extracted `ResumeData`), `template.tex` (server-assembled, style-personalized), `source.tex` (verbatim paste, never compiled), `meta.json` (provider/model/timestamps). Directory is git-ignored (only `.gitkeep` tracked) and docker-ignored.
 
 ## 8. Error model
