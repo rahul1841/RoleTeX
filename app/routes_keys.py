@@ -5,7 +5,7 @@ Security rationale:
   with Fernet under the server secret, and stored per (user, provider). The
   plaintext is never persisted, logged, or echoed back — responses only carry
   a masked hint (ellipsis + last four characters).
-- ``mock`` needs no key and ``custom`` is operator-only (its base URL comes
+- ``custom`` is operator-only (its base URL comes
   from server env), so neither accepts stored keys.
 """
 
@@ -30,7 +30,6 @@ from .schemas import (
 
 
 PROVIDER_LABELS = {
-    "mock": "Mock (offline demo)",
     "anthropic": "Anthropic",
     "cerebras": "Cerebras",
     "gemini": "Google Gemini",
@@ -47,14 +46,7 @@ KEYABLE_PROVIDERS = tuple(sorted(name for name in PROVIDERS if name != "custom")
 
 
 def _provider_catalog() -> List[ProviderInfo]:
-    catalog = [
-        ProviderInfo(
-            id="mock",
-            label=PROVIDER_LABELS["mock"],
-            default_model="deterministic-local",
-            needs_key=False,
-        )
-    ]
+    catalog: List[ProviderInfo] = []
     for name in KEYABLE_PROVIDERS:
         definition = PROVIDERS[name]
         catalog.append(

@@ -248,7 +248,7 @@ class OpenAICompatibleLLM:
 
     @property
     def configured_provider(self) -> str:
-        return os.getenv("LLM_PROVIDER", "mock").strip().lower() or "mock"
+        return os.getenv("LLM_PROVIDER", "").strip().lower()
 
     def resolve_config(
         self,
@@ -257,18 +257,15 @@ class OpenAICompatibleLLM:
         api_key_override: Optional[str] = None,
     ) -> ProviderConfig:
         provider = (provider_override or self.configured_provider).strip().lower()
-        if provider == "mock":
-            return ProviderConfig(
-                provider="mock",
-                base_url="",
-                api_key="",
-                model=(model_override or "deterministic-local").strip(),
+        if not provider:
+            raise LLMConfigurationError(
+                "No LLM provider selected. Set LLM_PROVIDER or choose one per request."
             )
         definition = PROVIDERS.get(provider)
         if definition is None:
             raise LLMConfigurationError(
                 "Unsupported LLM provider '{0}'. Supported values: {1}".format(
-                    provider, ", ".join(["mock"] + sorted(PROVIDERS))
+                    provider, ", ".join(sorted(PROVIDERS))
                 )
             )
 
@@ -315,11 +312,6 @@ class OpenAICompatibleLLM:
         api_key: Optional[str] = None,
     ) -> LLMResult:
         config = self.resolve_config(provider, model, api_key)
-        if config.provider == "mock":
-            proposal = self._mock_proposal(resume, job_description)
-            raw = json.dumps(_proposal_dict(proposal), ensure_ascii=False)
-            return LLMResult(proposal, config.provider, config.model, raw)
-
         messages = self._initial_messages(resume, job_description)
         raw = await self._complete(config, messages)
         proposal = parse_proposal(raw)
@@ -342,11 +334,6 @@ class OpenAICompatibleLLM:
         """
 
         config = self.resolve_config(provider, model, api_key)
-        if config.provider == "mock":
-            proposal = self._mock_proposal(resume, job_description)
-            raw = json.dumps(_proposal_dict(proposal), ensure_ascii=False)
-            return LLMResult(proposal, config.provider, config.model, raw)
-
         payload = json.dumps(build_llm_resume_payload(resume), ensure_ascii=False)
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -392,11 +379,6 @@ class OpenAICompatibleLLM:
         """
 
         config = self.resolve_config(provider, model, api_key)
-        if config.provider == "mock":
-            resume, style = _mock_extraction(source)
-            raw = json.dumps(dict(resume, style=style), ensure_ascii=False)
-            return LLMExtractResult(resume, style, config.provider, config.model, raw)
-
         if source_kind == "image":
             return await self._extract_from_images(config, images or [])
 
@@ -595,26 +577,6 @@ class OpenAICompatibleLLM:
                 await client.aclose()
         raise LLMProviderError("LLM request failed after retries")  # pragma: no cover
 
-    @staticmethod
-    def _mock_proposal(resume: ResumeData, job_description: str) -> TailorProposal:
-        """Deterministic no-network mode for development and smoke tests."""
-
-        job = job_description.casefold()
-        original = flattened_skills(resume)
-        indexed = list(enumerate(original))
-        indexed.sort(
-            key=lambda pair: (
-                -job.count(pair[1].casefold()),
-                pair[0],
-            )
-        )
-        return TailorProposal(
-            summary=resume.summary,
-            bullet_rewrites=[],
-            skills_order=[skill for _, skill in indexed],
-        )
-
-
 def _retry_delay(attempt: int, retry_after: Optional[str]) -> float:
     if retry_after:
         try:
@@ -643,13 +605,6 @@ def _safe_provider_error(response: httpx.Response) -> str:
     if detail:
         return "LLM provider rejected the request: {0}".format(detail)
     return "LLM provider rejected the request (HTTP {0})".format(response.status_code)
-
-
-def _proposal_dict(proposal: TailorProposal) -> Dict[str, Any]:
-    dumper = getattr(proposal, "model_dump", None)
-    if dumper is not None:
-        return dumper()
-    return proposal.dict()
 
 
 def _json_candidates(content: str) -> List[str]:
@@ -712,51 +667,8 @@ def parse_extraction(content: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     ) from last_error
 
 
-def _mock_extraction(latex_source: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    """Deterministic offline extraction so the import flow works without network."""
-
-    resume = {
-        "identity": {
-            "name": "Imported User",
-            "email": "imported.user@example.com",
-            "phone": "+1 000 000 0000",
-            "location": "Remote",
-            "links": [],
-        },
-        "summary": "Engineer imported in deterministic mock mode",
-        "experience": [
-            {
-                "company": "Example Corp",
-                "role": "Software Engineer",
-                "location": "Remote",
-                "start": "2022",
-                "end": "Present",
-                "bullets": [
-                    "Built and shipped backend services in Python.",
-                    "Improved reliability of production systems.",
-                ],
-            }
-        ],
-        "projects": [],
-        "education": [
-            {
-                "institution": "Example University",
-                "degree": "B.Tech, Computer Science",
-                "location": "Remote",
-                "start": "2018",
-                "end": "2022",
-                "details": [],
-            }
-        ],
-        "skills": [{"category": "Programming", "items": ["Python", "SQL"]}],
-        "achievements": [],
-    }
-    style = {"paper": "a4paper", "font_size": "10pt", "margin_cm": 2.0, "accent_hex": None}
-    return resume, style
-
-
 def supported_providers() -> Tuple[str, ...]:
-    return tuple(["mock"] + sorted(PROVIDERS))
+    return tuple(sorted(PROVIDERS))
 
 
 # Concise alias for dependency injection in application factories/tests.

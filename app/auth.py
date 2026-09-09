@@ -204,9 +204,31 @@ def clear_session_cookie(response: Response, request: Request, config: Any) -> N
     )
 
 
+def _env_backed_providers(config: Any) -> set:
+    """Providers usable without a stored key because the operator supplied one.
+
+    Only meaningful when ``ALLOW_ENV_KEY_FALLBACK`` is on; ``resolve_llm_selection``
+    applies the same rule, so this keeps the picker honest about what will
+    actually work instead of hiding a provider the request would have accepted.
+    """
+
+    if not config.allow_env_key_fallback:
+        return set()
+    shared = os.getenv("LLM_API_KEY", "").strip()
+    return {
+        name
+        for name, definition in PROVIDERS.items()
+        if name != "custom"
+        and (os.getenv(definition.key_env, "").strip() or shared)
+    }
+
+
 async def build_user_out(services: Any, user: Dict[str, Any]) -> UserOut:
     keys = await services.database.api_keys.list_for_user(user["_id"])
-    providers_with_keys = sorted({doc.get("provider", "") for doc in keys if doc.get("provider")})
+    stored = {doc.get("provider", "") for doc in keys if doc.get("provider")}
+    providers_with_keys = sorted(
+        stored.union(_env_backed_providers(services.config)) - {""}
+    )
     return UserOut(
         id=user["_id"],
         email=user.get("email", ""),
@@ -242,19 +264,11 @@ async def resolve_llm_selection(
     user_default_provider = (user.get("default_provider") or "").strip().lower()
     provider = (requested_provider or user_default_provider or "").strip().lower()
     if not provider:
-        if os.getenv("LLM_PROVIDER", "").strip().lower() == "mock":
-            provider = "mock"
-        else:
-            raise _api_error(
-                400,
-                "provider_required",
-                "Choose an AI provider (or set a default in Settings) for this request.",
-            )
-    if provider == "mock":
-        warnings.append(
-            "Offline mock output: no AI provider was called for this request."
+        raise _api_error(
+            400,
+            "provider_required",
+            "Choose an AI provider (or set a default in Settings) for this request.",
         )
-        return "mock", requested_model, None, warnings
 
     if provider not in PROVIDERS:
         raise _api_error(

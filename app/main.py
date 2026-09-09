@@ -856,7 +856,7 @@ def create_app(
 
         # A semantic/schema repair may already have consumed the single repair
         # budget. Environment failures are never sent to an LLM.
-        if (repairable_failure or needs_shortening) and not repair_used and result.provider != "mock":
+        if (repairable_failure or needs_shortening) and not repair_used:
             issue = (
                 "The generated PDF has {0} pages. Shorten editable content to fit one page "
                 "without removing factual outcomes or changing the schema.".format(

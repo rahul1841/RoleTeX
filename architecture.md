@@ -17,7 +17,7 @@ FastAPI app  (app/main.py — create_app() factory, DI-friendly)
         ├── ResumeRepository (app/resume.py) ── resume/data.json + resume/template.tex (locked seed, demo mode)
         ├── Database         (app/db.py)     ── MongoDB (Motor): users, sessions, api_keys, resumes(+versions), jds(+versions), runs
         ├── Security         (app/security.py)── PBKDF2 passwords, session tokens, Fernet key encryption, rate/login limiting, origin checks
-        ├── LLM adapter      (app/llm.py)     ── OpenAI-compatible chat completions (8 providers + mock, per-user key overrides)
+        ├── LLM adapter      (app/llm.py)     ── OpenAI-compatible chat completions (9 providers, per-user key overrides)
         ├── Importer         (app/importer.py)── extraction normalization + template assembly
         ├── PDF text         (app/pdftext.py) ── bounded poppler extraction (pdftotext/pdfinfo/pdftoppm) for PDF imports
         └── CompileService   (app/compiler.py)── Tectonic in a per-request sandbox + poppler checks
@@ -28,7 +28,7 @@ FastAPI app  (app/main.py — create_app() factory, DI-friendly)
 | Module | Responsibility |
 |---|---|
 | `app/main.py` | App factory (`create_app`), routes, tailor orchestration, single shared repair budget, body-size middleware, structured error responses, static file serving |
-| `app/llm.py` | Provider-neutral chat client (`OpenAICompatibleLLM`): `generate`/`repair` for tailoring, `extract_resume` for import; env config resolution (`resolve_config`), retry/backoff, JSON-mode fallback, deterministic `mock` provider |
+| `app/llm.py` | Provider-neutral chat client (`OpenAICompatibleLLM`): `generate`/`repair` for tailoring, `extract_resume` for import; env config resolution (`resolve_config`), retry/backoff, JSON-mode fallback |
 | `app/resume.py` | Load/validate locked resume data; `build_llm_resume_payload` (identity excluded); `validate_proposal` (safety contract); `escape_latex`; `redact_identity`; deterministic token rendering incl. `sectioned=True` mode; change list + unified diff |
 | `app/compiler.py` | `CompileService`: unique temp dir per compile, `tectonic -X compile --untrusted [--only-cached]`, timeout + POSIX rlimits, per-event-loop `asyncio.Semaphore`, `pdfinfo` page count, `pdftotext` extraction, log sanitization |
 | `app/importer.py` | Normalize LLM extraction into `ResumeData` (backend-assigned positional stable IDs), clamp style hints to whitelists, assemble a fully server-controlled `template.tex` |
@@ -86,8 +86,7 @@ TailorRequest ──► resume source
                     │ page_count > 1 &&
                     │   require_one_page    → one shortening repair *
                     │   (MAX_PDF_PAGES only drives a compiler warning)
-                    │            (* only if the semantic repair was not already used,
-                    │               and never for the mock provider)
+                    │            (* only if the semantic repair was not already used)
                     ▼
              TailorResponse: proposal, changes, unified_diff, latex_source,
                              pdf_base64, page_count, compiler report, run_id
@@ -192,7 +191,7 @@ Structured JSON errors via `_api_error`: `{code, message, ...details}`.
 
 ## 10. Configuration
 
-All via environment variables — see the README table for the full list. Key ones: `LLM_PROVIDER` (default `mock`), `LLM_MODEL`, `${PROVIDER}_API_KEY` / `LLM_API_KEY`, `TECTONIC_BIN`, `TECTONIC_ONLY_CACHED` (default `true`), `COMPILE_TIMEOUT_SECONDS`, `COMPILE_CONCURRENCY`, `MAX_PDF_PAGES`, `USER_DATA_DIR` (default `data`), `RESUME_DATA_PATH`, `RESUME_TEMPLATE_PATH`. HTTPS is enforced for provider base URLs by default (`ALLOW_INSECURE_LLM_BASE_URL=true` opts out).
+All via environment variables — see the README table for the full list. Key ones: `LLM_PROVIDER` (no default), `LLM_MODEL`, `${PROVIDER}_API_KEY` / `LLM_API_KEY`, `TECTONIC_BIN`, `TECTONIC_ONLY_CACHED` (default `true`), `COMPILE_TIMEOUT_SECONDS`, `COMPILE_CONCURRENCY`, `MAX_PDF_PAGES`, `USER_DATA_DIR` (default `data`), `RESUME_DATA_PATH`, `RESUME_TEMPLATE_PATH`. HTTPS is enforced for provider base URLs by default (`ALLOW_INSECURE_LLM_BASE_URL=true` opts out).
 
 ## 11. Deployment
 

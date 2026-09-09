@@ -1447,9 +1447,6 @@
     if (found && found.label) {
       return found.label;
     }
-    if (providerId === "mock") {
-      return "Mock (offline)";
-    }
     return readableValue(providerId);
   }
 
@@ -1469,9 +1466,6 @@
     keyed.forEach((providerId) => {
       select.append(new Option(providerLabel(providerId), providerId));
     });
-    if (!keyed.includes("mock")) {
-      select.append(new Option("Mock (offline dry run)", "mock"));
-    }
     const values = Array.from(select.options).map((option) => option.value);
     if (previous && values.includes(previous)) {
       select.value = previous;
@@ -1479,8 +1473,6 @@
       select.value = "";
     } else if (keyed.length) {
       select.value = keyed[0];
-    } else {
-      select.value = "mock";
     }
     select.disabled = false;
     if (noteEl) {

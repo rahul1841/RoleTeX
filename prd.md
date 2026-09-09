@@ -25,7 +25,7 @@ Paste a job description → an LLM proposes structured, fact-preserving edits (s
 | G3 | Make fabrication structurally hard: unknown IDs, invented skills, and new numeric claims are rejected server-side |
 | G4 | Make LaTeX injection impossible: the model returns plain text only; the server owns all LaTeX |
 | G5 | Compile untrusted output safely: unique temp dir, `--untrusted`, `--only-cached`, timeouts, resource limits |
-| G6 | Run at ~$0: free-tier LLM providers (Groq recommended; the code default is the offline `mock` provider), free compiler (Tectonic), free hosting (private Hugging Face Docker Space) |
+| G6 | Run at ~$0: free-tier LLM providers (Groq or Gemini recommended), free compiler (Tectonic), free hosting (private Hugging Face Docker Space) |
 | G7 | Let a user import their own LaTeX resume as a private per-user profile and tailor against it (multi-user extension) |
 | G8 | Let a user with no resume file **write one in the app** and get a compiled PDF, without an AI provider key and without touching the repository's seed data |
 
@@ -77,9 +77,9 @@ Paste a job description → an LLM proposes structured, fact-preserving edits (s
 | FR-3 | `GET /api/health` — mode, resume validity, compiler/database/secret-key/pdftotext checks | ✅ Done, tested |
 | FR-4 | Resume library routes (`GET/PATCH/DELETE /api/resumes/{id}`, versions, source download) | ✅ Done, tested |
 | FR-5 | Web UI: auth, tailor, resume library, JD library, history, settings views; diff cards, PDF preview, downloads | ✅ Done. Only the resume editor has automated coverage (`tests/ui/resume_editor.mjs`, Node + jsdom, outside pytest); the rest of the SPA still has none |
-| FR-6 | Provider adapter: mock, groq, cerebras, gemini, openrouter, mistral, openai, anthropic, custom | ✅ Implemented; real-provider path **unexercised by tests** |
+| FR-6 | Provider adapter: groq, cerebras, gemini, openrouter, mistral, openai, anthropic, grid, custom | ✅ Implemented; real-provider path **unexercised by tests** |
 | FR-7 | One shared repair budget per request (semantic OR compile/page repair, never both) | ✅ Done, tested |
-| FR-8 | Deterministic mock provider for offline dev/tests | ✅ Done, tested |
+| FR-8 | ~~Deterministic mock provider for offline dev/tests~~ | ❌ **Removed 2026-09-10** — an offline dry run returned placeholder facts that were indistinguishable from a real extraction until read. Every request now reaches a real provider |
 | FR-9 | Resume/JD/run lifecycle (list/delete/quota/pruning) | ✅ Done, tested (Mongo revamp) |
 | FR-12 | Accounts & sessions, per-user encrypted API keys, rate limiting, login throttling, CSRF origin checks | ✅ Done, tested |
 | FR-14 | Account lifecycle: password change, emailed password reset, email verification (optionally enforced), active-session listing + per-device/bulk revocation, `disabled` account flag | ✅ Done, tested (2026-08-19, D-18). Mail transport is pluggable: SMTP driver + console driver; **no real SMTP server exercised yet** (G-19) |
