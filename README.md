@@ -78,21 +78,40 @@ source text, and a version history (re-import to evolve). Tailoring targets a
 library entry with `resume_id`; in demo mode (no database) the seed resume is
 used instead.
 
+Sections the fixed template does not name — Certifications, Publications,
+Volunteering, Languages — are carried in `custom_sections`, each a heading plus
+bullets, and render into a single optional `@@CUSTOM@@` slot. Their bullets get
+stable IDs like any other, so tailoring can rewrite them under the same rules.
+The slot is optional rather than required so templates stored before it existed
+still validate; editing a resume regenerates the template with the slot present.
+
 Uploads are bounded at `MAX_PDF_UPLOAD_BYTES` (5 MB) and `MAX_IMPORT_PDF_PAGES`
 (3 pages). The page count is read with `pdfinfo` before any text is extracted,
 so an oversized document is rejected (`422 pdf_too_many_pages`) rather than
 billed as LLM input; the check fails open when `pdfinfo` is missing and
 `/api/health` reports that.
 
-A scanned PDF has no text layer, so `pdftotext` finds nothing. Instead of
-failing, the importer renders the pages to PNG with `pdftoppm` and sends them to
-a multimodal model (`source_kind="image"`, stored as `source_type` `pdf_scanned`
-with no `source_text`, since there is no original text to keep). The response
-carries a warning to check names, contacts, and figures, because that path
-transcribes from pixels. Providers whose models are text-only (`groq`,
-`cerebras`) reject it up front with a clear message rather than a provider
-error, and a server without `pdftoppm` falls back to the original
-`422 pdf_no_text`.
+Every uploaded PDF is also rasterized with `pdftoppm`, and when the resolved
+provider can see images both are sent in one request (`source_kind="text_and_image"`):
+the page images decide *what the document says*, and the text layer confirms the
+exact spelling of emails, URLs, and figures. This matters because `pdftotext`
+interleaves columns, repeats running headers, and silently drops text drawn
+inside a graphic — the usual reason a field goes missing on import. Rendering
+costs about 100 ms and roughly 2,000 image tokens per page. Against a text-only
+provider the images are dropped and the import proceeds from text alone with a
+warning.
+
+Hyperlink targets are recovered separately with `pdftohtml -xml` and passed as a
+third input. A PDF stores them as annotations, so a contact row of linked words
+("Portfolio", "LinkedIn", "GitHub") shows only its labels in both the text layer
+and a page image — without this the URLs are simply not in anything the model
+receives.
+
+A scanned PDF has no text layer at all, so `pdftotext` finds nothing. Rather
+than failing, its pages go to the model as images only (`source_kind="image"`,
+stored as `source_type` `pdf_scanned` with no `source_text`), with a warning to
+check names, contacts, and figures because that path transcribes from pixels.
+A server without `pdftoppm` still falls back to the original `422 pdf_no_text`.
 
 Two deliberate boundaries keep this safe:
 
@@ -235,6 +254,8 @@ send.
 | `LLM_MODEL` | No | provider default | Exact provider model ID |
 | `${PROVIDER}_API_KEY` | For real providers | — | Preferred provider-specific server credential, such as `GROQ_API_KEY` |
 | `${PROVIDER}_BASE_URL` | No | provider default | Override a provider's endpoint, e.g. `GRID_BASE_URL` for a self-hosted gateway |
+| `${PROVIDER}_MODEL` | No | registry default | Per-provider model, e.g. `GRID_MODEL`; beats the global `LLM_MODEL` |
+| `${PROVIDER}_VISION` | No | registry flag | Whether the provider serves multimodal models, e.g. `GRID_VISION=true` |
 | `LLM_API_KEY` | For real providers without a provider key | — | Generic credential fallback |
 | `${PROVIDER}_BASE_URL` | No | provider endpoint | Provider-specific compatible API endpoint override |
 | `LLM_BASE_URL` | For `custom` | — | Generic compatible API endpoint override |
@@ -290,7 +311,8 @@ send.
 | `MAX_IMPORT_PDF_PAGES` | No | `3` | Page cap for an imported resume, bounded 1–20 |
 | `PDFTOTEXT_BIN` | No | `pdftotext` | poppler binary for PDF text extraction |
 | `PDFINFO_BIN` | No | `pdfinfo` | poppler binary for the import page-count check |
-| `PDFTOPPM_BIN` | No | `pdftoppm` | poppler binary for rendering scanned PDFs |
+| `PDFTOPPM_BIN` | No | `pdftoppm` | poppler binary for rendering PDF pages to images |
+| `PDFTOHTML_BIN` | No | `pdftohtml` | poppler binary for recovering hyperlink targets |
 | `PDF_EXTRACT_TIMEOUT_SECONDS` | No | `30` | Extraction subprocess timeout, bounded 10–120 |
 
 See `.env.example` for a commented template, and `docker-compose.yml` for a

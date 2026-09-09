@@ -10,6 +10,10 @@ Security rationale:
 - The extracted text is sanitized (NULs stripped, runaway blank lines
   collapsed) and capped, because it will be embedded into an LLM prompt and
   stored per-user; unbounded output would be a memory and token-cost hazard.
+- Hyperlink targets live in the PDF's link annotations, not in its text, so
+  ``pdftotext`` and a page image both show only the anchor word ("LinkedIn").
+  ``pdftohtml -xml`` is used to recover the label/URL pairs, which are then
+  given to the model as a third, separate input.
 - Page count is checked with ``pdfinfo`` before any text is extracted. A resume
   is a short document, so a large page count means either a mistaken upload or
   someone using the importer to feed a book into a paid LLM. The check fails
@@ -27,7 +31,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 
 PDF_MAGIC = b"%PDF-"
@@ -78,6 +82,86 @@ def is_pdfinfo_available(bin_path: str) -> bool:
 
 def is_pdftoppm_available(bin_path: str) -> bool:
     """Report whether the configured pdftoppm binary is resolvable."""
+
+    try:
+        return shutil.which(bin_path) is not None
+    except (TypeError, ValueError):
+        return False
+
+
+_ANCHOR_PATTERN = re.compile(
+    r"<a\s+href=\"([^\"]{1,2000})\"[^>]*>(.*?)</a>", re.IGNORECASE | re.DOTALL
+)
+_TAG_PATTERN = re.compile(r"<[^>]+>")
+
+
+def _unescape(value: str) -> str:
+    for entity, char in (
+        ("&#160;", " "), ("&nbsp;", " "), ("&amp;", "&"),
+        ("&lt;", "<"), ("&gt;", ">"), ("&quot;", '"'), ("&#39;", "'"),
+    ):
+        value = value.replace(entity, char)
+    return value
+
+
+def extract_pdf_links(
+    pdf_bytes: bytes,
+    bin_path: str = "pdftohtml",
+    timeout_seconds: int = 30,
+    max_bytes: int = 10_000_000,
+    max_links: int = 40,
+) -> List[Dict[str, str]]:
+    """Recover ``[{"label", "url"}]`` from the PDF's link annotations.
+
+    A resume's contact row is typically a set of words ("Portfolio", "GitHub")
+    hyperlinked to profile URLs. Neither the text layer nor a page image carries
+    the target, so without this the model can only ever return the label. Best
+    effort by design: any failure yields an empty list and the import proceeds.
+    """
+
+    if not isinstance(pdf_bytes, (bytes, bytearray)) or bytes(pdf_bytes[:5]) != PDF_MAGIC:
+        return []
+    if len(pdf_bytes) > max_bytes:
+        return []
+
+    with tempfile.TemporaryDirectory(prefix="pdflinks-") as workdir:
+        input_path = Path(workdir) / "in.pdf"
+        try:
+            input_path.write_bytes(bytes(pdf_bytes))
+            completed = subprocess.run(
+                [bin_path, "-xml", "-i", "-stdout", str(input_path)],
+                capture_output=True,
+                text=True,
+                errors="replace",
+                check=False,
+                timeout=timeout_seconds,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return []
+        if completed.returncode != 0:
+            return []
+        markup = completed.stdout
+
+    links: List[Dict[str, str]] = []
+    seen = set()
+    for url, label in _ANCHOR_PATTERN.findall(markup):
+        url = _unescape(url).strip()
+        # Rendering rejects anything that is not http(s) anyway.
+        if not url.lower().startswith(("http://", "https://")):
+            continue
+        label = _unescape(_TAG_PATTERN.sub("", label)).strip()
+        key = (label.casefold(), url)
+        if key in seen:
+            continue
+        seen.add(key)
+        links.append({"label": label[:100], "url": url[:500]})
+        if len(links) >= max_links:
+            break
+    return links
+
+
+def is_pdftohtml_available(bin_path: str) -> bool:
+    """Report whether the configured pdftohtml binary is resolvable."""
 
     try:
         return shutil.which(bin_path) is not None

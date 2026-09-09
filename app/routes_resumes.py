@@ -43,6 +43,7 @@ from .builder import (
 )
 from .importer import assemble_template, build_resume_data, sanitize_style
 from .llm import (
+    provider_supports_vision,
     LLMConfigurationError,
     LLMExtractResult,
     LLMProviderError,
@@ -104,7 +105,7 @@ def _import_source_type(source_kind: str) -> str:
     back on, and the UI is clearer for saying where the facts came from.
     """
 
-    if source_kind == "text":
+    if source_kind in ("text", "text_and_image"):
         return "pdf"
     if source_kind == "image":
         return "pdf_scanned"
@@ -201,6 +202,7 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
         requested_provider: Optional[str],
         requested_model: Optional[str],
         images: Optional[List[bytes]] = None,
+        links: Optional[List[Dict[str, str]]] = None,
     ) -> Tuple[ResumeData, Any, str, LLMExtractResult, List[str]]:
         """Shared import pipeline: LLM extraction -> importer -> render check."""
 
@@ -210,10 +212,26 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
         llm_kwargs: Dict[str, Any] = {"provider": provider, "model": model}
         if api_key:
             llm_kwargs["api_key"] = api_key
+        if source_kind == "text" and images:
+            # Sending the pages alongside the text is strictly better when the
+            # model can see them: the text layer loses column order and drops
+            # anything drawn as a graphic, which the images still show.
+            if provider_supports_vision(provider):
+                source_kind = "text_and_image"
+            else:
+                images = []
+                warnings.append(
+                    "{0} has no vision-capable model configured, so this PDF was "
+                    "read from its text layer alone. Multi-column layouts may "
+                    "lose fields.".format(provider)
+                )
         if source_kind != "latex":
             llm_kwargs["source_kind"] = source_kind
-        if source_kind == "image":
+            if links:
+                llm_kwargs["links"] = links
+        if source_kind in ("image", "text_and_image"):
             llm_kwargs["images"] = images or []
+        if source_kind == "image":
             # Transcription from pixels is the one import path that can silently
             # misread a digit, so the user is told to check rather than trust.
             warnings.append(
@@ -270,14 +288,25 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
         warnings = warnings + [IMPORT_REVIEW_WARNING]
         return resume, style, template, extraction, warnings
 
-    async def _read_pdf_upload(file: UploadFile) -> Tuple[str, str, List[bytes]]:
+    async def _read_pdf_upload(
+        file: UploadFile,
+    ) -> Tuple[str, str, List[bytes], List[Dict[str, str]]]:
         """Return ``(source_text, source_kind, page_images)`` for an upload.
 
-        A text-based PDF yields ``("...", "text", [])``. A scanned one has no
-        text layer to read, so its pages are rasterized instead and returned as
-        ``("", "image", [png, ...])`` for the vision extraction path. When
-        rendering is also unavailable the original ``pdf_no_text`` error stands,
-        which is the behaviour that predates the fallback.
+        Every PDF is rasterized, because the page images are the only faithful
+        record of the layout: ``pdftotext`` interleaves columns, repeats running
+        headers, and drops text drawn inside a graphic. A text PDF yields
+        ``("...", "text", [png, ...])`` so both can be sent; a scan, which has
+        no text layer at all, yields ``("", "image", [png, ...])``. Rendering is
+        best-effort for a text PDF and required for a scan: when it fails there,
+        the original ``pdf_no_text`` error stands.
+
+        Hyperlink targets are recovered separately in every case: a PDF keeps
+        them in annotations, so a contact row of linked words ("Portfolio",
+        "GitHub") shows only its labels in both the text and the images.
+
+        The caller decides whether the images are actually usable -- that
+        depends on the provider the request resolves to.
         """
 
         cap = services.config.max_pdf_upload_bytes
@@ -298,6 +327,10 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
             )
         loop = asyncio.get_running_loop()
         try:
+            links = await loop.run_in_executor(None, services.pdf_link_extractor, data)
+        except PdfExtractionError:
+            links = []
+        try:
             text = await loop.run_in_executor(None, services.pdf_extractor, data)
         except PdfExtractionError as exc:
             if exc.code != "pdf_no_text":
@@ -310,8 +343,16 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
                 # Surface the original diagnosis: the upload is a scan, and this
                 # server could not render it either.
                 raise _pdf_error(exc) from exc
-            return "", "image", images
-        return text, "text", []
+            return "", "image", images, links
+
+        try:
+            images = await loop.run_in_executor(None, services.pdf_renderer, data)
+        except PdfExtractionError as exc:
+            # The text alone is still a usable import, so a rendering failure
+            # here degrades rather than fails.
+            logger.warning("Could not rasterize an uploaded PDF: %s", exc)
+            images = []
+        return text, "text", images, links
 
     async def _check_resume_quota(user: Dict[str, Any]) -> None:
         count = await services.database.resumes.count_for_user(user["_id"])
@@ -332,12 +373,16 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
                 ),
             )
 
-    def _manual_artifacts(draft: Any, style: Any) -> Tuple[ResumeData, Any, str, str]:
+    def _manual_artifacts(
+        draft: Any, style: Any, *, require_content: bool = True
+    ) -> Tuple[ResumeData, Any, str, str]:
         """Draft -> stored artifacts, with draft problems as field-addressed 422s."""
 
         try:
             return build_manual_artifacts(
-                dump_model(draft), dump_model(style) if style is not None else None
+                dump_model(draft),
+                dump_model(style) if style is not None else None,
+                require_content=require_content,
             )
         except ResumeDraftError as exc:
             raise _api_error(
@@ -355,10 +400,11 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
         provider: Optional[str],
         model: Optional[str],
         images: Optional[List[bytes]] = None,
+        links: Optional[List[Dict[str, str]]] = None,
     ) -> ResumeCreateResponse:
         await _check_resume_quota(user)
         resume, style, template, extraction, warnings = await _extract_validated_import(
-            user, source_text, source_kind, provider, model, images
+            user, source_text, source_kind, provider, model, images, links
         )
         source_type = _import_source_type(source_kind)
         doc = await services.database.resumes.create(
@@ -384,13 +430,14 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
         provider: Optional[str],
         model: Optional[str],
         images: Optional[List[bytes]] = None,
+        links: Optional[List[Dict[str, str]]] = None,
     ) -> ResumeCreateResponse:
         existing = await services.database.resumes.get(user["_id"], resume_id)
         if existing is None:
             raise _resume_not_found()
         _check_version_quota(existing)
         resume, style, template, extraction, warnings = await _extract_validated_import(
-            user, source_text, source_kind, provider, model, images
+            user, source_text, source_kind, provider, model, images, links
         )
         source_type = _import_source_type(source_kind)
         doc = await services.database.resumes.add_version(
@@ -438,8 +485,10 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
         model: Optional[str] = Form(default=None),
     ) -> ResumeCreateResponse:
         user = await require_user(request, services)
-        text, kind, images = await _read_pdf_upload(file)
-        return await _create_resume(user, text, kind, name, provider, model, images)
+        text, kind, images, links = await _read_pdf_upload(file)
+        return await _create_resume(
+            user, text, kind, name, provider, model, images, links
+        )
 
     @app.post(
         "/api/resumes/manual", response_model=ResumeCreateResponse, status_code=201
@@ -526,8 +575,10 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
             )
 
         if payload.resume is not None:
+            # Preview only: an empty body renders as a blank page under the
+            # contact block, which is what a fresh editor should show.
             resume, _style, _template, latex_source = _manual_artifacts(
-                payload.resume, payload.style
+                payload.resume, payload.style, require_content=False
             )
             filename = _pdf_filename(resume.identity.name)
         else:
@@ -620,9 +671,9 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
         model: Optional[str] = Form(default=None),
     ) -> ResumeCreateResponse:
         user = await require_user(request, services)
-        text, kind, images = await _read_pdf_upload(file)
+        text, kind, images, links = await _read_pdf_upload(file)
         return await _add_resume_version(
-            user, resume_id, text, kind, provider, model, images
+            user, resume_id, text, kind, provider, model, images, links
         )
 
     @app.get(

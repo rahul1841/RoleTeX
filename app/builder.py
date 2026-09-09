@@ -108,8 +108,6 @@ def _validate_identity(identity: Mapping[str, Any], errors: List[str]) -> None:
     _check_required(email, "Your email address", errors)
     if email and not _EMAIL_PATTERN.match(email):
         errors.append("Your email address does not look like an email address.")
-    _check_required(_text(identity.get("phone")), "Your phone number", errors)
-    _check_required(_text(identity.get("location")), "Your location", errors)
 
     for index, raw in enumerate(_sequence(identity.get("links")), start=1):
         link = _mapping(raw)
@@ -128,11 +126,9 @@ def _validate_identity(identity: Mapping[str, Any], errors: List[str]) -> None:
 
 
 def _validate_headline(summary: str, errors: List[str]) -> None:
+    """Bound the headline if there is one. A resume without one is fine."""
+
     if not summary:
-        errors.append(
-            "A headline is required — one short line describing you, shown under "
-            "your name."
-        )
         return
     if len(summary.split()) > MAX_SUMMARY_WORDS:
         errors.append(
@@ -159,7 +155,6 @@ def _validate_experience(entries: Sequence[Any], errors: List[str]) -> None:
         label = "Experience {0}".format(index)
         _check_required(role, label + ": job title", errors)
         _check_required(company, label + ": company", errors)
-        _check_required(location, label + ": location", errors)
         _check_required(start, label + ": start date", errors)
         _check_required(end, label + ": end date", errors)
         _check_items(bullets, label + ", bullet", MAX_TEXT_ITEM_CHARACTERS, errors)
@@ -200,7 +195,6 @@ def _validate_education(entries: Sequence[Any], errors: List[str]) -> None:
         label = "Education {0}".format(index)
         _check_required(institution, label + ": school", errors)
         _check_required(degree, label + ": degree", errors)
-        _check_required(location, label + ": location", errors)
         _check_required(start, label + ": start date", errors)
         _check_required(end, label + ": end date", errors)
         _check_items(details, label + ", detail", MAX_SHORT_ITEM_CHARACTERS, errors)
@@ -220,16 +214,46 @@ def _validate_skills(entries: Sequence[Any], errors: List[str]) -> None:
         _check_items(items, label + ", skill", MAX_SHORT_ITEM_CHARACTERS, errors)
 
 
+def _validate_custom_sections(entries: Sequence[Any], errors: List[str]) -> None:
+    for index, raw in enumerate(entries, start=1):
+        item = _mapping(raw)
+        title = _text(item.get("title"))
+        bullets = _texts(item.get("bullets"))
+        if _entry_is_blank([title], bullets):
+            continue
+        label = "Section {0}".format(index)
+        _check_required(title, label + ": heading", errors)
+        if not bullets:
+            errors.append(
+                "{0}: add at least one line, or remove the section.".format(label)
+            )
+        _check_items(bullets, label + ", line", MAX_TEXT_ITEM_CHARACTERS, errors)
+
+
 def _has_content(draft: Mapping[str, Any]) -> bool:
     pruned = prune_draft(draft)
     return any(
         pruned.get(section)
-        for section in ("experience", "projects", "education", "skills", "achievements")
+        for section in (
+            "experience",
+            "projects",
+            "education",
+            "skills",
+            "achievements",
+            "custom_sections",
+        )
     )
 
 
-def validate_draft(draft: Mapping[str, Any]) -> List[str]:
-    """Field-addressed reasons this draft cannot be saved, in reading order."""
+def validate_draft(
+    draft: Mapping[str, Any], *, require_content: bool = True
+) -> List[str]:
+    """Field-addressed reasons this draft cannot be saved, in reading order.
+
+    ``require_content=False`` is the preview relaxation: a resume that is
+    nothing but a name and an email is not worth storing, but it is worth
+    looking at, and an empty page is a truer answer than a placeholder.
+    """
 
     errors: List[str] = []
     _validate_identity(_mapping(draft.get("identity")), errors)
@@ -244,10 +268,11 @@ def validate_draft(draft: Mapping[str, Any]) -> List[str]:
         MAX_TEXT_ITEM_CHARACTERS,
         errors,
     )
-    if not _has_content(draft):
+    _validate_custom_sections(_sequence(draft.get("custom_sections")), errors)
+    if require_content and not _has_content(draft):
         errors.append(
             "Add at least one section — experience, a project, education, "
-            "skills, or an achievement."
+            "skills, an achievement, or a section of your own."
         )
     return errors
 
@@ -332,6 +357,15 @@ def prune_draft(draft: Mapping[str, Any]) -> Dict[str, Any]:
             continue
         skills.append({"category": category, "items": items})
 
+    custom_sections = []
+    for raw in _sequence(draft.get("custom_sections")):
+        item = _mapping(raw)
+        title = _text(item.get("title"))
+        bullets = _texts(item.get("bullets"))
+        if _entry_is_blank([title], bullets):
+            continue
+        custom_sections.append({"title": title, "bullets": bullets})
+
     identity = _mapping(draft.get("identity"))
     links = []
     for raw in _sequence(identity.get("links")):
@@ -356,6 +390,7 @@ def prune_draft(draft: Mapping[str, Any]) -> Dict[str, Any]:
         "education": education,
         "skills": skills,
         "achievements": _texts(draft.get("achievements")),
+        "custom_sections": custom_sections,
     }
 
 
@@ -370,10 +405,12 @@ def _schema_errors(exc: ValidationError) -> List[str]:
     return reported
 
 
-def build_manual_resume(draft: Mapping[str, Any]) -> ResumeData:
+def build_manual_resume(
+    draft: Mapping[str, Any], *, require_content: bool = True
+) -> ResumeData:
     """Validate a user-authored draft and normalize it into stored resume facts."""
 
-    errors = validate_draft(draft)
+    errors = validate_draft(draft, require_content=require_content)
     if errors:
         raise ResumeDraftError(errors)
     normalized = normalize_extracted_resume(prune_draft(draft))
@@ -408,7 +445,10 @@ def render_baseline(template: str, resume: ResumeData) -> str:
 
 
 def build_manual_artifacts(
-    draft: Mapping[str, Any], style_raw: Optional[Mapping[str, Any]] = None
+    draft: Mapping[str, Any],
+    style_raw: Optional[Mapping[str, Any]] = None,
+    *,
+    require_content: bool = True,
 ) -> Tuple[ResumeData, ResumeStyle, str, str]:
     """Draft in; ``(resume, style, template, rendered LaTeX)`` out.
 
@@ -417,7 +457,7 @@ def build_manual_artifacts(
     does, so a stored resume can always be previewed and tailored.
     """
 
-    resume = build_manual_resume(draft)
+    resume = build_manual_resume(draft, require_content=require_content)
     style = sanitize_style(dict(style_raw) if style_raw else None)
     template = assemble_template(style)
     return resume, style, template, render_baseline(template, resume)

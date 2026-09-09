@@ -2084,10 +2084,227 @@ select:focus-visible,
   font-weight: 650;
 }
 
+/* Two-pane editor: fields scroll on the left, the compiled page stays put on
+   the right. The preview is the thing you are checking your edits against, so
+   it should never scroll out of view. */
+.editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 18px 0 4px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.editor-toolbar .privacy-note {
+  margin: 0;
+}
+
+.editor-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+
+/* The left pane is now half the card, so its field grids decide their column
+   count from the pane's own width rather than the viewport's. */
+.editor-fields {
+  min-width: 0;
+  container-type: inline-size;
+}
+
+@container (max-width: 640px) {
+  .editor-fields .setup-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (max-width: 440px) {
+  .editor-fields .setup-grid,
+  .editor-fields .setup-grid--two,
+  .editor-fields .editor-row-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.editor-preview-pane {
+  position: sticky;
+  /* Clears the sticky site header. */
+  top: 18px;
+  min-width: 0;
+}
+
+/* Appearance controls sit with the action bar rather than at the foot of a
+   long form: they change the page you are looking at, so they belong next to
+   it, not a scroll away. */
+.editor-appearance {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin-left: auto;
+}
+
+.appearance-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.appearance-control > span {
+  font-weight: 600;
+}
+
+.appearance-control select {
+  min-width: 78px;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+}
+
+.appearance-control input[type="range"] {
+  width: 96px;
+}
+
+.appearance-control--accent input[type="color"] {
+  width: 30px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+
+.appearance-control .checkbox-inline {
+  gap: 6px;
+  font-size: 0.82rem;
+}
+
+/* --- the PDF viewer ------------------------------------------------------
+   Canvas pages rendered by the vendored PDF.js, so the pane carries only the
+   controls that matter here and none of the browser plugin's chrome. */
+.pdf-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px 12px 0 0;
+  background: var(--surface-muted, rgba(0, 0, 0, 0.03));
+}
+
+.pdf-toolbar-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pdf-toolbar-group--end {
+  margin-left: auto;
+}
+
+.pdf-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.82rem;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.pdf-tool--wide {
+  min-width: 52px;
+}
+
+.pdf-tool:hover:not(:disabled) {
+  border-color: var(--line);
+  background: var(--surface, #fff);
+}
+
+.pdf-tool:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.pdf-pages {
+  padding: 0 6px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pdf-pages-scroll {
+  overflow: auto;
+  max-height: min(78vh, 940px);
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 12px 12px;
+  background: #525659;
+  overscroll-behavior: contain;
+}
+
+.pdf-page {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.pdf-page:last-child {
+  margin-bottom: 0;
+}
+
+.pdf-page canvas {
+  display: block;
+  max-width: 100%;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.35);
+}
+
+.pdf-error {
+  margin: 10px 2px 0;
+}
+
 .preview-card {
   margin-top: 30px;
   padding-top: 26px;
   border-top: 1px solid var(--line);
+}
+
+/* Inside the right pane it is the whole column, not a trailing block. */
+.editor-preview-pane .preview-card {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.preview-card--empty {
+  padding: 28px 22px;
+  border: 1px dashed var(--line);
+  border-radius: 14px;
+  background: var(--surface-muted, transparent);
+}
+
+.preview-empty-copy {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
 }
 
 .preview-card .pdf-frame-wrap {
@@ -2125,6 +2342,25 @@ select:focus-visible,
 }
 
 /* -------------------------------------------------------------- responsive */
+
+/* Below this the two panes are too narrow to be useful, so stack them and let
+   the preview fall back to a normal block under the fields. */
+@media (max-width: 1100px) {
+  .editor-split {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .editor-preview-pane {
+    position: static;
+  }
+
+  .editor-preview-pane .preview-card {
+    margin-top: 30px;
+    padding-top: 26px;
+    border-top: 1px solid var(--line);
+  }
+}
 
 @media (max-width: 1080px) {
   .review-grid {

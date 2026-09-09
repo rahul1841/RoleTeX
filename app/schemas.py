@@ -44,8 +44,8 @@ class ResumeLink(StrictModel):
 class ResumeIdentity(StrictModel):
     name: str = Field(..., min_length=1, max_length=160)
     email: str = Field(..., min_length=3, max_length=254)
-    phone: str = Field(..., min_length=3, max_length=80)
-    location: str = Field(..., min_length=1, max_length=180)
+    phone: str = Field(default="", max_length=80)
+    location: str = Field(default="", max_length=180)
     links: List[ResumeLink] = Field(default_factory=list, max_length=12)
 
 
@@ -61,7 +61,7 @@ class ResumeExperience(StrictModel):
     id: str = Field(..., min_length=1, max_length=120)
     company: str = Field(..., min_length=1, max_length=200)
     role: str = Field(..., min_length=1, max_length=200)
-    location: str = Field(..., min_length=1, max_length=180)
+    location: str = Field(default="", max_length=180)
     start: str = Field(..., min_length=1, max_length=80)
     end: str = Field(..., min_length=1, max_length=80)
     bullets: List[ResumeBullet] = Field(default_factory=list, max_length=30)
@@ -79,7 +79,7 @@ class ResumeEducation(StrictModel):
     id: str = Field(..., min_length=1, max_length=120)
     institution: str = Field(..., min_length=1, max_length=250)
     degree: str = Field(..., min_length=1, max_length=250)
-    location: str = Field(..., min_length=1, max_length=180)
+    location: str = Field(default="", max_length=180)
     start: str = Field(..., min_length=1, max_length=80)
     end: str = Field(..., min_length=1, max_length=80)
     details: List[str] = Field(default_factory=list, max_length=20)
@@ -90,14 +90,28 @@ class ResumeSkillCategory(StrictModel):
     items: List[str] = Field(..., min_length=1, max_length=100)
 
 
+class ResumeCustomSection(StrictModel):
+    """A section the fixed template does not name: Certifications, Publications…
+
+    Deliberately shaped as title + bullets rather than something richer: it
+    reuses ``ResumeBullet``, so custom content carries stable IDs and tailoring
+    can rewrite it under exactly the same rules as experience bullets.
+    """
+
+    id: str = Field(..., min_length=1, max_length=120)
+    title: str = Field(..., min_length=1, max_length=80)
+    bullets: List[ResumeBullet] = Field(default_factory=list, max_length=30)
+
+
 class ResumeData(StrictModel):
     identity: ResumeIdentity
-    summary: str = Field(..., min_length=1, max_length=2000)
+    summary: str = Field(default="", max_length=2000)
     experience: List[ResumeExperience] = Field(default_factory=list, max_length=30)
     projects: List[ResumeProject] = Field(default_factory=list, max_length=30)
     education: List[ResumeEducation] = Field(default_factory=list, max_length=20)
     skills: List[ResumeSkillCategory] = Field(default_factory=list, max_length=30)
     achievements: List[ResumeBullet] = Field(default_factory=list, max_length=50)
+    custom_sections: List[ResumeCustomSection] = Field(default_factory=list, max_length=10)
 
 
 class BulletRewrite(StrictModel):
@@ -108,7 +122,7 @@ class BulletRewrite(StrictModel):
 class TailorProposal(StrictModel):
     """Only plain text is accepted from the model; never LaTeX."""
 
-    summary: str = Field(..., min_length=1, max_length=1000)
+    summary: str = Field(default="", max_length=1000)
     bullet_rewrites: List[BulletRewrite] = Field(..., max_length=6)
     skills_order: List[str] = Field(..., max_length=300)
 
@@ -445,6 +459,11 @@ class ResumeDraftSkillCategory(StrictModel):
     items: List[str] = Field(default_factory=list, max_length=100)
 
 
+class ResumeDraftCustomSection(StrictModel):
+    title: str = Field(default="", max_length=80)
+    bullets: List[str] = Field(default_factory=list, max_length=30)
+
+
 class ResumeDraft(StrictModel):
     """A resume as typed into the editor, before the server owns it."""
 
@@ -457,6 +476,9 @@ class ResumeDraft(StrictModel):
     education: List[ResumeDraftEducation] = Field(default_factory=list, max_length=20)
     skills: List[ResumeDraftSkillCategory] = Field(default_factory=list, max_length=30)
     achievements: List[str] = Field(default_factory=list, max_length=50)
+    custom_sections: List[ResumeDraftCustomSection] = Field(
+        default_factory=list, max_length=10
+    )
 
 
 class ResumeStyleInput(StrictModel):

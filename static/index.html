@@ -535,6 +535,49 @@
               <button id="resume-editor-close" class="button button--quiet" type="button">Cancel</button>
             </div>
 
+            <div class="editor-toolbar">
+              <p class="privacy-note">
+                <span aria-hidden="true">✓</span>
+                Nothing here is sent to an AI provider. Saving and previewing stay on this server.
+              </p>
+              <div class="editor-appearance" role="group" aria-label="Page appearance">
+                <label class="appearance-control" for="editor-font-size">
+                  <span>Font</span>
+                  <select id="editor-font-size">
+                    <option value="10pt">10 pt</option>
+                    <option value="11pt">11 pt</option>
+                    <option value="12pt">12 pt</option>
+                  </select>
+                </label>
+                <label class="appearance-control" for="editor-margin">
+                  <span>Margin <output id="editor-margin-value" for="editor-margin">2 cm</output></span>
+                  <input id="editor-margin" type="range" min="1" max="3" step="0.1" value="2">
+                </label>
+                <span class="appearance-control appearance-control--accent">
+                  <input id="editor-accent" type="color" value="#1F3A8A" aria-label="Accent colour">
+                  <label class="checkbox-inline" for="editor-accent-on">
+                    <input id="editor-accent-on" type="checkbox">
+                    Accent
+                  </label>
+                </span>
+              </div>
+
+              <div class="form-actions">
+                <button id="resume-editor-preview" class="button button--secondary" type="button">
+                  <span class="button-label">Preview PDF</span>
+                  <span class="button-spinner" aria-hidden="true"></span>
+                </button>
+                <!-- Outside the form now, so `form=` keeps it a submit button. -->
+                <button id="resume-editor-save" class="button button--primary" type="submit" form="resume-editor-form">
+                  <span class="button-label">Save resume</span>
+                  <span class="button-arrow" aria-hidden="true">↗</span>
+                  <span class="button-spinner" aria-hidden="true"></span>
+                </button>
+              </div>
+            </div>
+
+            <div class="editor-split">
+              <div class="editor-fields">
             <form id="resume-editor-form" novalidate>
               <div class="field editor-name-field" id="editor-name-field">
                 <label for="editor-resume-name">Resume name <span class="optional-tag">optional</span></label>
@@ -555,11 +598,11 @@
                     <input id="editor-email" type="email" maxlength="254" autocomplete="email" placeholder="you@example.com">
                   </div>
                   <div class="field">
-                    <label for="editor-phone">Phone</label>
+                    <label for="editor-phone">Phone <span class="optional-tag">optional</span></label>
                     <input id="editor-phone" type="tel" maxlength="80" autocomplete="tel" placeholder="+91 98765 43210">
                   </div>
                   <div class="field">
-                    <label for="editor-location">Location</label>
+                    <label for="editor-location">Location <span class="optional-tag">optional</span></label>
                     <input id="editor-location" type="text" maxlength="180" placeholder="Bengaluru, India">
                   </div>
                 </div>
@@ -575,10 +618,10 @@
               <fieldset class="editor-group">
                 <legend>Headline</legend>
                 <div class="field">
-                  <label for="editor-summary">One line under your name</label>
+                  <label for="editor-summary">One line under your name <span class="optional-tag">optional</span></label>
                   <input id="editor-summary" type="text" maxlength="120" placeholder="Backend engineer building reliable payment systems" aria-describedby="editor-summary-help editor-summary-count">
                   <div class="textarea-meta">
-                    <p id="editor-summary-help" class="field-note">Up to 12 words. Tailoring rewrites this line for each job description.</p>
+                    <p id="editor-summary-help" class="field-note">Up to 12 words, and fine to leave blank. Tailoring rewrites this line for each job description.</p>
                     <output id="editor-summary-count" for="editor-summary" aria-label="Headline length">0 / 120</output>
                   </div>
                 </div>
@@ -619,40 +662,12 @@
               </fieldset>
 
               <fieldset class="editor-group">
-                <legend>Layout</legend>
-                <div class="setup-grid">
-                  <div class="field">
-                    <label for="editor-paper">Paper size</label>
-                    <select id="editor-paper">
-                      <option value="a4paper">A4</option>
-                      <option value="letterpaper">US Letter</option>
-                    </select>
-                  </div>
-                  <div class="field">
-                    <label for="editor-font-size">Font size</label>
-                    <select id="editor-font-size">
-                      <option value="10pt">10 pt</option>
-                      <option value="11pt">11 pt</option>
-                      <option value="12pt">12 pt</option>
-                    </select>
-                  </div>
-                  <div class="field">
-                    <label for="editor-margin">Margin <output id="editor-margin-value" for="editor-margin">2 cm</output></label>
-                    <input id="editor-margin" type="range" min="1" max="3" step="0.1" value="2">
-                  </div>
-                  <div class="field">
-                    <label for="editor-accent">Accent colour</label>
-                    <div class="accent-field">
-                      <input id="editor-accent" type="color" value="#1F3A8A" aria-describedby="editor-accent-help">
-                      <label class="checkbox-inline" for="editor-accent-on">
-                        <input id="editor-accent-on" type="checkbox">
-                        Use it
-                      </label>
-                    </div>
-                    <p id="editor-accent-help" class="field-note">Colours your name and section headings.</p>
-                  </div>
-                </div>
+                <legend>Your own sections <span class="optional-tag">optional</span></legend>
+                <p class="field-note">Anything the fields above don’t cover — Certifications, Publications, Volunteering, Languages. Each one prints under its own heading, in the order you add them.</p>
+                <div id="editor-custom" class="editor-rows"></div>
+                <button id="editor-custom-add" class="button button--secondary button--small" type="button">Add a section</button>
               </fieldset>
+
 
               <section id="resume-editor-error" class="notice notice--error" role="alert" tabindex="-1" hidden>
                 <span class="notice-icon" aria-hidden="true">!</span>
@@ -663,42 +678,37 @@
                 </div>
               </section>
 
-              <div class="form-footer">
-                <p class="privacy-note">
-                  <span aria-hidden="true">✓</span>
-                  Nothing here is sent to an AI provider. Saving and previewing stay on this server.
-                </p>
-                <div class="form-actions">
-                  <button id="resume-editor-preview" class="button button--secondary" type="button">
-                    <span class="button-label">Preview PDF</span>
-                    <span class="button-spinner" aria-hidden="true"></span>
-                  </button>
-                  <button id="resume-editor-save" class="button button--primary" type="submit">
-                    <span class="button-label">Save resume</span>
-                    <span class="button-arrow" aria-hidden="true">↗</span>
-                    <span class="button-spinner" aria-hidden="true"></span>
-                  </button>
-                </div>
-              </div>
             </form>
+              </div>
 
-            <section id="editor-preview-panel" class="preview-card" aria-labelledby="editor-preview-title" hidden>
-              <div class="section-heading">
-                <div>
-                  <p class="step-label">Preview</p>
-                  <h3 id="editor-preview-title">Compiled PDF</h3>
+              <aside class="editor-preview-pane">
+            <section id="editor-preview-panel" class="preview-card" aria-label="Compiled resume" hidden>
+              <div class="pdf-toolbar">
+                <div class="pdf-toolbar-group">
+                  <button id="editor-pdf-prev" class="pdf-tool" type="button" aria-label="Previous page" disabled>&#8593;</button>
+                  <button id="editor-pdf-next" class="pdf-tool" type="button" aria-label="Next page" disabled>&#8595;</button>
+                  <span class="pdf-pages" aria-live="polite"><span id="editor-pdf-page">1</span> / <span id="editor-pdf-count">1</span></span>
                 </div>
-                <span id="editor-preview-meta" class="file-chip"></span>
+                <div class="pdf-toolbar-group">
+                  <button id="editor-pdf-zoom-out" class="pdf-tool" type="button" aria-label="Zoom out">&#8722;</button>
+                  <button id="editor-pdf-zoom" class="pdf-tool pdf-tool--wide" type="button" title="Reset to 100%">100%</button>
+                  <button id="editor-pdf-zoom-in" class="pdf-tool" type="button" aria-label="Zoom in">+</button>
+                </div>
+                <div class="pdf-toolbar-group pdf-toolbar-group--end">
+                  <a id="editor-preview-download" class="pdf-tool" href="#" download aria-label="Download PDF" title="Download PDF">&#8595;&#65039;</a>
+                  <a id="editor-preview-tex" class="pdf-tool pdf-tool--wide" href="#" download title="Download LaTeX source">.tex</a>
+                </div>
               </div>
-              <div class="pdf-frame-wrap">
-                <iframe id="editor-preview-frame" title="Resume PDF preview" referrerpolicy="no-referrer"></iframe>
-              </div>
-              <div class="preview-actions">
-                <a id="editor-preview-download" class="button button--secondary button--small" href="#" download>Download PDF</a>
-                <a id="editor-preview-tex" class="button button--quiet button--small" href="#" download>Download .tex</a>
-              </div>
-              <p class="preview-help">This is your resume as written, with no job description applied — tailoring happens on the Tailor tab.</p>
+              <div id="editor-pdf-pages" class="pdf-pages-scroll" tabindex="0"></div>
+              <p id="editor-pdf-error" class="field-note pdf-error" role="status" hidden></p>
             </section>
+
+            <div id="editor-preview-empty" class="preview-card preview-card--empty">
+              <p class="step-label">Preview</p>
+              <p class="preview-empty-copy">Your compiled resume appears here. Press <strong>Preview PDF</strong> whenever you want to see how it looks.</p>
+            </div>
+              </aside>
+            </div>
           </section>
 
           <section id="resumes-list-section" class="list-section" aria-labelledby="resumes-list-title">

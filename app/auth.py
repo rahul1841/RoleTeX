@@ -27,7 +27,7 @@ from fastapi import FastAPI, HTTPException, Request, Response
 
 from . import security
 from .db import DuplicateEmailError
-from .llm import PROVIDERS, supported_providers
+from .llm import PROVIDERS, provider_default_model, supported_providers
 from .schemas import (
     DeleteMeRequest,
     LoginRequest,
@@ -310,7 +310,7 @@ async def resolve_llm_selection(
         # Complete the spec §6.4 chain with the *selected provider's* default
         # so the operator's env LLM_MODEL (which belongs to the env-configured
         # provider) can never bleed into a per-user request for another one.
-        model = (PROVIDERS[provider].default_model or "").strip() or None
+        model = provider_default_model(provider) or None
     return provider, model, api_key, warnings
 
 

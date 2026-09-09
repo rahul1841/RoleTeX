@@ -54,6 +54,18 @@ RUN mkdir -p "$TECTONIC_CACHE_DIR" /tmp/tectonic-prewarm \
     && tectonic -X compile --untrusted --only-cached \
        --outdir /tmp/tectonic-prewarm \
        /tmp/tectonic-prewarm/resume.tex \
+# The seed template is 10pt and carries no escaped specials, so a bare prewarm
+# leaves size11.clo/size12.clo and the TS1 (textcomp) fonts uncached — an 11pt
+# or 12pt resume, or any resume containing & % $ # _ { } ~ ^ \, then fails under
+# --only-cached. Render one document per offered font size containing the whole
+# escape_latex output set, and compile each twice so the second proves the cache.
+    && python -c "import pathlib; from app.importer import assemble_template, sanitize_style, build_resume_data; from app.resume import render_template_text; from app.builder import baseline_proposal; S = r'Escapes & % \$ # _ { } ~ ^ \\ done'; resume = build_resume_data({'identity': {'name': 'Prewarm Name', 'email': 'prewarm@example.com', 'phone': '+00 000', 'location': 'Nowhere'}, 'summary': 'Prewarm headline ' + S, 'experience': [{'company': 'Co', 'role': 'Role', 'location': 'Here', 'start': '2020', 'end': '2021', 'bullets': [S, 'A plain bullet.']}], 'projects': [{'name': 'Proj', 'url': 'https://example.com', 'technologies': ['T'], 'bullets': [S]}], 'education': [{'institution': 'Uni', 'degree': 'Deg', 'location': 'There', 'start': '2016', 'end': '2020', 'details': ['Detail']}], 'skills': [{'category': 'Cat', 'items': ['One', 'Two']}], 'achievements': [S], 'custom_sections': [{'title': 'Extra', 'bullets': [S]}]}); [pathlib.Path('/tmp/tectonic-prewarm/size-%s.tex' % z).write_text(render_template_text(assemble_template(sanitize_style({'font_size': z, 'accent_hex': '1F3A8A'})), resume, baseline_proposal(resume), sectioned=True), encoding='utf-8') for z in ('10pt', '11pt', '12pt')]" \
+    && for size in 10pt 11pt 12pt; do \
+         tectonic -X compile --untrusted --outdir /tmp/tectonic-prewarm \
+           "/tmp/tectonic-prewarm/size-$size.tex" \
+         && tectonic -X compile --untrusted --only-cached --outdir /tmp/tectonic-prewarm \
+           "/tmp/tectonic-prewarm/size-$size.tex" || exit 1; \
+       done \
     && rm -rf /tmp/tectonic-prewarm
 
 EXPOSE 7860
