@@ -34,6 +34,7 @@ PROVIDER_LABELS = {
     "anthropic": "Anthropic",
     "cerebras": "Cerebras",
     "gemini": "Google Gemini",
+    "grid": "Grid",
     "groq": "Groq",
     "mistral": "Mistral",
     "openai": "OpenAI",

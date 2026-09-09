@@ -234,6 +234,7 @@ send.
 | `LLM_PROVIDER` | No | `mock` | `mock`, `groq`, `cerebras`, `gemini`, `openrouter`, `mistral`, `openai`, `anthropic`, or `custom` |
 | `LLM_MODEL` | No | provider default | Exact provider model ID |
 | `${PROVIDER}_API_KEY` | For real providers | — | Preferred provider-specific server credential, such as `GROQ_API_KEY` |
+| `${PROVIDER}_BASE_URL` | No | provider default | Override a provider's endpoint, e.g. `GRID_BASE_URL` for a self-hosted gateway |
 | `LLM_API_KEY` | For real providers without a provider key | — | Generic credential fallback |
 | `${PROVIDER}_BASE_URL` | No | provider endpoint | Provider-specific compatible API endpoint override |
 | `LLM_BASE_URL` | For `custom` | — | Generic compatible API endpoint override |
@@ -302,7 +303,7 @@ Docker build arguments, or Git.
 
 Provider adapters use separate secrets such as `GROQ_API_KEY`,
 `CEREBRAS_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `MISTRAL_API_KEY`,
-`OPENAI_API_KEY`, and `ANTHROPIC_API_KEY`. These env keys serve demo mode and
+`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and `GRID_API_KEY`. These env keys serve demo mode and
 (only when `ALLOW_ENV_KEY_FALLBACK=true`) multi-user requests; in multi-user
 mode users normally add their own keys in Settings, stored Fernet-encrypted
 and never echoed back. Use `LLM_PROVIDER=mock` for deterministic local UI and

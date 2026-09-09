@@ -246,6 +246,7 @@
   const resumeModelInput = $("resume-model-input");
   const resumeAddError = $("resume-add-error");
   const resumeAddErrorMessage = $("resume-add-error-message");
+  const resumeAddErrorList = $("resume-add-error-list");
   const resumeAddWarnings = $("resume-add-warnings");
   const resumeAddWarningsList = $("resume-add-warnings-list");
   const resumeAddButton = $("resume-add-button");
@@ -2581,12 +2582,23 @@
     setBuildStartLabel("Start building");
   }
 
-  function showResumeAddError(message) {
+  function showResumeAddError(message, details) {
     resumeAddWarnings.hidden = true;
+    // The generic copy names the likely fields; the server's detail names the
+    // one that actually failed, which is the difference between "try again"
+    // and knowing the resume has no phone number on it.
+    const items = Array.isArray(details) ? details.filter(Boolean) : [];
+    resumeAddErrorList.replaceChildren();
+    items.forEach((item) => {
+      resumeAddErrorList.append(el("li", "", readableValue(item)));
+    });
+    resumeAddErrorList.hidden = items.length === 0;
     showNotice(resumeAddError, resumeAddErrorMessage, message);
   }
 
   function hideResumeAddError() {
+    resumeAddErrorList.replaceChildren();
+    resumeAddErrorList.hidden = true;
     hideNotice(resumeAddError, resumeAddErrorMessage);
   }
 
@@ -2726,7 +2738,7 @@
       } else if (error && error.name === "AbortError") {
         /* Navigated away mid-import; nothing to show. */
       } else {
-        showResumeAddError(errorText(error));
+        showResumeAddError(errorText(error), error && error.errors);
       }
     } finally {
       timeoutToken.clear();

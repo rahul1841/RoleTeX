@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import logging
 import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -71,6 +72,8 @@ from .schemas import (
     validate_model,
 )
 
+
+logger = logging.getLogger(__name__)
 
 #: ``source_type`` for a resume typed into the editor rather than imported.
 MANUAL_SOURCE_TYPE = "manual"
@@ -118,8 +121,23 @@ def _resume_not_found() -> Exception:
 
 
 def _validation_issue(exc: Exception) -> str:
+    """Describe a validation failure by field, never by value (rule R-10).
+
+    ``str(ValidationError)`` embeds ``input_value``, which for an import is a
+    fragment of somebody's resume. This is surfaced to the browser and written
+    to the server log, so the location and the reason are kept and the offending
+    value is dropped.
+    """
+
     if isinstance(exc, ProposalValidationError):
         return "; ".join(exc.errors)[:4_000]
+    if isinstance(exc, ValidationError):
+        parts = []
+        for error in exc.errors():
+            location = ".".join(str(item) for item in error.get("loc", ())) or "resume"
+            parts.append("{0}: {1}".format(location, error.get("msg", "is invalid")))
+        if parts:
+            return "; ".join(parts)[:4_000]
     return str(exc)[:4_000]
 
 
@@ -227,6 +245,16 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
                 template, resume, baseline_proposal(resume), sectioned=True
             )
         except (ResumeError, ProposalValidationError, ValidationError) as exc:
+            # Extraction quality is the usual cause and the hardest thing to
+            # debug from a generic 422, so record which field actually failed.
+            # The detail names fields, never their values (rule R-10).
+            logger.warning(
+                "Import extraction failed validation (provider=%s model=%s kind=%s): %s",
+                extraction.provider,
+                extraction.model,
+                source_kind,
+                _validation_issue(exc),
+            )
             raise _api_error(
                 422,
                 "invalid_extraction",

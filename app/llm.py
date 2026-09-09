@@ -101,6 +101,12 @@ PROVIDERS: Mapping[str, ProviderDefinition] = {
         "gpt-oss-120b",
         supports_vision=False,
     ),
+    "grid": ProviderDefinition(
+        "",
+        "GRID_API_KEY",
+        "open-fast",
+        supports_vision=False,
+    ),
     "gemini": ProviderDefinition(
         "https://generativelanguage.googleapis.com/v1beta/openai",
         "GEMINI_API_KEY",
