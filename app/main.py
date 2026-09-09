@@ -361,6 +361,26 @@ def _rate_limited_response(retry_after: float) -> JSONResponse:
     )
 
 
+def _default_llm_client() -> Any:
+    """The real provider client, or the offline stub when opted into.
+
+    ``LLM_PROVIDER=stub`` selects a deterministic in-process client so the
+    import and tailor flows can be developed and tested without a provider key
+    or token spend. Any other value (including unset) yields the real client;
+    the stub is never reachable by accident.
+    """
+
+    if os.getenv("LLM_PROVIDER", "").strip().lower() == "stub":
+        from .llm_stub import StubLLM
+
+        logger.warning(
+            "LLM_PROVIDER=stub: using the deterministic offline LLM. "
+            "Generated resume copy is fixture text, not model output."
+        )
+        return StubLLM()
+    return LLMClient()
+
+
 def create_app(
     repository: Optional[ResumeRepository] = None,
     llm_client: Optional[LLMClient] = None,
@@ -376,14 +396,14 @@ def create_app(
     """Create an app with injectable filesystem, LLM, compiler, and DB dependencies."""
 
     application = FastAPI(
-        title="JD Resume Builder",
+        title="RoleTeX",
         description="Tailor validated plain-text resume fields and compile a locked LaTeX template.",
         version=__version__,
     )
     app_config = config or load_config()
     services = ApplicationServices(
         repository=repository or ResumeRepository(),
-        llm=llm_client or LLMClient(),
+        llm=llm_client or _default_llm_client(),
         compiler=compiler or CompileService(),
         database=database if database is not None else Database.from_env(),
         config=app_config,
@@ -447,7 +467,18 @@ def create_app(
     )
     application.state.services = services
 
-    chosen_static_dir = Path(static_dir or (PROJECT_ROOT / "static"))
+    # Where the built frontend lives. The hand-written `static/` SPA this app
+    # shipped with has been replaced by the Next.js frontend, whose static
+    # export lands in `frontend/out` (`npm run build`). FRONTEND_DIR overrides
+    # it for a deployment that stages the export elsewhere; the explicit
+    # `static_dir` argument still wins, which is how the tests point it at a
+    # scratch directory.
+    frontend_dir_env = os.getenv("FRONTEND_DIR", "").strip()
+    chosen_static_dir = Path(
+        static_dir or frontend_dir_env or (PROJECT_ROOT / "frontend" / "out")
+    )
+    if not chosen_static_dir.is_absolute():
+        chosen_static_dir = PROJECT_ROOT / chosen_static_dir
 
     @application.on_event("startup")
     async def ensure_database_indexes() -> None:
@@ -961,18 +992,43 @@ def create_app(
     register_jds_routes(application, services)
     register_runs_routes(application, services)
 
+    serve_frontend = (chosen_static_dir / "index.html").is_file()
+    if not serve_frontend:
+        logger.warning(
+            "No frontend at %s — the API will serve but there is no UI. "
+            "Build it with `npm run build` in frontend/, or set FRONTEND_DIR.",
+            chosen_static_dir,
+        )
+
     @application.get("/", include_in_schema=False)
     async def index() -> Any:
         index_path = chosen_static_dir / "index.html"
         if index_path.is_file():
             return FileResponse(str(index_path))
         return HTMLResponse(
-            "<h1>JD Resume Builder</h1><p>The API is ready. Static UI files are not installed.</p>"
+            "<h1>RoleTeX</h1><p>The API is ready, but no frontend build was found. "
+            "Run <code>npm run build</code> in <code>frontend/</code>, "
+            "or set <code>FRONTEND_DIR</code>.</p>"
         )
 
-    application.mount(
-        "/static", StaticFiles(directory=str(chosen_static_dir), check_dir=False), name="static"
-    )
+    # Registered last so every /api route and the "/" handler above match
+    # first; whatever is left is a frontend asset or a client route.
+    #
+    # The export is a tree of real HTML files (`trailingSlash: true` emits
+    # `/settings/index.html`), so StaticFiles(html=True) resolves the directory
+    # indexes and returns a proper 404 for anything missing — no catch-all
+    # route needed. It also serves `/_next/*`, which the export references from
+    # the root.
+    #
+    # Mounted only when the directory actually holds a build: mounting a
+    # missing directory answers every request under it with a 500 rather than
+    # a 404.
+    if serve_frontend:
+        application.mount(
+            "/",
+            StaticFiles(directory=str(chosen_static_dir), html=True),
+            name="frontend",
+        )
     return application
 
 

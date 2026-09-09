@@ -33,3 +33,12 @@ data
 .DS_Store
 .idea
 .vscode
+
+# Frontend build inputs. The Next build runs in a separate Docker stage;
+# copying these into the Python image would add hundreds of MB and bust the
+# Tectonic prewarm layer on every CSS change.
+node_modules
+.next
+frontend/node_modules
+frontend/.next
+frontend/out

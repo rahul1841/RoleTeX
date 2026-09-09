@@ -1,10 +1,12 @@
 ---
-title: JD Resume Builder
+title: RoleTeX
 sdk: docker
 app_port: 7860
 ---
 
-# JD Resume Builder
+# RoleTeX
+
+*AI + LaTeX.*
 
 A FastAPI application that tailors resumes to job descriptions. The language
 model returns structured text changes; the server validates them, renders them
@@ -168,12 +170,24 @@ app/config.py         Env-driven AppConfig with clamped bounds
 resume/data.json      Canonical seed resume facts and stable editable IDs
 resume/template.tex   Locked Tectonic-compatible LaTeX template
 resume/assets/        Approved local images/fonts, if the template needs them
-static/               Browser UI
+app/llm_stub.py       Deterministic offline LLM for tests and frontend development
+frontend/             Next.js frontend (App Router, TypeScript, Tailwind, shadcn/ui)
+frontend/app/         Routes. (app) is the signed-in shell, (auth) the signed-out pages
+frontend/components/  Feature UI, plus common/ primitives and ui/ shadcn parts
+frontend/lib/api/     The only place that talks to FastAPI; schema.d.ts is generated
+frontend/hooks/       TanStack Query hooks, one module per domain
 tests/                Validation, rendering, compiler, and API tests
-tests/ui/             Node + jsdom harness driving the resume editor
 Dockerfile            Hugging Face-compatible production image
 docker-compose.yml    Local MongoDB for multi-user development
 ```
+
+The frontend is a separate application that speaks only HTTP/JSON to this API.
+It holds no business logic: FastAPI remains the source of truth.
+
+`frontend/lib/api/schema.d.ts` is **generated** from the running server's
+OpenAPI document and must never be hand-edited — regenerate it with
+`npm run gen:api` whenever a request or response model changes, and the
+TypeScript models cannot drift from the Python ones.
 
 `resume/template.tex` contains each of these tokens exactly once:
 
@@ -219,13 +233,66 @@ export LLM_MODEL=llama-3.3-70b-versatile
 export GROQ_API_KEY='your-secret-key'
 ```
 
-Start the application:
+Start the API:
 
 ```bash
-uvicorn app.main:app --host 127.0.0.1 --port 7860 --reload
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Open <http://127.0.0.1:7860>. Run the test suite with:
+### Running the frontend
+
+The frontend is a separate Node application. Needs Node 20 or newer.
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open <http://localhost:3000> — **not** the uvicorn port. In development,
+`next dev` proxies `/api/*` to the API (`next.config.ts`, `rewrites`), so the
+browser sees a single origin. That is not cosmetic:
+
+- the session cookie is `HttpOnly` and host-only, so it is only sent to the
+  origin that set it, and
+- the CSRF guard (`origin_allowed` in `app/security.py`) requires a
+  state-changing request's `Origin` to match the request host.
+
+Proxying satisfies both, which is why this project needs no CORS middleware
+and never has to weaken the cookie to `SameSite=None`. Point the proxy at a
+different API port with `API_PROXY_ORIGIN`:
+
+```bash
+API_PROXY_ORIGIN=http://127.0.0.1:8000 npm run dev
+```
+
+Other frontend commands:
+
+```bash
+npm run typecheck   # tsc --noEmit
+npm run lint
+npm run build       # static export into frontend/out
+npm run gen:api     # regenerate lib/api/schema.d.ts from the running API
+```
+
+### Developing without a provider key
+
+`LLM_PROVIDER=stub` selects a deterministic in-process client
+(`app/llm_stub.py`) instead of a real provider. Resume import and tailoring
+then return fixture text, cost nothing, and never touch the network, so the
+whole UI can be exercised offline:
+
+```bash
+LLM_PROVIDER=stub uvicorn app.main:app --port 8000 --reload
+```
+
+Generated copy is prefixed `[stub]` so fixture text is never mistaken for a
+model's output. The stub is opt-in and unreachable unless that value is set
+explicitly. Note it is the *client*, not a selectable provider: in multi-user
+mode you still choose a provider and store a key in Settings, exactly as a
+real user would — the key is simply never used.
+
+### Tests
 
 ```bash
 pytest -q
@@ -234,17 +301,8 @@ pytest -q
 Tests that need the Tectonic executable may skip when it is unavailable. The
 Docker build always renders the configured baseline and performs a real compile.
 
-The resume editor has a browser-side harness that runs outside pytest, because
-it needs Node rather than Python:
-
-```bash
-npm install jsdom          # once, anywhere on the machine
-node tests/ui/resume_editor.mjs
-```
-
-It loads `static/index.html` and `static/app.js` into jsdom, drives the editor
-against a recording fake server, and checks what the browser would actually
-send.
+There is no frontend test suite yet. `npm run typecheck`, `npm run lint` and
+`npm run build` are the current gate.
 
 ## Configuration
 
@@ -376,6 +434,29 @@ cache from a fully rendered baseline resume. Runtime resume compilation uses
 `--only-cached`, so changing packages, fonts, or formatting commands requires a
 new image build.
 
+### The frontend is not in the image yet
+
+**Known gap.** The Dockerfile has no Node stage, so it does not build the
+frontend. An image built today serves the API and, finding no UI at
+`frontend/out`, logs a warning and answers `/` with a short "no UI installed"
+page.
+
+Serving the frontend needs a multi-stage build: a `node` stage running
+`npm ci && npm run build` in `frontend/`, then a `COPY --from` of
+`frontend/out` into the Python image. Two things to get right when adding it:
+
+- Put the Node stage and the `COPY` **after** the Tectonic prewarm layers. The
+  prewarm runs several full LaTeX compiles, and the current `COPY . ./` sits
+  before it — so as things stand every frontend edit invalidates the cache and
+  pays for the whole prewarm again.
+- `node_modules`, `.next` and `out` are already in `.dockerignore`, so the
+  builder stage must install dependencies itself rather than expect them to be
+  copied in.
+
+Until then, a container is API-only. Locally, run `npm run build` and point the
+server at the result — `frontend/out` is the default, and `FRONTEND_DIR`
+overrides it.
+
 ## Deploy to a private Hugging Face Space
 
 1. Create a new **private** Space and select **Docker** as the SDK and **CPU
@@ -404,4 +485,3 @@ When upgrading, change both `TECTONIC_URL` and `TECTONIC_SHA256` in the
 Dockerfile using the matching official release asset. Then rebuild and run the
 full compile and PDF-text tests. The current image deliberately rejects an ARM
 build because its pinned executable is x86-64.
-# RoleTeX
