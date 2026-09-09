@@ -192,7 +192,6 @@ class TailorResponse(StrictModel):
     unified_diff: str
     latex_source: str
     pdf_base64: Optional[str] = None
-    pdf_data_url: Optional[str] = None
     page_count: Optional[int] = None
     filename: str = "tailored-resume.pdf"
     provider: str

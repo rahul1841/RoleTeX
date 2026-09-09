@@ -1598,8 +1598,6 @@ export interface components {
             latex_source: string;
             /** Pdf Base64 */
             pdf_base64?: string | null;
-            /** Pdf Data Url */
-            pdf_data_url?: string | null;
             /** Page Count */
             page_count?: number | null;
             /**

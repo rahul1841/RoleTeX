@@ -1,16 +1,20 @@
-# Architecture — JD Resume Builder ("RoleTeX")
+# Architecture — RoleTeX
 
 > Companion docs: [prd.md](prd.md) · [design.md](design.md) · [rules.md](rules.md) · [memory.md](memory.md)
 
-One private FastAPI container. No database, no queue. All state is the seed resume on disk plus optional per-user profile directories.
+Two applications: a Next.js frontend (browser only) and a FastAPI backend that
+owns all business logic. One private container serves both — the frontend is a
+static export, so no Node process runs in production. No queue.
 
 ---
 
 ## 1. System overview
 
 ```text
-Browser (static/ vanilla JS SPA)
-        │  JSON over HTTP
+Browser
+  └── Next.js frontend (frontend/ — App Router, React, TypeScript)
+        │  built to a static export; no server-side rendering at request time
+        │  JSON over HTTP, same origin (dev: next rewrites /api → uvicorn)
         ▼
 FastAPI app  (app/main.py — create_app() factory, DI-friendly)
         │
@@ -27,7 +31,7 @@ FastAPI app  (app/main.py — create_app() factory, DI-friendly)
 
 | Module | Responsibility |
 |---|---|
-| `app/main.py` | App factory (`create_app`), routes, tailor orchestration, single shared repair budget, body-size middleware, structured error responses, static file serving |
+| `app/main.py` | App factory (`create_app`), routes, tailor orchestration, single shared repair budget, body-size middleware, structured error responses, serving the built frontend |
 | `app/llm.py` | Provider-neutral chat client (`OpenAICompatibleLLM`): `generate`/`repair` for tailoring, `extract_resume` for import; env config resolution (`resolve_config`), retry/backoff, JSON-mode fallback |
 | `app/resume.py` | Load/validate locked resume data; `build_llm_resume_payload` (identity excluded); `validate_proposal` (safety contract); `escape_latex`; `redact_identity`; deterministic token rendering incl. `sectioned=True` mode; change list + unified diff |
 | `app/compiler.py` | `CompileService`: unique temp dir per compile, `tectonic -X compile --untrusted [--only-cached]`, timeout + POSIX rlimits, per-event-loop `asyncio.Semaphore`, `pdfinfo` page count, `pdftotext` extraction, log sanitization |
@@ -40,7 +44,7 @@ FastAPI app  (app/main.py — create_app() factory, DI-friendly)
 | `app/pdftext.py` | Bounded poppler subprocess work (`%PDF-` magic check, size/page/timeout caps, no shell): `pdftotext` extraction, `pdfinfo` page gate, `pdftoppm` rasterization, `pdftohtml` link-annotation recovery |
 | `app/routes_keys.py` / `routes_resumes.py` / `routes_jds.py` / `routes_runs.py` | Route groups for per-user API keys, resume library, JD library, and tailor-run history |
 | `app/schemas.py` | All Pydantic models (`StrictModel` base, `extra="forbid"`), Pydantic v1/v2 compatibility helpers (`validate_model`, `dump_model`) |
-| `static/` | Vanilla JS SPA: hash routing (auth/tailor/resumes/jds/history/settings), diff cards, PDF iframe preview, downloads, abort + request versioning; no localStorage |
+| `frontend/` | Next.js App Router frontend. `lib/api/` is the only code that talks to FastAPI (`schema.d.ts` is generated from the OpenAPI document); `hooks/` holds TanStack Query hooks, one module per domain; `components/common/` the shared primitives |
 | `resume/` | Seed: `data.json` (facts + stable IDs), `template.tex` (locked, 7 tokens), `assets/` (approved files; currently empty) |
 | `tests/` | 244 offline tests; stub LLM, mocked compiler subprocess, and mongomock-motor database via `create_app` dependency injection |
 
@@ -57,7 +61,7 @@ FastAPI app  (app/main.py — create_app() factory, DI-friendly)
 | `POST /api/resumes/preview` | Compile a draft as typed, or a stored resume, with no job description and no model call. Returns `pdf_base64` + the rendered LaTeX |
 | `GET/POST /api/jds`, `GET/PUT/DELETE /api/jds/{id}`, `.../versions` | JD library with version history |
 | `GET /api/runs`, `GET/DELETE /api/runs/{id}`, `POST /api/runs/{id}/compile` | Tailor history; on-demand recompile of stored LaTeX (no LLM) |
-| `GET /` + `/static` | Serve the SPA (inline HTML fallback if `static/index.html` is missing) |
+| `GET /` + `/*` | Serve the frontend's static export from `frontend/out` (override with `FRONTEND_DIR`). Mounted last, so `/api/*` always wins; an inline HTML notice is served when no build is present |
 
 Middleware (one combined handler): declared-`Content-Length` body-size guard (PDF uploads `MAX_PDF_UPLOAD_BYTES`+64KB, LaTeX import *and* structured-resume routes 260KB — a whole resume authored in the editor arrives as one JSON document — other `/api/*` 64KB) → CSRF origin check for cookie-authenticated state-changing requests → sliding-window rate limiting (LLM bucket for tailor/imports/recompile *and* `/api/resumes/preview`, which spends a Tectonic compile rather than a model call; general bucket for other authed calls, so writing and saving a resume is never charged against the LLM budget; keyed by user id, `Retry-After` on 429). *Known gap: a request omitting `Content-Length` (chunked) bypasses the size guard.*
 

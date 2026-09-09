@@ -118,13 +118,51 @@ Pipeline: (PDF only: bounded `pdftotext` extraction) → `extract_resume` (LLM, 
 - Post-checks: `pdfinfo` page count vs `MAX_PDF_PAGES`; `pdftotext` extraction (ATS sanity + `text_preview`); compiler log sanitized (temp paths stripped) and capped before leaving the service.
 - Failure taxonomy: `compiler_not_found` / start failure → 503, timeout → 504, `latex_compile_failed` → 422-adjacent repairable, inspector failures degrade to warnings.
 
-## 7. Frontend design (`static/`)
+## 7. Frontend design (`frontend/`)
 
-Vanilla JS SPA, no build step, hash-routed views: `#/auth`, `#/tailor`, `#/resumes`, `#/jds`, `#/history`, `#/settings`. Boot: `GET /api/health` → demo banner + seed tailor only, or `GET /api/me` → full authenticated app. No localStorage — sessions live in the HttpOnly cookie; API keys are sent once and stored encrypted server-side.
+Next.js App Router + React + TypeScript + Tailwind + shadcn/ui, built to a
+**static export** and served by FastAPI. Client-rendered throughout: every
+screen sits behind an HttpOnly session cookie, so there is nothing to render on
+a server that the browser cannot fetch itself.
 
-- Results view: before/after diff cards (`<del>`/`<ins>`), embedded PDF `<iframe>` from a base64 object URL, PDF + `.tex` downloads, "Saved to history" chip.
-- Robustness: in-flight request abort + monotonic request versioning (stale responses dropped), object-URL revocation, status-specific error copy (error-code → friendly message map, `Retry-After` surfaced on 429), global 401 interceptor → `#/auth`, reduced-motion support. All server text rendered via `textContent` (no `innerHTML`).
-- *Known gap: zero automated coverage in the repo suite; verified by `node --check` plus a scripted DOM-stub smoke harness during development.*
+Routes: `/` (tailor), `/resumes`, `/jds`, `/history`, `/settings`, plus the
+signed-out group `/sign-in`, `/register`, `/forgot-password`, `/reset-password`,
+`/verify-email`. Boot mirrors the API: `GET /api/health` decides the mode
+(`demo` → seed tailoring only, storage screens explain themselves via
+`<RequiresStorage>`; `multi_user` → `GET /api/me`, where a 401 is the normal
+signed-out state).
+
+- **Entity selection is a query parameter, never a route segment** (`/resumes?id=…`,
+  `/history?run=…`). A static export cannot prerender `[id]` without
+  `generateStaticParams`, which cannot know user records. This is also the first
+  time the product has had working deep links.
+- **One API layer.** `lib/api/client.ts` is the only place that calls `fetch`;
+  it uses same-origin relative paths and `credentials: "same-origin"`, so the
+  HttpOnly cookie and the Origin-equals-host CSRF check both work with no CORS
+  middleware and no `SameSite=None` downgrade. In development `next dev`
+  rewrites `/api/*` to uvicorn to preserve that single origin.
+- **Types come from the server.** `lib/api/schema.d.ts` is generated from the
+  live OpenAPI document (`npm run gen:api`), so TypeScript models cannot drift
+  from Pydantic. Note the read/write asymmetry it encodes: `ResumeData` carries
+  server-owned ids and object bullets, `ResumeDraft` has neither, and every
+  request model is `extra="forbid"` — `lib/api/mappers.ts` converts between them.
+- **Server state is TanStack Query**, keyed centrally in `lib/api/query-keys.ts`.
+  Mutations never auto-retry; queries never retry a 4xx or a timeout, because
+  every expensive call either spends provider tokens or runs Tectonic.
+- Results view: reviewable change cards plus a unified diff rendered with
+  dedicated `--diff-added` / `--diff-removed` design tokens (legible in both
+  themes), the PDF preview alongside — never instead of — the changes (R-14),
+  and downloads decoded from base64 into revoked object URLs.
+- PDF preview uses `pdfjs-dist` from npm, dynamically imported client-side with
+  the worker resolved via `new URL(..., import.meta.url)` so the bundler emits
+  it; the old hand-vendored copy and its hard-coded worker path are gone.
+- Accessibility: skip link, one `<h1>` per page owned by `<PageHeader>` with
+  focus moved to it on navigation, `aria-current` on active nav, labelled inputs
+  with `aria-invalid`/`aria-describedby`, and focus traps from the underlying
+  Base UI primitives.
+- *Known gap: no automated frontend tests. `npm run typecheck`, `npm run lint`
+  and `npm run build` are the only gate, and no browser-driven verification has
+  been run.*
 
 ## 8. Key design decisions & rationale
 

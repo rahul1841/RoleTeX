@@ -974,7 +974,6 @@ def create_app(
                 pdf_base64=encoded_pdf,
                 # Avoid duplicating a large base64 payload; browsers can prepend
                 # the data URL prefix to pdf_base64 when desired.
-                pdf_data_url=None,
                 page_count=compile_result.page_count,
                 filename="tailored-resume.pdf",
                 provider=result.provider,

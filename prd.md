@@ -76,7 +76,7 @@ Paste a job description → an LLM proposes structured, fact-preserving edits (s
 | FR-2 | `POST /api/resumes` / `POST /api/resumes/pdf` — LaTeX paste or PDF upload in, private versioned resume out | ✅ Done, tested (replaced legacy `POST /api/import`) |
 | FR-3 | `GET /api/health` — mode, resume validity, compiler/database/secret-key/pdftotext checks | ✅ Done, tested |
 | FR-4 | Resume library routes (`GET/PATCH/DELETE /api/resumes/{id}`, versions, source download) | ✅ Done, tested |
-| FR-5 | Web UI: auth, tailor, resume library, JD library, history, settings views; diff cards, PDF preview, downloads | ✅ Done. Only the resume editor has automated coverage (`tests/ui/resume_editor.mjs`, Node + jsdom, outside pytest); the rest of the SPA still has none |
+| FR-5 | Web UI: auth, tailor, resume library, JD library, history, settings views; change cards + unified diff, PDF preview, downloads | ✅ Done. Rebuilt as a Next.js app in `frontend/` (2026-09-10), replacing the vanilla SPA. **No automated frontend coverage** — `npm run typecheck`/`lint`/`build` is the only gate, and no browser-driven verification has been run (G-3) |
 | FR-6 | Provider adapter: groq, cerebras, gemini, openrouter, mistral, openai, anthropic, grid, custom | ✅ Implemented; real-provider path **unexercised by tests** |
 | FR-7 | One shared repair budget per request (semantic OR compile/page repair, never both) | ✅ Done, tested |
 | FR-8 | ~~Deterministic mock provider for offline dev/tests~~ | ❌ **Removed 2026-09-10** — an offline dry run returned placeholder facts that were indistinguishable from a real extraction until read. Every request now reaches a real provider |
@@ -86,7 +86,7 @@ Paste a job description → an LLM proposes structured, fact-preserving edits (s
 | FR-10 | Evaluation harness (compile success, fact preservation, keyword coverage across JDs) | ❌ Not built |
 | FR-11 | Automatic provider failover | ❌ Not built (providers selectable, no fallback chain) |
 | FR-13 | Cover letter generation | ❌ Not built |
-| FR-16 | In-app resume builder: create (`POST /api/resumes/manual`), edit as a new version (`PUT /api/resumes/{id}/content`), and untailored preview/compile (`POST /api/resumes/preview`) | ✅ Done, tested (2026-09-06, D-19). 20 API tests + a real-Tectonic compile test + a jsdom UI harness; no LLM on any of the three routes |
+| FR-16 | In-app resume builder: create (`POST /api/resumes/manual`), edit as a new version (`PUT /api/resumes/{id}/content`), and untailored preview/compile (`POST /api/resumes/preview`) | ✅ Done, tested (2026-09-06, D-19). 20 API tests + a real-Tectonic compile test; no LLM on any of the three routes. The builder UI was reimplemented in the Next.js frontend (2026-09-10) and is currently untested |
 | FR-15 | Admin/operator surface for the `disabled` flag | ❌ Not built — set the field directly in MongoDB (G-20) |
 
 ## 8. Non-functional requirements

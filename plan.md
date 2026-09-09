@@ -4,6 +4,18 @@
 >
 > **Validated:** 2026-07-11 against current official documentation. Free tiers, quotas, model names, and beta hosting features can change, so re-check them before deployment.
 
+> ---
+>
+> **⚠️ HISTORICAL DOCUMENT — kept as the original feasibility record, not as a
+> description of the codebase.** It predates several shipped changes: the app is
+> now multi-user with MongoDB, and the frontend is a Next.js application in
+> `frontend/` (the `static/` vanilla SPA in §6.1 was removed in 2026-09-10).
+> The repository layout and file names below are what was *planned*; several
+> never existed under those names.
+>
+> For current architecture see [architecture.md](architecture.md),
+> [design.md](design.md) and [README.md](README.md).
+
 ---
 
 ## 1. Verdict

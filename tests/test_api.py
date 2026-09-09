@@ -339,7 +339,6 @@ async def test_compiled_tailor_path_returns_base64_pdf_and_report(
     assert response.status_code == 200
     body = response.json()
     assert base64.b64decode(body["pdf_base64"]) == pdf
-    assert body["pdf_data_url"] is None
     assert body["filename"] == "tailored-resume.pdf"
     assert body["page_count"] == 1
     assert body["compiler"] == {
