@@ -240,7 +240,7 @@ function explain(error: unknown): Explanation {
 /**
  * The Tectonic log the server attaches to a compile failure, if it reached us.
  *
- * `compiler_failure()` in app/routes_runs.py puts the last 8 KB of the log in
+ * `compiler_failure()` in backend/app/routes_runs.py puts the last 8 KB of the log in
  * the structured error body as `compiler_log`, but `ApiError` in
  * lib/api/errors.ts keeps only status, code, message, field errors and
  * retry-after, so today this is always null. It is read defensively rather

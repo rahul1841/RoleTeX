@@ -62,11 +62,11 @@ import { LIMITS } from "./resume-form";
  *    is the one place in this app where a model writes the user's facts.
  */
 
-/** app/config.py max_pdf_upload_bytes default. */
+/** backend/app/config.py max_pdf_upload_bytes default. */
 const MAX_PDF_BYTES = 5_000_000;
-/** app/config.py max_import_pdf_pages default. */
+/** backend/app/config.py max_import_pdf_pages default. */
 const MAX_PDF_PAGES = 3;
-/** app/schemas.py ResumeCreateRequest.latex min_length. */
+/** backend/app/schemas.py ResumeCreateRequest.latex min_length. */
 const MIN_LATEX_CHARS = 40;
 
 export type ImportTarget =

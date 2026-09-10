@@ -24,7 +24,7 @@ import { FormSection } from "./section-frame";
 /**
  * The three layout knobs the server will actually honour.
  *
- * `sanitize_style` in app/importer.py whitelists exactly this much: a font size
+ * `sanitize_style` in backend/app/importer.py whitelists exactly this much: a font size
  * from a fixed set, a margin clamped to 1–3cm, and an optional six-digit accent
  * colour. Paper is always A4 and is not offered. Everything else about the
  * document is application code — that is the locked-template safety model, and

@@ -3,7 +3,7 @@ import { z } from "zod";
 /**
  * Client-side validation, kept deliberately thin.
  *
- * The server owns both rules that matter. `app/security.py` decides what a
+ * The server owns both rules that matter. `backend/app/security.py` decides what a
  * valid address is and what a strong enough password is, and it reports both
  * as structured errors (`invalid_email`, `weak_password`) with a message
  * written for a human. Restating the password policy here would create a
@@ -14,11 +14,11 @@ import { z } from "zod";
  * checked against the SAME expression the server uses, which is not a second
  * policy — it is the first one, applied a round trip earlier. That matters on
  * sign-in specifically: a typo'd address would otherwise cost a real attempt
- * against the per-(email, IP) login throttle in app/auth.py before the user is
+ * against the per-(email, IP) login throttle in backend/app/auth.py before the user is
  * told anything.
  */
 
-/** Mirrors `_EMAIL_RE` in app/security.py. Keep the two identical. */
+/** Mirrors `_EMAIL_RE` in backend/app/security.py. Keep the two identical. */
 export const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 /** Mirrors `EMAIL_MAX_LENGTH`; the field is `max_length=254` in Pydantic too. */

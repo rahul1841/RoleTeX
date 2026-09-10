@@ -45,7 +45,7 @@ type DefaultsValues = z.infer<typeof defaultsSchema>;
 /**
  * ⚠️ THE ONE THING TO GET RIGHT ON THIS SCREEN.
  *
- * `PATCH /api/me` reads `model_fields_set` (app/auth.py), so for
+ * `PATCH /api/me` reads `model_fields_set` (backend/app/auth.py), so for
  * `default_provider` and `default_model` it distinguishes three cases, not two:
  *
  *   key absent            leave the stored value exactly as it is
@@ -60,7 +60,7 @@ type DefaultsValues = z.infer<typeof defaultsSchema>;
  *
  * Clearing the provider also clears the model, and that is not tidiness. The
  * server only consults `default_model` when the request's provider matches
- * `default_provider` (app/auth.py `resolve_provider`), so a model kept without
+ * `default_provider` (backend/app/auth.py `resolve_provider`), so a model kept without
  * a provider is data that can never be read — it would sit in the account
  * looking effective while doing nothing.
  */
@@ -216,7 +216,7 @@ function DefaultProviderFields({
                     {(value) =>
                       // A stored provider outside the catalog is shown raw
                       // rather than mislabelled: `PATCH /api/me` accepts every
-                      // name in app/llm.py `supported_providers()`, which
+                      // name in backend/app/llm.py `supported_providers()`, which
                       // includes the operator-only `custom` that
                       // `GET /api/providers` deliberately withholds.
                       items.find((item) => item.value === value)?.label ??

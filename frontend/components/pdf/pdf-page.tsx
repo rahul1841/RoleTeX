@@ -35,9 +35,9 @@ export interface PdfPageCanvasProps {
  *
  * The canvas is sized twice, on purpose: `width`/`height` are the device-pixel
  * backing store (scale × devicePixelRatio) and the CSS width/height are the
- * layout size (scale alone). Setting only the former is the classic mistake
- * that renders a page at double size; setting only the latter is what made the
- * vanilla viewer blurry on every retina screen.
+ * layout size (scale alone). Setting only the former renders the page at
+ * double size; setting only the latter renders it blurry on every retina
+ * screen. Both are needed.
  *
  * The previous render is cancelled before a new one starts. pdf.js rejects
  * `RenderTask.promise` with a `RenderingCancelledException` when that happens,

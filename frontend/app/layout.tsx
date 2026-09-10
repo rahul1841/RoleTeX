@@ -46,8 +46,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
     >
       <body className="bg-background text-foreground min-h-full flex flex-col">
-        {/* Keyboard users land here first; the old app had this and losing it
-            would be an accessibility regression. */}
+        {/* Keyboard users land here first, ahead of the header and nav, so
+            reaching the page content does not cost a tab through the shell. */}
         <a
           href="#main-content"
           className="focus:bg-card focus:ring-ring focus:text-foreground sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-md focus:border focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:shadow-lg focus:ring-3 focus:outline-none"

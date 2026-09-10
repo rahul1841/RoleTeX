@@ -28,7 +28,6 @@ export {
   createObjectUrl,
   downloadBase64Pdf,
   downloadBlob,
-  liveObjectUrlCount,
   revokeAllObjectUrls,
   revokeObjectUrl,
   sanitizeFilename,

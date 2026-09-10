@@ -155,7 +155,7 @@ export function useLogout() {
  * `POST /api/auth/password/forgot`.
  *
  * The response is intentionally identical for an address with an account and
- * one without (app/routes_account.py refuses to be an account oracle), so the
+ * one without (backend/app/routes_account.py refuses to be an account oracle), so the
  * caller must not phrase its success state as confirmation that mail was sent
  * to that person. `delivered` reports only whether this SERVER has a real mail
  * transport at all — with the console driver it is false and the link is in
@@ -209,12 +209,9 @@ export function useRequestVerification() {
  * opened in a different browser from the one that asked for it. The token is
  * the proof.
  *
- * ⚠️ The endpoint helper in lib/api/endpoints/session.ts is declared
- * `api.post<UserResponse>`, but the route's `response_model` is `OkResponse`
- * and the running server returns `{"ok": true}` — verified against
- * 127.0.0.1:8011. The response is therefore ignored and the session query is
- * invalidated instead, which is also what a signed-out redemption needs. See
- * the report note about correcting that type.
+ * The route answers `{"ok": true}` and has no user to hand back, so the
+ * response is ignored and the session query is invalidated instead — which is
+ * also the right move for a redemption made while signed out.
  */
 export function useConfirmVerification() {
   const queryClient = useQueryClient();

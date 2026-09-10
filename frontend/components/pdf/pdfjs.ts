@@ -1,34 +1,24 @@
 /**
  * The single place pdf.js is loaded and configured.
  *
- * MIGRATION NOTE. The vanilla app vendored PDF.js 4.6.82 under
- * `static/vendor/pdfjs/` and pulled it in with a dynamic import of an absolute
- * path, then set `GlobalWorkerOptions.workerSrc` to a hand-written string.
- * None of that survives a bundler:
- *
- *  - A hard-coded `/vendor/...` worker path is not rewritten by the build, so
- *    it 404s wherever the app is actually mounted.
- *  - `import("/abs/path.mjs")` is not a module specifier a bundler can resolve.
- *  - Older pdf.js `.mjs` builds carried `await import("fs" | "http" | "url")`
- *    branches for Node, which bundlers try — and fail — to resolve for the
- *    browser.
- *
- * The npm package solves all three, but only if it is loaded the right way:
+ * Three constraints decide the shape of this module, and each one is a way the
+ * library fails to bundle if it is loaded any other way:
  *
  *  1. `pdfjs-dist@5`'s modern `build/pdf.mjs` has no Node built-in imports at
- *    all (verified by grep against the installed file), and its package.json
- *    `browser` field maps `canvas`/`fs`/`http`/`https`/`url` to `false`, so no
- *    bundler alias configuration is needed. That matters here: `next.config.ts`
- *    is off-limits, so a build that needed a webpack/turbopack alias could not
- *    have been made to work.
+ *     all (verified by grep against the installed file), and its package.json
+ *     `browser` field maps `canvas`/`fs`/`http`/`https`/`url` to `false`, so no
+ *     bundler alias configuration is needed. Older `.mjs` builds carried
+ *     `await import("fs" | "http" | "url")` branches that a browser bundler
+ *     tries — and fails — to resolve.
  *  2. The worker is referenced with `new URL(specifier, import.meta.url)`,
- *    which the bundler rewrites into a real emitted asset URL. Under
- *    `output: "export"` that lands in `out/_next/static/` and is served from
- *    the same origin as the app, which keeps pdf.js off its cross-origin
- *    fallback path (it otherwise wraps the worker in a Blob shim).
+ *     which the bundler rewrites into a real emitted asset URL. Under
+ *     `output: "export"` that lands in `out/_next/static/` and is served from
+ *     the same origin as the app, which keeps pdf.js off its cross-origin
+ *     fallback path (it otherwise wraps the worker in a Blob shim). A
+ *     hand-written absolute worker path would 404 wherever the app is mounted.
  *  3. `import()` lives inside a function, never at module scope, so nothing
- *    executes during the static prerender. pdf.js touches `document` and
- *    `Worker` as it initializes and would throw if it ran on the server.
+ *     executes during the static prerender. pdf.js touches `document` and
+ *     `Worker` as it initializes and would throw if it ran on the server.
  *
  * The module promise is memoized: a viewer, a thumbnail and a download button
  * on the same screen must share one pdf.js instance and one worker.

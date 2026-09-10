@@ -5,7 +5,7 @@
  * for `detail`:
  *
  *   1. `{ code, message, ...extra }`  — the canonical structured error, built
- *      by `_api_error()` in app/auth.py. `extra` carries per-error fields such
+ *      by `_api_error()` in backend/app/auth.py. `extra` carries per-error fields such
  *      as `errors` (field messages) or `retry_after`.
  *   2. `ValidationError[]`            — FastAPI's own 422 body, when a request
  *      fails Pydantic validation before reaching route code.
@@ -46,7 +46,12 @@ export const API_ERROR_CODES = [
   "not_authenticated",
   "nothing_to_update",
   "password_unchanged",
+  "pdf_extract_failed",
+  "pdf_extract_timeout",
+  "pdf_no_text",
+  "pdf_support_unavailable",
   "pdf_too_large",
+  "pdf_too_many_pages",
   "preview_target_required",
   "provider_required",
   "rate_limited",

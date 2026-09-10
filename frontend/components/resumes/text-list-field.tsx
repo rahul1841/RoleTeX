@@ -35,7 +35,7 @@ export interface TextListFieldProps {
   hideLabel?: boolean;
   placeholder?: string;
   hint?: React.ReactNode;
-  /** Server-side cap on the array (app/schemas.py). */
+  /** Server-side cap on the array (backend/app/schemas.py). */
   max: number;
   rows?: number;
   className?: string;

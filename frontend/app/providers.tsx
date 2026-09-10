@@ -15,9 +15,9 @@ import { isApiError } from "@/lib/api/errors";
 const queryConfig: QueryClientConfig = {
   defaultOptions: {
     queries: {
-      // The old client refetched on every view entry and cached nothing. A
-      // short stale window keeps navigation feeling instant without showing
-      // meaningfully outdated resumes or runs.
+      // A short stale window keeps navigation feeling instant without showing
+      // meaningfully outdated resumes or runs. Without it every view entry
+      // would refetch and the app would flash a spinner on each tab change.
       staleTime: 30_000,
       refetchOnWindowFocus: false,
       retry: (failureCount, error) => {

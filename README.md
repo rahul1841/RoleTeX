@@ -58,7 +58,7 @@ imports and compiles the same one-page PDF.
 | Preview | `POST /api/resumes/preview` | Compiles a draft as typed (`resume`) or a stored resume (`resume_id`), with no job description; returns the PDF and the rendered `.tex` |
 
 The safety contract is unchanged, because the draft is treated exactly like an
-LLM extraction: `app/builder.py` discards anything resembling an ID, assigns its
+LLM extraction: `backend/app/builder.py` discards anything resembling an ID, assigns its
 own positional stable IDs, clamps the style values, and renders through
 `escape_latex` — so a bullet containing `\input{...}` is typeset as text, never
 executed. What differs is the error shape: an incomplete draft comes back as
@@ -159,26 +159,36 @@ become an account oracle.
 ## Repository layout
 
 ```text
-app/                  FastAPI application, validation, rendering, and compiler
-app/importer.py       LaTeX-extraction normalization and template assembly
-app/builder.py        User-authored draft validation and normalization (no LLM)
-app/db.py             MongoDB (Motor) stores: users, sessions, auth tokens, keys, resumes, JDs, runs
-app/routes_account.py Password change/reset, email verification, session management
-app/mailer.py         Pluggable outbound mail: SMTP driver plus a console driver
-app/security.py       Password hashing, sessions, Fernet key encryption, rate limiting
-app/config.py         Env-driven AppConfig with clamped bounds
-resume/data.json      Canonical seed resume facts and stable editable IDs
-resume/template.tex   Locked Tectonic-compatible LaTeX template
-resume/assets/        Approved local images/fonts, if the template needs them
-app/llm_stub.py       Deterministic offline LLM for tests and frontend development
-frontend/             Next.js frontend (App Router, TypeScript, Tailwind, shadcn/ui)
-frontend/app/         Routes. (app) is the signed-in shell, (auth) the signed-out pages
-frontend/components/  Feature UI, plus common/ primitives and ui/ shadcn parts
-frontend/lib/api/     The only place that talks to FastAPI; schema.d.ts is generated
-frontend/hooks/       TanStack Query hooks, one module per domain
-tests/                Validation, rendering, compiler, and API tests
-Dockerfile            Hugging Face-compatible production image
-docker-compose.yml    Local MongoDB for multi-user development
+backend/                  The FastAPI service — nothing outside it is imported
+  app/main.py             App factory, middleware, /api/health, /api/tailor
+  app/resume.py           Template token contract, proposal validation, rendering
+  app/importer.py         LaTeX/PDF-extraction normalization and template assembly
+  app/builder.py          User-authored draft validation and normalization (no LLM)
+  app/llm.py              One OpenAI-compatible client for every provider
+  app/llm_stub.py         Deterministic offline LLM for frontend development
+  app/compiler.py         Sandboxed Tectonic execution
+  app/pdftext.py          Bounded poppler text/image/link extraction
+  app/db.py               MongoDB (Motor) stores: users, sessions, tokens, keys, resumes, JDs, runs
+  app/auth.py             Sessions, login/register, per-user provider-key resolution
+  app/routes_account.py   Password change/reset, email verification, session management
+  app/routes_*.py         Resume, JD, and tailor-history endpoints
+  app/security.py         Password hashing, sessions, Fernet key encryption, rate limiting
+  app/config.py           Env-driven AppConfig with clamped bounds
+  app/schemas.py          Every request/response model, shared with the frontend via OpenAPI
+  resume/data.json        Canonical seed resume facts and stable editable IDs
+  resume/template.tex     Locked Tectonic-compatible LaTeX template
+  resume/assets/          Approved local images/fonts, if the template needs them
+  requirements.txt        Runtime dependencies
+
+frontend/                 Next.js app (App Router, TypeScript, Tailwind, shadcn/ui)
+  app/                    Routes. (app) is the signed-in shell, (auth) the signed-out pages
+  components/             Feature UI, plus common/ primitives and ui/ shadcn parts
+  lib/api/                The only place that talks to FastAPI; schema.d.ts is generated
+  hooks/                  TanStack Query hooks, one module per domain
+
+docs/                     architecture, design, prd, rules, plan, memory
+Dockerfile                Hugging Face-compatible production image
+docker-compose.yml        Local MongoDB for multi-user development
 ```
 
 The frontend is a separate application that speaks only HTTP/JSON to this API.
@@ -189,7 +199,7 @@ OpenAPI document and must never be hand-edited — regenerate it with
 `npm run gen:api` whenever a request or response model changes, and the
 TypeScript models cannot drift from the Python ones.
 
-`resume/template.tex` contains each of these tokens exactly once:
+`backend/resume/template.tex` contains each of these tokens exactly once:
 
 ```text
 @@CONTACT@@
@@ -201,8 +211,7 @@ TypeScript models cannot drift from the Python ones.
 @@ACHIEVEMENTS@@
 ```
 
-Do not rename, duplicate, or delete them without updating the renderer and its
-tests.
+Do not rename, duplicate, or delete them without updating the renderer.
 
 ## Local development
 
@@ -222,7 +231,7 @@ Create the environment and install the application:
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -r requirements-dev.txt
+python -m pip install -r backend/requirements.txt
 ```
 
 Configure Groq without writing the key into the repository:
@@ -233,11 +242,15 @@ export LLM_MODEL=llama-3.3-70b-versatile
 export GROQ_API_KEY='your-secret-key'
 ```
 
-Start the API:
+Start the API from the repository root:
 
 ```bash
-uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+PYTHONPATH=backend uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
+
+`PYTHONPATH=backend` is what makes `app.main` importable; running from the root
+rather than from inside `backend/` is what lets the server find the frontend
+build at `frontend/out`. The Docker image sets the same two things.
 
 ### Running the frontend
 
@@ -255,7 +268,7 @@ browser sees a single origin. That is not cosmetic:
 
 - the session cookie is `HttpOnly` and host-only, so it is only sent to the
   origin that set it, and
-- the CSRF guard (`origin_allowed` in `app/security.py`) requires a
+- the CSRF guard (`origin_allowed` in `backend/app/security.py`) requires a
   state-changing request's `Origin` to match the request host.
 
 Proxying satisfies both, which is why this project needs no CORS middleware
@@ -278,12 +291,12 @@ npm run gen:api     # regenerate lib/api/schema.d.ts from the running API
 ### Developing without a provider key
 
 `LLM_PROVIDER=stub` selects a deterministic in-process client
-(`app/llm_stub.py`) instead of a real provider. Resume import and tailoring
+(`backend/app/llm_stub.py`) instead of a real provider. Resume import and tailoring
 then return fixture text, cost nothing, and never touch the network, so the
 whole UI can be exercised offline:
 
 ```bash
-LLM_PROVIDER=stub uvicorn app.main:app --port 8000 --reload
+LLM_PROVIDER=stub PYTHONPATH=backend uvicorn app.main:app --port 8000 --reload
 ```
 
 Generated copy is prefixed `[stub]` so fixture text is never mistaken for a
@@ -292,17 +305,23 @@ explicitly. Note it is the *client*, not a selectable provider: in multi-user
 mode you still choose a provider and store a key in Settings, exactly as a
 real user would — the key is simply never used.
 
-### Tests
+### Verifying a change
+
+There is no automated test suite. The Docker build is the one thing that still
+proves the LaTeX pipeline end to end: it renders the configured baseline and
+performs a real Tectonic compile, so a broken template or a missing package
+fails the build.
+
+For the API, boot it with the offline stub and call it — that exercises the
+real routes through the real middleware stack with no provider key:
 
 ```bash
-pytest -q
+LLM_PROVIDER=stub PYTHONPATH=backend uvicorn app.main:app --port 8000 --reload
+curl -s localhost:8000/api/health | python3 -m json.tool
 ```
 
-Tests that need the Tectonic executable may skip when it is unavailable. The
-Docker build always renders the configured baseline and performs a real compile.
-
-There is no frontend test suite yet. `npm run typecheck`, `npm run lint` and
-`npm run build` are the current gate.
+For the frontend, `npm run typecheck`, `npm run lint` and `npm run build` are
+the gate.
 
 ## Configuration
 
@@ -331,9 +350,9 @@ There is no frontend test suite yet. `npm run typecheck`, `npm run lint` and
 | `COMPILE_MEMORY_LIMIT_MB` | No | `2048` | Address-space cap (`RLIMIT_AS`) for the compile subprocess, bounded 256–8192; **Linux only** |
 | `MAX_PDF_PAGES` | No | `1` | Page-count target/check threshold, bounded from 1–10 |
 | `LLM_EXTRACT_MAX_TOKENS` | No | `6000` | Max tokens for resume extraction, bounded 1000–8000 |
-| `RESUME_DATA_PATH` | No | `resume/data.json` | Canonical seed structured resume file |
-| `RESUME_TEMPLATE_PATH` | No | `resume/template.tex` | Locked LaTeX template |
-| `RESUME_ASSETS_DIR` | No | `resume/assets` | Approved local template assets |
+| `RESUME_DATA_PATH` | No | `backend/resume/data.json` | Canonical seed structured resume file |
+| `RESUME_TEMPLATE_PATH` | No | `backend/resume/template.tex` | Locked LaTeX template |
+| `RESUME_ASSETS_DIR` | No | `backend/resume/assets` | Approved local template assets |
 | `TECTONIC_UNTRUSTED_MODE` | No | `1` in Docker | Disables trusted-only Tectonic features |
 | `TECTONIC_CACHE_DIR` | No | Tectonic default locally | Support-file cache; pre-warmed in Docker |
 | `MONGODB_URI` | For multi-user mode | — | MongoDB connection string; unset → demo mode (seed tailoring only) |
@@ -378,7 +397,7 @@ local MongoDB (`docker compose up -d mongo`, then
 `MONGODB_URI=mongodb://localhost:27017`).
 
 Only put API credentials in local environment variables or your hosting
-provider's secret store. Never add them to `resume/data.json`, frontend code,
+provider's secret store. Never add them to `backend/resume/data.json`, frontend code,
 Docker build arguments, or Git.
 
 Provider adapters use separate secrets such as `GROQ_API_KEY`,
@@ -392,13 +411,13 @@ like a genuine extraction.
 
 ## Customize the resume
 
-1. Update only verified facts in `resume/data.json`; it is the authoritative
+1. Update only verified facts in `backend/resume/data.json`; it is the authoritative
    source used for every tailored resume.
 2. Keep every object and bullet `id` stable. The model refers to those IDs when
    proposing edits.
 3. Keep contact information under `identity`; the backend excludes it from the
    LLM request and restores it during deterministic rendering.
-4. Add only approved local files to `resume/assets/`.
+4. Add only approved local files to `backend/resume/assets/`.
 5. If you add a LaTeX package or asset, rebuild the image so Tectonic downloads
    it during cache pre-warming.
 6. Compile and visually compare the original before using tailored output.
@@ -482,6 +501,8 @@ durable history.
 ## Updating Tectonic
 
 When upgrading, change both `TECTONIC_URL` and `TECTONIC_SHA256` in the
-Dockerfile using the matching official release asset. Then rebuild and run the
-full compile and PDF-text tests. The current image deliberately rejects an ARM
-build because its pinned executable is x86-64.
+Dockerfile using the matching official release asset. Then rebuild — the
+prewarm layer compiles the seed resume and every offered font size with the
+new binary, so an incompatible release fails the build rather than the first
+request. The current image deliberately rejects an ARM build because its
+pinned executable is x86-64.

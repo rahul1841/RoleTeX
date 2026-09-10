@@ -125,7 +125,7 @@ function NameForm({ user }: { user: User }) {
     setFailure(null);
     try {
       // ONLY `name` travels. `default_provider` and `default_model` are omitted
-      // on purpose: an absent key means "leave it alone" to app/auth.py, which
+      // on purpose: an absent key means "leave it alone" to backend/app/auth.py, which
       // is exactly what a rename should do to settings it has no opinion about.
       // Sending them as null here would silently wipe the tailoring defaults.
       await updateMe.mutateAsync({ name: values.name.trim() });

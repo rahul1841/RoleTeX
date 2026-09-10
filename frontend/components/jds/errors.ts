@@ -49,7 +49,7 @@ export function describeJdFailure(
         retryable: false,
       };
 
-    // Not currently emitted by the JD routes — app/db.py prunes the oldest
+    // Not currently emitted by the JD routes — backend/app/db.py prunes the oldest
     // archived revisions instead of refusing the write — but the code is in
     // the API's error contract, so it is handled rather than falling through
     // to a generic 409.

@@ -29,7 +29,7 @@ import { emptyResumeDraft, resumeDataToDraft } from "@/lib/api/mappers";
  */
 
 // --- server-mirrored limits ------------------------------------------------
-// These are app/schemas.py and app/builder.py, restated. They exist so the
+// These are backend/app/schemas.py and backend/app/builder.py, restated. They exist so the
 // form can refuse locally what the server would refuse remotely, with a
 // message about the field rather than a 422 about the request.
 
@@ -49,11 +49,11 @@ export const LIMITS = {
   degree: 250,
   skillCategory: 120,
   sectionTitle: 80,
-  /** app/builder.py MAX_TEXT_ITEM_CHARACTERS — bullets and achievements. */
+  /** backend/app/builder.py MAX_TEXT_ITEM_CHARACTERS — bullets and achievements. */
   bullet: 1_000,
-  /** app/builder.py MAX_SHORT_ITEM_CHARACTERS — tags and education details. */
+  /** backend/app/builder.py MAX_SHORT_ITEM_CHARACTERS — tags and education details. */
   shortItem: 200,
-  /** app/resume.py MAX_SUMMARY_WORDS / MAX_SUMMARY_CHARACTERS. */
+  /** backend/app/resume.py MAX_SUMMARY_WORDS / MAX_SUMMARY_CHARACTERS. */
   summaryWords: 12,
   summaryChars: 120,
   resumeName: 120,
@@ -77,7 +77,7 @@ export const MAX_ENTRIES = {
 export const FONT_SIZES = ["10pt", "11pt", "12pt"] as const;
 export type FontSize = (typeof FONT_SIZES)[number];
 
-/** app/importer.py sanitize_style clamps the margin to this range. */
+/** backend/app/importer.py sanitize_style clamps the margin to this range. */
 export const MARGIN_RANGE = { min: 1, max: 3, step: 0.1 } as const;
 
 // --- form types ------------------------------------------------------------
@@ -186,7 +186,7 @@ function splitTags(value: string): string[] {
 /**
  * A row the user added and never filled in.
  *
- * Mirrors `_entry_is_blank` in app/builder.py exactly, because the server
+ * Mirrors `_entry_is_blank` in backend/app/builder.py exactly, because the server
  * silently drops these rather than rejecting them. Validating them locally
  * would make the form stricter than the API and stop people saving with an
  * empty row left at the bottom — which is what an "Add" button always leaves.
@@ -539,7 +539,7 @@ export function emptyResumeForm(): ResumeFormValues {
  *
  * Trims everything and drops empties, so a trailing blank bullet or a link row
  * the user opened and abandoned never reaches the server. Blank *entries* are
- * left in place: app/builder.py prunes them, and removing them here would
+ * left in place: backend/app/builder.py prunes them, and removing them here would
  * renumber the entries that validation messages refer to.
  */
 export function formToDraft(values: ResumeFormValues): ResumeDraft {

@@ -30,7 +30,7 @@ import type { TailorRequest, TailorResponse } from "@/lib/api/types";
 
 /**
  * `TailorRequest.job_description` is `min_length=50, max_length=20_000` in
- * app/schemas.py. Mirrored here so the form rejects what the server would,
+ * backend/app/schemas.py. Mirrored here so the form rejects what the server would,
  * with copy the user can act on instead of a raw 422.
  */
 export const JD_MIN_CHARACTERS = 50;

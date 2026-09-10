@@ -43,7 +43,7 @@ const FIELD_FOR_CODE = {
  *  - It does not ask for the password twice. The reveal toggle on <PasswordInput>
  *    catches the typo a confirmation field is there to catch, and does it while
  *    the user can still see what they typed.
- *  - It does not state the password policy. `app/security.py` owns the rule and
+ *  - It does not state the password policy. `backend/app/security.py` owns the rule and
  *    returns `weak_password` with its own message ("Password must be at least 8
  *    characters"), which is attached to the field. A hard-coded "8 characters"
  *    here would be a second copy of a rule the operator can change.

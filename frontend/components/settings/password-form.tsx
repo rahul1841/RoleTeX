@@ -14,7 +14,7 @@ import { SecretInput, SettingsField, describedBy } from "./field";
 /**
  * Only "you left this blank" is checked here.
  *
- * app/security.py owns the password policy and reports a violation as
+ * backend/app/security.py owns the password policy and reports a violation as
  * `weak_password` with a message written for a human ("Password must be at
  * least 8 characters"). Restating the rules here would create a second copy
  * that drifts the day the server's minimum changes and, worse, could reject a

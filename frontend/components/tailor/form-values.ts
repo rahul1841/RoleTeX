@@ -3,7 +3,7 @@
  *
  * Kept apart from the panel that renders it because this is the part with
  * rules in it, and the rules are the server's: the field lengths mirror
- * `TailorRequest` in app/schemas.py, and `buildRequest` is the one place that
+ * `TailorRequest` in backend/app/schemas.py, and `buildRequest` is the one place that
  * decides which of `job_description` / `jd_id` a request carries.
  */
 

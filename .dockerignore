@@ -7,11 +7,8 @@
 venv
 __pycache__
 *.py[cod]
-.pytest_cache
 .mypy_cache
 .ruff_cache
-.coverage*
-htmlcov
 *.aux
 *.log
 *.out
@@ -19,24 +16,18 @@ htmlcov
 *.synctex.gz
 *.xdv
 output
-tests
-requirements-dev.txt
-pla.md
-plan.md
-prd.md
-architecture.md
-design.md
-rules.md
-memory.md
+docs
 data
 .claude
 .DS_Store
 .idea
 .vscode
 
-# Frontend build inputs. The Next build runs in a separate Docker stage;
-# copying these into the Python image would add hundreds of MB and bust the
-# Tectonic prewarm layer on every CSS change.
+# Frontend build inputs. Copying these into the Python image would add hundreds
+# of MB and bust the Tectonic prewarm layer on every CSS change. The image has
+# no Node stage yet, so it currently ships no frontend at all — when one is
+# added it must run `npm ci && npm run build` itself rather than expect these.
+# See README, "The frontend is not in the image yet".
 node_modules
 .next
 frontend/node_modules

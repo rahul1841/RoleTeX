@@ -7,9 +7,9 @@ import { usePathname } from "next/navigation";
  * Route-change focus management.
  *
  * A client-side navigation swaps the page content without moving focus, so a
- * screen reader or keyboard user is left wherever the old page put them and is
- * never told the page changed. The old vanilla app solved this by focusing the
- * view's heading on every view switch; this reproduces that for the router.
+ * screen reader or keyboard user is left wherever the previous page put them
+ * and is never told the page changed. Moving focus to the new <h1> on every
+ * navigation is what announces it.
  *
  * The mechanism is split in two because the two halves live in different
  * places: the provider sits in the shell (it is the only thing that sees every

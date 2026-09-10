@@ -13,7 +13,7 @@ import type { NextConfig } from "next";
  * export mode cannot be set unconditionally.
  *
  * The dev rewrite is what keeps the browser on ONE origin. The backend's CSRF
- * check (app/security.py origin_allowed) compares the request's `Origin`
+ * check (backend/app/security.py origin_allowed) compares the request's `Origin`
  * against `X-Forwarded-Host`/`Host`, and the session cookie is HttpOnly and
  * host-only. Proxying /api through :3000 means Origin and host agree and the
  * cookie is first-party, so no CORS middleware and no SameSite=None downgrade

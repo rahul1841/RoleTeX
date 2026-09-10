@@ -1,35 +1,35 @@
 /**
  * One-time account links, and why the token lives in the URL fragment.
  *
- * The backend emails links built in app/routes_account.py:
+ * `_token_link()` in backend/app/routes_account.py emails links of this shape:
  *
- *     RESET_PATH  = "/#/reset-password"
- *     VERIFY_PATH = "/#/verify-email"
- *     link        = f"{base}{PATH}?token={token}"
+ *     https://host/reset-password/#token=<one-time token>
  *
- * so a real message contains, verbatim:
+ * The token sits in the FRAGMENT, and that is the security property this
+ * module exists to preserve: a fragment is never put on the wire. It is not in
+ * the request line, so it cannot reach an access log, a reverse proxy log, or
+ * an analytics pipeline; and it is stripped from the `Referer` header of any
+ * request the page makes afterwards, so a third-party script or an image on
+ * the reset page cannot exfiltrate it. Moving the token to a real query string
+ * would leak a live password-reset credential into every one of those places.
  *
- *     https://host/#/reset-password?token=<one-time token>
+ * Two shapes are accepted, and both keep the token in the fragment:
  *
- * The `?token=` sits INSIDE the fragment. That is deliberate and it is the
- * security property this module exists to preserve: a fragment is never put on
- * the wire. It is not in the request line, so it cannot reach an access log, a
- * reverse proxy log, or an analytics pipeline; and it is stripped from the
- * `Referer` header of any request the page makes afterwards, so a third-party
- * script or an image on the reset page cannot exfiltrate it. Moving the token
- * to a real query string — the reflexive "fix" for a hash route — would leak a
- * live password-reset credential into every one of those places.
- *
- * Two shapes are therefore accepted, and both keep the token in the fragment:
- *
- *   LEGACY   /#/reset-password?token=ABC     already sitting in people's inboxes
- *   MODERN   /reset-password/#token=ABC      a real route, token still in the hash
+ *   CURRENT  /reset-password/#token=ABC      a real route, token in the hash
+ *   LEGACY   /#/reset-password?token=ABC     what the server emitted before
+ *                                            2026-09-10, when the UI was a
+ *                                            hash-routed single page
  *
  * The legacy shape lands on "/" as far as the server and the router are
- * concerned, so <AuthRuntime> rewrites it to the modern shape client-side (see
- * auth-runtime.tsx). The pages themselves only ever read the fragment, never
- * `useSearchParams()`, so a token can never be promoted into the query string
- * by accident.
+ * concerned, so <AuthRuntime> rewrites it to the current shape client-side (see
+ * auth-runtime.tsx). That rewrite is transitional: reset tokens live at most
+ * 24 hours and verification tokens at most 7 days (the `PASSWORD_RESET_TTL_MINUTES`
+ * / `EMAIL_VERIFY_TTL_HOURS` bounds in backend/app/config.py), so once a week has
+ * passed since the server stopped emitting them, `legacyHashRoute` and
+ * `useLegacyTokenLinkRedirect` can both be deleted.
+ *
+ * The pages themselves only ever read the fragment, never `useSearchParams()`,
+ * so a token can never be promoted into the query string by accident.
  *
  * Everything here is pure string work on purpose: no `window`, so it is
  * callable during render, from a server component, and from a test.
@@ -76,7 +76,7 @@ export function tokenFromFragment(hash: string): string | null {
  * The account route a LEGACY hash link is asking for, or null.
  *
  * Only a fragment that starts with "/" is a legacy route — that is what
- * distinguishes `#/verify-email?token=ABC` from the modern `#token=ABC`, and
+ * distinguishes `#/verify-email?token=ABC` from the current `#token=ABC`, and
  * it is what stops this from matching its own output and looping.
  *
  * Anything that is not one of the two known routes returns null and is left
@@ -102,7 +102,7 @@ export function legacyHashRoute(
 }
 
 /**
- * The modern URL for an account route, with the token still in the fragment.
+ * The current URL for an account route, with the token still in the fragment.
  *
  * The trailing slash is not cosmetic: `trailingSlash: true` in next.config.ts
  * makes the static export emit `reset-password/index.html`, and this href is
