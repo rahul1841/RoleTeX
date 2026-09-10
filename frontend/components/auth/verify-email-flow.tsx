@@ -8,7 +8,7 @@ import {
   MailCheckIcon,
   TriangleAlertIcon,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ButtonLink } from "@/components/ui/button";
 import { ErrorState, Spinner } from "@/components/common";
 import { useConfirmVerification, useLogout } from "@/hooks/use-auth";
 import { useSession } from "@/hooks/use-session";
@@ -57,13 +57,13 @@ export function VerifyEmailFlow() {
   }, [confirm.isSuccess]);
 
   const continueAction = session.isAuthenticated ? (
-    <Button render={<Link href="/" />} size="sm">
+    <ButtonLink href="/" size="sm">
       Continue to RoleTeX
-    </Button>
+    </ButtonLink>
   ) : (
-    <Button render={<Link href="/sign-in" />} size="sm">
+    <ButtonLink href="/sign-in" size="sm">
       Sign in
-    </Button>
+    </ButtonLink>
   );
 
   if (token === undefined) {

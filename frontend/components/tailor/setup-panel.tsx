@@ -6,7 +6,7 @@ import { Controller, useForm, useWatch, type FieldErrors } from "react-hook-form
 import { zodResolver } from "@hookform/resolvers/zod";
 import { cn } from "cn";
 import { DatabaseIcon, SparklesIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import {
   Card,
   CardAction,
@@ -360,14 +360,14 @@ export function SetupPanel({
                       from LaTeX, or by typing it — and it becomes selectable
                       here.
                     </p>
-                    <Button
+                    <ButtonLink
                       className="mt-2"
                       variant="outline"
                       size="sm"
-                      render={<Link href="/resumes" />}
+                      href="/resumes"
                     >
                       Add a resume
-                    </Button>
+                    </ButtonLink>
                   </div>
                 </FormField>
               ) : (

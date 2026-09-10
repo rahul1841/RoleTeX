@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { MailCheckIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ErrorState, Spinner } from "@/components/common";
 import { useForgotPassword } from "@/hooks/use-auth";
@@ -95,9 +95,9 @@ export function ForgotPasswordForm() {
             icon={MailCheckIcon}
             actions={
               <>
-                <Button render={<Link href="/sign-in" />} size="sm">
+                <ButtonLink href="/sign-in" size="sm">
                   Back to sign in
-                </Button>
+                </ButtonLink>
                 <Button
                   variant="ghost"
                   size="sm"

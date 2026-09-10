@@ -1,10 +1,9 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { CheckCircle2Icon, DownloadIcon, RefreshCwIcon } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { ErrorState, Spinner } from "@/components/common";
 import { RunWarnings } from "@/components/tailor";
 // components/pdf owns every base64 -> Blob -> object-URL path in the app, and
@@ -217,23 +216,23 @@ function CompileError({
   if (code === "run_has_no_latex") {
     title = "This run has no stored LaTeX";
     action = (
-      <Button variant="outline" size="sm" render={<Link href="/" />}>
+      <ButtonLink variant="outline" size="sm" href="/">
         Tailor again
-      </Button>
+      </ButtonLink>
     );
   } else if (code === "latex_compile_failed") {
     title = "The stored LaTeX did not compile";
     action = (
-      <Button variant="outline" size="sm" render={<Link href="/" />}>
+      <ButtonLink variant="outline" size="sm" href="/">
         Tailor again
-      </Button>
+      </ButtonLink>
     );
   } else if (code === "compiler_not_found" || code === "compiler_start_failed") {
     title = "This server has no LaTeX compiler";
     action = (
-      <Button variant="outline" size="sm" render={<Link href="/settings" />}>
+      <ButtonLink variant="outline" size="sm" href="/settings">
         Check server status
-      </Button>
+      </ButtonLink>
     );
   } else if (code === "compile_timeout") {
     title = "Compiling took too long";

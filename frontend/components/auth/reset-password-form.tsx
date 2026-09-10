@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { LinkIcon, TriangleAlertIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { ErrorState, Spinner } from "@/components/common";
 import { useResetPassword } from "@/hooks/use-auth";
 import { AuthGate } from "./auth-gate";
@@ -68,9 +68,9 @@ export function ResetPasswordForm() {
   });
 
   const requestAnother = (
-    <Button render={<Link href="/forgot-password" />} size="sm">
+    <ButtonLink href="/forgot-password" size="sm">
       Request a new link
-    </Button>
+    </ButtonLink>
   );
 
   // The fragment has not been read yet. One frame, and holding still beats

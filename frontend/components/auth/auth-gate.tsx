@@ -1,11 +1,10 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { DatabaseIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ButtonLink } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState, LoadingState, Spinner } from "@/components/common";
 import { useSession } from "@/hooks/use-session";
@@ -102,9 +101,9 @@ export function AuthGate({
           tone="info"
           icon={DatabaseIcon}
           actions={
-            <Button render={<Link href="/" />} size="sm">
+            <ButtonLink href="/" size="sm">
               Go to RoleTeX
-            </Button>
+            </ButtonLink>
           }
         >
           <p>

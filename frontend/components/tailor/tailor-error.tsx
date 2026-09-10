@@ -1,8 +1,7 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { ErrorState } from "@/components/common";
 import { isApiError } from "@/lib/api/errors";
 import { CodeBlock } from "./code-block";
@@ -47,15 +46,15 @@ interface Explanation {
 }
 
 const settingsLink = (
-  <Button variant="outline" size="sm" render={<Link href="/settings" />}>
+  <ButtonLink variant="outline" size="sm" href="/settings">
     Open Settings
-  </Button>
+  </ButtonLink>
 );
 
 const resumesLink = (
-  <Button variant="outline" size="sm" render={<Link href="/resumes" />}>
+  <ButtonLink variant="outline" size="sm" href="/resumes">
     Go to Resumes
-  </Button>
+  </ButtonLink>
 );
 
 function explain(error: unknown): Explanation {

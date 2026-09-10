@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeftIcon,
@@ -13,7 +12,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   CardSkeleton,
@@ -126,9 +125,9 @@ export function ResumeDetailView({ id }: { id: string }) {
             title={resumeErrorGuidance(query.error)?.title}
             onRetry={() => void query.refetch()}
             action={
-              <Button variant="ghost" size="sm" render={<Link href="/resumes" />}>
+              <ButtonLink variant="ghost" size="sm" href="/resumes">
                 Back to all resumes
-              </Button>
+              </ButtonLink>
             }
           />
         </div>
@@ -169,14 +168,10 @@ export function ResumeDetailView({ id }: { id: string }) {
         }
         actions={
           <>
-            <Button
-              variant="ghost"
-              size="sm"
-              render={<Link href="/resumes" />}
-            >
+            <ButtonLink variant="ghost" size="sm" href="/resumes">
               <ArrowLeftIcon data-icon="inline-start" />
               All resumes
-            </Button>
+            </ButtonLink>
             <Button
               variant="outline"
               size="sm"

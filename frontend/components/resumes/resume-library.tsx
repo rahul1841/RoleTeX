@@ -1,10 +1,9 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { FileTextIcon, PlusIcon, UploadIcon } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import {
   CardGridSkeleton,
   ConfirmDialog,
@@ -49,13 +48,13 @@ export function ResumeLibrary() {
         <UploadIcon data-icon="inline-start" />
         Import
       </Button>
-      <Button
+      <ButtonLink
         size="sm"
-        render={<Link href={{ pathname: "/resumes", query: { new: "1" } }} />}
+        href={{ pathname: "/resumes", query: { new: "1" } }}
       >
         <PlusIcon data-icon="inline-start" />
         New resume
-      </Button>
+      </ButtonLink>
     </>
   );
 

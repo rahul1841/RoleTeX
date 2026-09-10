@@ -1,11 +1,10 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "cn";
 import { FileSearchIcon, HistoryIcon, SparklesIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import {
   CardSkeleton,
   EmptyState,
@@ -77,10 +76,10 @@ export function HistoryWorkspace() {
           title="No tailoring runs yet"
           description="Every time you tailor a resume to a job description, the run is kept here with its change list, its diff and the LaTeX it produced — so you can recompile the PDF later without spending tokens again."
           action={
-            <Button render={<Link href="/" />}>
+            <ButtonLink href="/">
               <SparklesIcon data-icon="inline-start" />
               Tailor a resume
-            </Button>
+            </ButtonLink>
           }
         />
       </div>

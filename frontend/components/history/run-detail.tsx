@@ -6,7 +6,7 @@ import { cn } from "cn";
 import { ArrowLeftIcon, ArrowUpRightIcon, TrashIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConfirmDialog, CopyButton } from "@/components/common";
 // The change list, the diff renderer and the code block are the tailor
@@ -77,15 +77,15 @@ export function RunDetail({ run, onDeleted, className }: RunDetailProps) {
 
   return (
     <div className={cn("min-w-0 space-y-5", className)}>
-      <Button
+      <ButtonLink
         variant="ghost"
         size="sm"
-        render={<Link href="/history" />}
+        href="/history"
         className="-ml-2 lg:hidden"
       >
         <ArrowLeftIcon data-icon="inline-start" />
         All runs
-      </Button>
+      </ButtonLink>
 
       <header className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">

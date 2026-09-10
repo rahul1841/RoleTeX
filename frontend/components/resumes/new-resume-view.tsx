@@ -1,11 +1,10 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeftIcon } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+import { ButtonLink } from "@/components/ui/button";
 import { PageContainer, PageHeader } from "@/components/common";
 import { useCreateResume } from "@/hooks/use-resumes";
 import { ResumeBuilder } from "./resume-builder";
@@ -33,10 +32,10 @@ export function NewResumeView() {
         title="New resume"
         description="Fill in what you can and watch the PDF compile beside you. Nothing is saved until you create it."
         actions={
-          <Button variant="ghost" size="sm" render={<Link href="/resumes" />}>
+          <ButtonLink variant="ghost" size="sm" href="/resumes">
             <ArrowLeftIcon data-icon="inline-start" />
             All resumes
-          </Button>
+          </ButtonLink>
         }
       />
 
