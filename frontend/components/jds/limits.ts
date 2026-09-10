@@ -7,11 +7,11 @@
  * "too long" state:
  *
  *  1. CONTENT CHARACTERS — `JdCreateRequest.content` is
- *     `Field(min_length=50, max_length=20_000)` in app/schemas.py. Over it,
+ *     `Field(min_length=50, max_length=20_000)` in backend/app/schemas.py. Over it,
  *     Pydantic answers 422 `invalid_request` with
  *     "content: String should have at most 20000 characters".
  *  2. TITLE CHARACTERS — the same file, `min_length=1, max_length=160`.
- *  3. REQUEST BYTES — `MAX_HTTP_BODY_BYTES` in app/main.py, enforced by
+ *  3. REQUEST BYTES — `MAX_HTTP_BODY_BYTES` in backend/app/main.py, enforced by
  *     `BodySizeLimitMiddleware` at the raw ASGI layer. This one runs BELOW
  *     routing and BELOW authentication: an oversized paste is answered 413
  *     `request_too_large` before FastAPI has looked at the session cookie, so
@@ -25,14 +25,14 @@
  * character limit and still be refused for its size. The form checks both.
  */
 
-/** app/schemas.py `JdCreateRequest.title`. */
+/** backend/app/schemas.py `JdCreateRequest.title`. */
 export const JD_TITLE_MAX = 160;
 
-/** app/schemas.py `JdCreateRequest.content`. */
+/** backend/app/schemas.py `JdCreateRequest.content`. */
 export const JD_CONTENT_MIN = 50;
 export const JD_CONTENT_MAX = 20_000;
 
-/** app/main.py `MAX_HTTP_BODY_BYTES`. */
+/** backend/app/main.py `MAX_HTTP_BODY_BYTES`. */
 export const JD_MAX_REQUEST_BYTES = 64_000;
 
 /** Where the counter turns advisory rather than neutral. */

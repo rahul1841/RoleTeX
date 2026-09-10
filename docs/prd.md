@@ -39,7 +39,7 @@ Paste a job description → an LLM proposes structured, fact-preserving edits (s
 
 ## 5. Users
 
-- **Primary:** the repo owner running a private instance with their own seed resume (`resume/data.json` + `resume/template.tex`; demo mode).
+- **Primary:** the repo owner running a private instance with their own seed resume (`backend/resume/data.json` + `backend/resume/template.tex`; demo mode).
 - **Secondary (2026-07 revamp):** registered users (email+password accounts with self-service password change/reset, optional email verification, and session revocation — MongoDB-backed) who build a resume in the app (`POST /api/resumes/manual`) or import one via `POST /api/resumes` (LaTeX paste) or `POST /api/resumes/pdf` (PDF upload) into a private, versioned, per-user library, manage saved JDs and tailor history, and bring their own provider API keys (encrypted at rest).
 - A user who only wants a typeset resume — no tailoring — is a supported case as of 2026-09-06: authoring, editing, previewing, and downloading a PDF need no provider key at all.
 

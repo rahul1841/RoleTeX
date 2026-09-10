@@ -208,7 +208,7 @@ class StubLLM:
     ) -> LLMExtractResult:
         # ``images``/``links`` are accepted and ignored: the extraction is a
         # fixture, so there is nothing to read them for. They must still be in
-        # the signature — app/routes_resumes.py passes them for every non-LaTeX
+        # the signature — backend/app/routes_resumes.py passes them for every non-LaTeX
         # import, and a vision-capable provider upgrades "text" to
         # "text_and_image", so omitting them 500s the whole PDF import path.
         resume, style = mock_extraction(source)

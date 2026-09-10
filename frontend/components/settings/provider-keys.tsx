@@ -282,7 +282,7 @@ function KeyStatus({
 }
 
 /**
- * Mirrors what app/routes_keys.py will accept: at least 8 characters after
+ * Mirrors what backend/app/routes_keys.py will accept: at least 8 characters after
  * trimming, at most 400, and no control characters (`ord < 32` or `ord == 127`).
  *
  * Restated here only because those three are cheap, unambiguous, and turn a

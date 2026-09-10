@@ -31,10 +31,15 @@ ENV HOME=/home/user \
     TECTONIC_UNTRUSTED_MODE=1 \
     PORT=7860
 
+# The repository root, so `REPO_ROOT / "frontend" / "out"` resolves the way it
+# does on a developer's machine. PYTHONPATH points one level in, at backend/,
+# which is what keeps the import path `app.main:app` rather than
+# `backend.app.main:app` — the package layout inside backend/ is unchanged.
 WORKDIR /home/user/app
+ENV PYTHONPATH=/home/user/app/backend
 
-COPY --chown=user:user requirements.txt ./
-RUN pip install --no-cache-dir --disable-pip-version-check -r requirements.txt
+COPY --chown=user:user backend/requirements.txt ./backend/
+RUN pip install --no-cache-dir --disable-pip-version-check -r backend/requirements.txt
 
 COPY --chown=user:user . ./
 
@@ -46,7 +51,7 @@ USER user
 # inserted. Production compiles use --only-cached, so a new template/package
 # must be exercised here before it can be used by the running application.
 RUN mkdir -p "$TECTONIC_CACHE_DIR" /tmp/tectonic-prewarm \
-    && cp -R resume/assets /tmp/tectonic-prewarm/assets \
+    && cp -R backend/resume/assets /tmp/tectonic-prewarm/assets \
     && python -c "from pathlib import Path; from app.resume import ResumeRepository, flattened_skills, render_resume; from app.schemas import TailorProposal; resume, template = ResumeRepository().load(); proposal = TailorProposal(summary=resume.summary, bullet_rewrites=[], skills_order=flattened_skills(resume)); Path('/tmp/tectonic-prewarm/resume.tex').write_text(render_resume(template, resume, proposal), encoding='utf-8')" \
     && tectonic -X compile --untrusted \
        --outdir /tmp/tectonic-prewarm \

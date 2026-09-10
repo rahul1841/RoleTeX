@@ -29,7 +29,7 @@ import type {
 /**
  * `GET /api/providers`.
  *
- * The catalog is compiled into the server (app/llm.py `PROVIDERS`), so it
+ * The catalog is compiled into the server (backend/app/llm.py `PROVIDERS`), so it
  * cannot change while the page is open. Cached forever, like health.
  */
 export function useProviders() {
@@ -64,7 +64,7 @@ export function useKeys(enabled: boolean) {
  *
  * `configurable` is the honest reading of an empty `default_model`. Every entry
  * in the catalog is `needs_key: true`, but `grid` ships with no base URL and no
- * model (app/llm.py), so a key alone will not make it work — the operator has
+ * model (backend/app/llm.py), so a key alone will not make it work — the operator has
  * to set `GRID_BASE_URL` and `GRID_MODEL` in the server environment. Deriving
  * that from the catalog rather than hard-coding "grid" means a future gateway
  * with the same shape is described correctly too.

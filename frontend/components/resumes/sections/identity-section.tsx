@@ -17,7 +17,7 @@ import { AddEntryButton, FormSection } from "./section-frame";
  * Name, contact line, and the links that render under it.
  *
  * Name and email are the only two fields in the whole builder that are
- * unconditionally required — `_validate_identity` in app/builder.py — so they
+ * unconditionally required — `_validate_identity` in backend/app/builder.py — so they
  * are the only ones marked required here. Everything else on a resume is
  * optional until you start filling it in.
  */

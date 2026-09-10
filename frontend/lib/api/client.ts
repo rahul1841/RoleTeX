@@ -5,7 +5,7 @@
  * next.config.ts rewrites `/api/*` to the uvicorn dev server; in production the
  * same FastAPI process serves both the static export and the API. Keeping one
  * origin is what lets the backend's HttpOnly session cookie and its
- * Origin-equals-host CSRF check (app/security.py `origin_allowed`) work with no
+ * Origin-equals-host CSRF check (backend/app/security.py `origin_allowed`) work with no
  * CORS middleware and no SameSite downgrade. Do not introduce absolute API URLs.
  *
  * CREDENTIALS: `same-origin` attaches the `rt_session` cookie. The cookie is

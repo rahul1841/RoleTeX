@@ -14,7 +14,7 @@ Security rationale:
   stored as ``pdf_scanned`` with a warning that the facts were read from
   pixels.
 - Manually authored resumes (``/api/resumes/manual``, ``PUT .../content``)
-  reach the same storage through ``app/builder.py``, which is the import
+  reach the same storage through ``backend/app/builder.py``, which is the import
   boundary's twin for a human author: the server still assigns every stable ID
   and still assembles the template, so no LLM and no provider key is involved
   in owning a resume here.

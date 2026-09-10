@@ -34,7 +34,7 @@ const FIELD_FOR_CODE = { invalid_email: "email" } as const;
  * arrives at already decided about, so making them open sign-in first to reach
  * it adds a step to the flow that is already the worst day of their week.
  *
- * THE COPY IS PART OF THE SECURITY MODEL. `app/routes_account.py` returns a
+ * THE COPY IS PART OF THE SECURITY MODEL. `backend/app/routes_account.py` returns a
  * byte-identical response whether or not the address has an account, precisely
  * so the endpoint cannot be used to test whether someone is a user. So the
  * confirmation says "if there is an account" and never "we sent you an email".

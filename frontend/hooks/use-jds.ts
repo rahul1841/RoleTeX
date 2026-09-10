@@ -65,7 +65,7 @@ import type {
 /**
  * `GET /api/jds`.
  *
- * The server sorts by `updated_at` DESC (app/db.py `JdStore.list_for_user`),
+ * The server sorts by `updated_at` DESC (backend/app/db.py `JdStore.list_for_user`),
  * which is the order the UI presents by default; any other sort is applied on
  * the loaded array, since the API takes no sort or filter parameters.
  */

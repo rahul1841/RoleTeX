@@ -1,7 +1,7 @@
 /**
  * One-time account links, and why the token lives in the URL fragment.
  *
- * `_token_link()` in app/routes_account.py emails links of this shape:
+ * `_token_link()` in backend/app/routes_account.py emails links of this shape:
  *
  *     https://host/reset-password/#token=<one-time token>
  *
@@ -24,7 +24,7 @@
  * concerned, so <AuthRuntime> rewrites it to the current shape client-side (see
  * auth-runtime.tsx). That rewrite is transitional: reset tokens live at most
  * 24 hours and verification tokens at most 7 days (the `PASSWORD_RESET_TTL_MINUTES`
- * / `EMAIL_VERIFY_TTL_HOURS` bounds in app/config.py), so once a week has
+ * / `EMAIL_VERIFY_TTL_HOURS` bounds in backend/app/config.py), so once a week has
  * passed since the server stopped emitting them, `legacyHashRoute` and
  * `useLegacyTokenLinkRedirect` can both be deleted.
  *

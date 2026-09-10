@@ -155,7 +155,7 @@ export function useLogout() {
  * `POST /api/auth/password/forgot`.
  *
  * The response is intentionally identical for an address with an account and
- * one without (app/routes_account.py refuses to be an account oracle), so the
+ * one without (backend/app/routes_account.py refuses to be an account oracle), so the
  * caller must not phrase its success state as confirmation that mail was sent
  * to that person. `delivered` reports only whether this SERVER has a real mail
  * transport at all — with the console driver it is false and the link is in

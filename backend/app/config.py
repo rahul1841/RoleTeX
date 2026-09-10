@@ -180,7 +180,7 @@ def load_config() -> AppConfig:
             "MAX_PDF_UPLOAD_BYTES", 5_000_000, 1_000_000, 20_000_000
         ),
         # A resume is a short document. The bound keeps a mistaken upload (or a
-        # deliberate one) from being billed as LLM input; see app/pdftext.py.
+        # deliberate one) from being billed as LLM input; see backend/app/pdftext.py.
         max_import_pdf_pages=_bounded_int("MAX_IMPORT_PDF_PAGES", 3, 1, 20),
         pdftotext_bin=os.getenv("PDFTOTEXT_BIN", "pdftotext").strip() or "pdftotext",
         pdfinfo_bin=os.getenv("PDFINFO_BIN", "pdfinfo").strip() or "pdfinfo",

@@ -66,7 +66,7 @@ export function formatRelative(value: string | null | undefined): string {
   return "just now";
 }
 
-/** app/routes_jds.py `EXCERPT_LENGTH`. */
+/** backend/app/routes_jds.py `EXCERPT_LENGTH`. */
 const EXCERPT_LENGTH = 160;
 
 /**

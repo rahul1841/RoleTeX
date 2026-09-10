@@ -24,7 +24,11 @@ from .schemas import (
 )
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+#: ``backend/`` — the seed resume, its template, and its assets live here.
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+#: The repository root, one level up: ``backend/`` and ``frontend/`` are
+#: siblings, so anything that resolves a frontend build has to start here.
+REPO_ROOT = BACKEND_ROOT.parent
 REQUIRED_TEMPLATE_TOKENS: Tuple[str, ...] = (
     "@@CONTACT@@",
     "@@SUMMARY@@",
@@ -87,14 +91,14 @@ class ResumeRepository:
         assets_dir: Optional[Path] = None,
     ) -> None:
         self.data_path = Path(
-            data_path or os.getenv("RESUME_DATA_PATH", str(PROJECT_ROOT / "resume" / "data.json"))
+            data_path or os.getenv("RESUME_DATA_PATH", str(BACKEND_ROOT / "resume" / "data.json"))
         )
         self.template_path = Path(
             template_path
-            or os.getenv("RESUME_TEMPLATE_PATH", str(PROJECT_ROOT / "resume" / "template.tex"))
+            or os.getenv("RESUME_TEMPLATE_PATH", str(BACKEND_ROOT / "resume" / "template.tex"))
         )
         configured_assets = assets_dir or os.getenv(
-            "RESUME_ASSETS_DIR", str(PROJECT_ROOT / "resume" / "assets")
+            "RESUME_ASSETS_DIR", str(BACKEND_ROOT / "resume" / "assets")
         )
         self.assets_dir = Path(configured_assets)
 

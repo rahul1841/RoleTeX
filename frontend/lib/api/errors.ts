@@ -5,7 +5,7 @@
  * for `detail`:
  *
  *   1. `{ code, message, ...extra }`  — the canonical structured error, built
- *      by `_api_error()` in app/auth.py. `extra` carries per-error fields such
+ *      by `_api_error()` in backend/app/auth.py. `extra` carries per-error fields such
  *      as `errors` (field messages) or `retry_after`.
  *   2. `ValidationError[]`            — FastAPI's own 422 body, when a request
  *      fails Pydantic validation before reaching route code.

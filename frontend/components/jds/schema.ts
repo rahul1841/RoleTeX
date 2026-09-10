@@ -7,7 +7,7 @@ import {
 } from "./limits";
 
 /**
- * The create/edit form's shape, mirroring app/schemas.py exactly.
+ * The create/edit form's shape, mirroring backend/app/schemas.py exactly.
  *
  * Mirroring rather than approximating matters here because every request model
  * on this API is Pydantic `extra="forbid"` with real `Field` constraints: a

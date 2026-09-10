@@ -14,7 +14,7 @@
 > never existed under those names.
 >
 > For current architecture see [architecture.md](architecture.md),
-> [design.md](design.md) and [README.md](README.md).
+> [design.md](design.md) and [README.md](../README.md).
 
 ---
 
@@ -396,7 +396,7 @@ COPY --chown=user:user . .
 USER user
 
 RUN mkdir -p "$TECTONIC_CACHE_DIR" /tmp/prewarm \
-    && tectonic -X compile resume/template.tex --outdir /tmp/prewarm \
+    && tectonic -X compile backend/resume/template.tex --outdir /tmp/prewarm \
     && rm -rf /tmp/prewarm
 
 EXPOSE 7860

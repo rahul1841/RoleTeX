@@ -6,7 +6,7 @@
 # Then run the app against it (from the repo root):
 #   export MONGODB_URI=mongodb://localhost:27017
 #   export APP_SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
-#   .venv/bin/python -m uvicorn app.main:app --reload --port 8000
+#   PYTHONPATH=backend .venv/bin/python -m uvicorn app.main:app --reload --port 8000
 #
 # Data persists in the named volume `mongo_data`; wipe it with:
 #   docker compose down -v

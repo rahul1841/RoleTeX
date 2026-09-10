@@ -59,7 +59,7 @@ function clearAccountCache(queryClient: QueryClient): void {
 /**
  * `PATCH /api/me`.
  *
- * ⚠️ OMITTED IS NOT NULL. app/auth.py checks `model_fields_set`, so a key that
+ * ⚠️ OMITTED IS NOT NULL. backend/app/auth.py checks `model_fields_set`, so a key that
  * is absent from the JSON leaves the stored value alone, while an explicit
  * `null` clears it. `JSON.stringify` drops `undefined` properties, which means
  * the difference the server cares about is exactly the difference between

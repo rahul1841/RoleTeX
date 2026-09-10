@@ -223,7 +223,7 @@ def build_resume_data(raw: Dict[str, Any]) -> ResumeData:
 
 # --- Server-controlled template assembly -----------------------------------
 # Everything below is fixed application LaTeX except the bounded style values.
-# This mirrors resume/template.tex but parameterizes only documentclass options,
+# This mirrors backend/resume/template.tex but parameterizes only documentclass options,
 # page geometry, and an optional accent color.
 
 _MACRO_BLOCK = r"""\textheight=10in

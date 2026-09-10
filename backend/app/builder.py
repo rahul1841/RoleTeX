@@ -1,6 +1,6 @@
 """User-authored resume drafts: the manual-entry trust boundary.
 
-``app/importer.py`` turns an LLM's reading of a pasted document into storable
+``backend/app/importer.py`` turns an LLM's reading of a pasted document into storable
 facts. This module does the same job for the other authoring path — a person
 filling in the browser editor — and keeps the identical guarantees: the server
 assigns every stable ID, the compiled template is assembled from bounded style

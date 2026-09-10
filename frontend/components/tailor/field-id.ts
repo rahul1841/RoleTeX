@@ -9,7 +9,7 @@
  *
  * An unrecognised id is passed through untouched rather than guessed at:
  * imported resumes carry server-assigned ids, but the seed resume in
- * `resume/data.json` carries whatever its author wrote, and inventing a label
+ * `backend/resume/data.json` carries whatever its author wrote, and inventing a label
  * for one of those would be worse than showing the id.
  */
 

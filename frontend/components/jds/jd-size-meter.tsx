@@ -13,7 +13,7 @@ import {
  * The live readout that keeps a paste inside the server's three ceilings.
  *
  * WHY THIS EXISTS AT ALL: the byte cap is enforced by an ASGI middleware that
- * runs below routing and below authentication (app/main.py
+ * runs below routing and below authentication (backend/app/main.py
  * `BodySizeLimitMiddleware`). A paste over it comes back 413 with no field
  * information, no relation to the form, and — verified against the running
  * server — the same answer whether or not the user is signed in. There is

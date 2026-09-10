@@ -394,7 +394,7 @@ class ResumeVersionSourceResponse(StrictModel):
 #
 # Draft models are deliberately lenient: every field defaults to empty and only
 # maximum lengths are enforced here, so a half-filled form reaches the route and
-# comes back with field-addressed guidance from ``app/builder.py`` instead of a
+# comes back with field-addressed guidance from ``backend/app/builder.py`` instead of a
 # schema dump. ``extra="forbid"`` still applies, so the stable IDs the server
 # owns cannot be smuggled in from the browser.
 

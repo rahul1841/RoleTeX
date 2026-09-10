@@ -28,7 +28,7 @@ import { formatNumber } from "./limits";
  *     from here, and the UI must not imply otherwise with a "view" or "revert"
  *     affordance it cannot honour.
  *  2. An archived entry's `created_at` is the moment it was REPLACED, not the
- *     moment it was written — app/db.py stamps `now` as it archives. Labelling
+ *     moment it was written — backend/app/db.py stamps `now` as it archives. Labelling
  *     it "created" would be off by exactly one edit, so it is labelled
  *     "replaced".
  *

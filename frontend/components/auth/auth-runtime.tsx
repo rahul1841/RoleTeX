@@ -46,7 +46,7 @@ export function AuthRuntime() {
  *   /#/reset-password?token=ABC   ->   /reset-password/#token=ABC
  *
  * The server no longer emits that first shape — `_token_link()` in
- * app/routes_account.py builds the real route directly — but links sent before
+ * backend/app/routes_account.py builds the real route directly — but links sent before
  * 2026-09-10 may still be in inboxes, and to a server, a router, and
  * `usePathname()` they are all simply "/". Without this they land on the tailor
  * page, and a signed-out visitor is then bounced to /sign-in with the token

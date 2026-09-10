@@ -16,37 +16,37 @@ Browser
         │  built to a static export; no server-side rendering at request time
         │  JSON over HTTP, same origin (dev: next rewrites /api → uvicorn)
         ▼
-FastAPI app  (app/main.py — create_app() factory, DI-friendly)
+FastAPI app  (backend/app/main.py — create_app() factory, DI-friendly)
         │
-        ├── ResumeRepository (app/resume.py) ── resume/data.json + resume/template.tex (locked seed, demo mode)
-        ├── Database         (app/db.py)     ── MongoDB (Motor): users, sessions, api_keys, resumes(+versions), jds(+versions), runs
-        ├── Security         (app/security.py)── PBKDF2 passwords, session tokens, Fernet key encryption, rate/login limiting, origin checks
-        ├── LLM adapter      (app/llm.py)     ── OpenAI-compatible chat completions (9 providers, per-user key overrides)
-        ├── Importer         (app/importer.py)── extraction normalization + template assembly
-        ├── PDF text         (app/pdftext.py) ── bounded poppler extraction (pdftotext/pdfinfo/pdftoppm) for PDF imports
-        └── CompileService   (app/compiler.py)── Tectonic in a per-request sandbox + poppler checks
+        ├── ResumeRepository (backend/app/resume.py) ── backend/resume/data.json + backend/resume/template.tex (locked seed, demo mode)
+        ├── Database         (backend/app/db.py)     ── MongoDB (Motor): users, sessions, api_keys, resumes(+versions), jds(+versions), runs
+        ├── Security         (backend/app/security.py)── PBKDF2 passwords, session tokens, Fernet key encryption, rate/login limiting, origin checks
+        ├── LLM adapter      (backend/app/llm.py)     ── OpenAI-compatible chat completions (9 providers, per-user key overrides)
+        ├── Importer         (backend/app/importer.py)── extraction normalization + template assembly
+        ├── PDF text         (backend/app/pdftext.py) ── bounded poppler extraction (pdftotext/pdfinfo/pdftoppm) for PDF imports
+        └── CompileService   (backend/app/compiler.py)── Tectonic in a per-request sandbox + poppler checks
 ```
 
 ## 2. Module map
 
 | Module | Responsibility |
 |---|---|
-| `app/main.py` | App factory (`create_app`), routes, tailor orchestration, single shared repair budget, body-size middleware, structured error responses, serving the built frontend |
-| `app/llm.py` | Provider-neutral chat client (`OpenAICompatibleLLM`): `generate`/`repair` for tailoring, `extract_resume` for import; env config resolution (`resolve_config`), retry/backoff, JSON-mode fallback |
-| `app/resume.py` | Load/validate locked resume data; `build_llm_resume_payload` (identity excluded); `validate_proposal` (safety contract); `escape_latex`; `redact_identity`; deterministic token rendering incl. `sectioned=True` mode; change list + unified diff |
-| `app/compiler.py` | `CompileService`: unique temp dir per compile, `tectonic -X compile --untrusted [--only-cached]`, timeout + POSIX rlimits, per-event-loop `asyncio.Semaphore`, `pdfinfo` page count, `pdftotext` extraction, log sanitization |
-| `app/importer.py` | Normalize LLM extraction into `ResumeData` (backend-assigned positional stable IDs), clamp style hints to whitelists, assemble a fully server-controlled `template.tex` |
-| `app/builder.py` | The same boundary for the *other* untrusted author — a person using the editor. Validates a draft into field-addressed errors, prunes blank rows, reuses the importer's normalization and template assembly, renders the untailored baseline. No LLM involved |
-| `app/config.py` | `AppConfig` dataclass; `load_config()` reads env with clamped, documented bounds |
-| `app/security.py` | Password hashing (PBKDF2-HMAC-SHA256), session token issue/hash, Fernet secret encryption + key hints, `RateLimiter`/`LoginThrottle`, CSRF origin check |
-| `app/db.py` | `Database` wrapper over Motor with per-collection stores; every query is `user_id`-scoped (ownership enforced at the query level) |
-| `app/auth.py` | Session dependency (`require_user`), auth routes, provider/key resolution for user LLM requests |
-| `app/pdftext.py` | Bounded poppler subprocess work (`%PDF-` magic check, size/page/timeout caps, no shell): `pdftotext` extraction, `pdfinfo` page gate, `pdftoppm` rasterization, `pdftohtml` link-annotation recovery |
-| `app/routes_keys.py` / `routes_resumes.py` / `routes_jds.py` / `routes_runs.py` | Route groups for per-user API keys, resume library, JD library, and tailor-run history |
-| `app/schemas.py` | All Pydantic models (`StrictModel` base, `extra="forbid"`), Pydantic v1/v2 compatibility helpers (`validate_model`, `dump_model`) |
+| `backend/app/main.py` | App factory (`create_app`), routes, tailor orchestration, single shared repair budget, body-size middleware, structured error responses, serving the built frontend |
+| `backend/app/llm.py` | Provider-neutral chat client (`OpenAICompatibleLLM`): `generate`/`repair` for tailoring, `extract_resume` for import; env config resolution (`resolve_config`), retry/backoff, JSON-mode fallback |
+| `backend/app/resume.py` | Load/validate locked resume data; `build_llm_resume_payload` (identity excluded); `validate_proposal` (safety contract); `escape_latex`; `redact_identity`; deterministic token rendering incl. `sectioned=True` mode; change list + unified diff |
+| `backend/app/compiler.py` | `CompileService`: unique temp dir per compile, `tectonic -X compile --untrusted [--only-cached]`, timeout + POSIX rlimits, per-event-loop `asyncio.Semaphore`, `pdfinfo` page count, `pdftotext` extraction, log sanitization |
+| `backend/app/importer.py` | Normalize LLM extraction into `ResumeData` (backend-assigned positional stable IDs), clamp style hints to whitelists, assemble a fully server-controlled `template.tex` |
+| `backend/app/builder.py` | The same boundary for the *other* untrusted author — a person using the editor. Validates a draft into field-addressed errors, prunes blank rows, reuses the importer's normalization and template assembly, renders the untailored baseline. No LLM involved |
+| `backend/app/config.py` | `AppConfig` dataclass; `load_config()` reads env with clamped, documented bounds |
+| `backend/app/security.py` | Password hashing (PBKDF2-HMAC-SHA256), session token issue/hash, Fernet secret encryption + key hints, `RateLimiter`/`LoginThrottle`, CSRF origin check |
+| `backend/app/db.py` | `Database` wrapper over Motor with per-collection stores; every query is `user_id`-scoped (ownership enforced at the query level) |
+| `backend/app/auth.py` | Session dependency (`require_user`), auth routes, provider/key resolution for user LLM requests |
+| `backend/app/pdftext.py` | Bounded poppler subprocess work (`%PDF-` magic check, size/page/timeout caps, no shell): `pdftotext` extraction, `pdfinfo` page gate, `pdftoppm` rasterization, `pdftohtml` link-annotation recovery |
+| `backend/app/routes_keys.py` / `routes_resumes.py` / `routes_jds.py` / `routes_runs.py` | Route groups for per-user API keys, resume library, JD library, and tailor-run history |
+| `backend/app/schemas.py` | All Pydantic models (`StrictModel` base, `extra="forbid"`) plus the `validate_model` / `dump_model` helpers every module validates through |
 | `frontend/` | Next.js App Router frontend. `lib/api/` is the only code that talks to FastAPI (`schema.d.ts` is generated from the OpenAPI document); `hooks/` holds TanStack Query hooks, one module per domain; `components/common/` the shared primitives |
-| `resume/` | Seed: `data.json` (facts + stable IDs), `template.tex` (locked, 7 tokens), `assets/` (approved files; currently empty) |
-| `tests/` | 244 offline tests; stub LLM, mocked compiler subprocess, and mongomock-motor database via `create_app` dependency injection |
+| `backend/resume/` | Seed: `data.json` (facts + stable IDs), `template.tex` (locked, 7 tokens), `assets/` (approved files; currently empty) |
+| `docs/` | This file plus `prd.md`, `design.md`, `rules.md`, `plan.md`, `memory.md` |
 
 ## 3. HTTP surface
 
@@ -57,7 +57,7 @@ FastAPI app  (app/main.py — create_app() factory, DI-friendly)
 | `POST /api/auth/register` / `login` / `logout`, `GET/PATCH/DELETE /api/me` | Accounts and sessions (HttpOnly `rt_session` cookie or `Authorization: Bearer`) |
 | `GET /api/providers`, `GET /api/keys`, `PUT/DELETE /api/keys/{provider}` | Per-user provider keys, Fernet-encrypted at rest, masked hint only in responses |
 | `GET/POST /api/resumes`, `POST /api/resumes/pdf`, `GET/PATCH/DELETE /api/resumes/{id}`, `.../versions[/pdf]`, `.../versions/{n}/source` | Resume library: LaTeX paste or PDF upload → LLM extraction → versioned storage |
-| `POST /api/resumes/manual`, `PUT /api/resumes/{id}/content` | Write a resume in the app and edit it afterwards: structured draft → `app/builder.py` → versioned storage. No provider key needed |
+| `POST /api/resumes/manual`, `PUT /api/resumes/{id}/content` | Write a resume in the app and edit it afterwards: structured draft → `backend/app/builder.py` → versioned storage. No provider key needed |
 | `POST /api/resumes/preview` | Compile a draft as typed, or a stored resume, with no job description and no model call. Returns `pdf_base64` + the rendered LaTeX |
 | `GET/POST /api/jds`, `GET/PUT/DELETE /api/jds/{id}`, `.../versions` | JD library with version history |
 | `GET /api/runs`, `GET/DELETE /api/runs/{id}`, `POST /api/runs/{id}/compile` | Tailor history; on-demand recompile of stored LaTeX (no LLM) |
@@ -170,7 +170,7 @@ Private, single-owner deployment. Five enforced safety goals:
 
 ## 7. Data model
 
-- **Seed resume:** `resume/data.json` → `ResumeData` (identity, summary, experience[], projects[], education[], skills[], achievements[]) with stable string IDs on every editable node. `resume/template.tex` contains each token exactly once: `@@CONTACT@@ @@SUMMARY@@ @@EXPERIENCE@@ @@PROJECTS@@ @@EDUCATION@@ @@SKILLS@@ @@ACHIEVEMENTS@@, plus the optional @@CUSTOM@@`.
+- **Seed resume:** `backend/resume/data.json` → `ResumeData` (identity, summary, experience[], projects[], education[], skills[], achievements[]) with stable string IDs on every editable node. `backend/resume/template.tex` contains each token exactly once: `@@CONTACT@@ @@SUMMARY@@ @@EXPERIENCE@@ @@PROJECTS@@ @@EDUCATION@@ @@SKILLS@@ @@ACHIEVEMENTS@@, plus the optional @@CUSTOM@@`.
 - **Per-user profile:** `data/<uuid32>/` — `data.json` (extracted `ResumeData`), `template.tex` (server-assembled, style-personalized), `source.tex` (verbatim paste, never compiled), `meta.json` (provider/model/timestamps). Directory is git-ignored (only `.gitkeep` tracked) and docker-ignored.
 
 ## 8. Error model
@@ -204,6 +204,10 @@ All via environment variables — see the README table for the full list. Key on
 
 Single Docker image (see `Dockerfile`): checksum-pinned Tectonic 0.16.9 (x86-64 only, guarded), non-root UID 1000 (matches HF Spaces), `TECTONIC_UNTRUSTED_MODE=1`, two-pass cache pre-warm proving the `--only-cached` path, port 7860. Target: **private** Hugging Face Docker Space. *Known gaps: the image has no Node stage, so it ships no frontend and answers `/` with a "no UI installed" notice (see README, "The frontend is not in the image yet"); deps range-pinned without a lockfile; deployment never verified end-to-end.*
 
-## 12. Testing architecture
+## 12. Verification
 
-`create_app(repository, llm_client, compiler, static_dir, database, config, pdf_extractor, pdf_renderer, pdf_link_extractor, mailer)` accepts injected doubles — tests wire a `StubLLM` and a fake compiler subprocess; everything runs offline in <1s. Real Tectonic/poppler and real providers are **not** exercised by the suite (verified manually on 2026-07-14 — see memory.md). Frontend has no automated coverage.
+**There is no automated test suite.** `tests/` was deleted on 2026-09-10 during an architecture rework; it is recoverable from git at `0565cf6` or earlier.
+
+`create_app(repository, llm_client, compiler, static_dir, database, config, pdf_extractor, pdf_renderer, pdf_link_extractor, mailer)` still accepts injected doubles at every boundary — filesystem, LLM, compiler, database, PDF tooling, mailer — so the app can be driven offline in-process. In practice: `LLM_PROVIDER=stub` plus an `httpx.ASGITransport` client against `create_app()` exercises the real routes through the real middleware stack with no provider key and no network.
+
+The Docker build is the only thing that still verifies the LaTeX pipeline for real: its prewarm renders the seed resume and four style variants and compiles each with Tectonic twice, so a broken template or an uncached package fails the build.

@@ -58,7 +58,7 @@ class CompileService:
         pdftotext_bin: Optional[str] = None,
     ) -> None:
         self.tectonic_bin = tectonic_bin or os.getenv("TECTONIC_BIN", "tectonic")
-        # The same two poppler binaries app/config.py resolves for PDF import,
+        # The same two poppler binaries backend/app/config.py resolves for PDF import,
         # read from the same environment variables. Hard-coding the names here
         # would silently ignore an operator who installed poppler somewhere the
         # PATH does not reach and configured it for the import path only.

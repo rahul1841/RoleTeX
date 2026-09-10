@@ -59,13 +59,13 @@ The model must return exactly:
 - ≤6 `bullet_rewrites`; `skills_order` capped at 300 entries.
 - Extra keys are rejected by the strict schema; non-JSON output is rejected. The parser is deliberately lenient about *wrappers*: a valid JSON object inside a markdown fence or embedded in surrounding prose is extracted (first decodable object wins).
 
-### 2.2 Provider adapter (`app/llm.py`)
+### 2.2 Provider adapter (`backend/app/llm.py`)
 
 - One `OpenAICompatibleLLM` client for all providers; `PROVIDERS` maps each of `anthropic, groq, cerebras, grid, gemini, openrouter, mistral, openai, custom` to `(base_url, key_env, default_model, supports_vision)`.
 - `resolve_config()` reads env: `LLM_PROVIDER` (no default — a provider must be named per request or by the operator), `LLM_MODEL`, `${PROVIDER}_API_KEY` then `LLM_API_KEY` fallback, optional `${PROVIDER}_BASE_URL` (`LLM_BASE_URL` applies to the `custom` provider only). HTTPS is enforced by default (`ALLOW_INSECURE_LLM_BASE_URL=true` opts out).
 - Bounded knobs: timeout 5–180s (default 60), max tokens 256–8000 (default 3000), extraction max tokens 1000–8000 (default 6000), reasoning effort `none|minimal|low|medium|high` (default `low` for Gemini and Groq GPT-OSS).
 - Retry/backoff on 429 and transient 5xx; JSON-mode request with plain-completion fallback when a provider rejects `response_format`.
-- **`LLM_PROVIDER=stub`:** selects `app/llm_stub.py`, a deterministic offline client for tests and frontend development. Never a default and never reachable by accident; its copy is fixture text prefixed `[stub]`, not model output. (This replaced the former in-client `mock` provider, which was removed because its placeholder facts were indistinguishable from a real extraction.)
+- **`LLM_PROVIDER=stub`:** selects `backend/app/llm_stub.py`, a deterministic offline client for tests and frontend development. Never a default and never reachable by accident; its copy is fixture text prefixed `[stub]`, not model output. (This replaced the former in-client `mock` provider, which was removed because its placeholder facts were indistinguishable from a real extraction.)
 
 ### 2.3 Prompt contract
 
@@ -92,7 +92,7 @@ At most **one** repair LLM call per request, spent on the first of:
 
 *Known limit (tracked in memory.md): the fabrication guard is numeric-only; invented non-numeric facts pass.*
 
-## 4. Rendering design (`app/resume.py`)
+## 4. Rendering design (`backend/app/resume.py`)
 
 - **Token-slot model:** `render_template_text` replaces each of the 7 tokens exactly once; any token left after substitution aborts the render. `validate_template` enforces the exactly-once contract up front.
 - **Escaping:** `escape_latex` handles all ten LaTeX specials (`\ { } $ & % # _ ~ ^`), strips NUL, collapses newlines. Applied to every model-supplied string.
@@ -101,7 +101,7 @@ At most **one** repair LLM call per request, spent on the first of:
 - **Identity:** rendered into `@@CONTACT@@` from locked data only — it never round-trips through the model.
 - **Diff:** `build_change_list` emits only material changes (`{field_id, before, after}`); `build_unified_diff` produces a reviewable text diff.
 
-## 5. Import design (`app/importer.py` + `app/db.py` + `app/pdftext.py`)
+## 5. Import design (`backend/app/importer.py` + `backend/app/db.py` + `backend/app/pdftext.py`)
 
 Pipeline: (PDF only: bounded `pdftotext` extraction) → `extract_resume` (LLM, JSON) → normalization → clamping → assembly → render-check → persist.
 
@@ -110,7 +110,7 @@ Pipeline: (PDF only: bounded `pdftotext` extraction) → `extract_resume` (LLM, 
 - **Template assembly:** a fully server-authored template embedding only the clamped style values, with the same 7-token contract. The raw paste / extracted PDF text is stored as `source_text` and **never compiled**.
 - **Storage layout:** MongoDB `resumes` + `resume_versions` collections (`{data, template_tex, source_text, source_type, style, provider, model, ...}`), every query scoped by `user_id`; version numbers are monotonic and `current_version` tracks the latest.
 
-## 6. Compiler design (`app/compiler.py`)
+## 6. Compiler design (`backend/app/compiler.py`)
 
 - Invocation: `tectonic -X compile --untrusted [--only-cached] --outdir <job_dir> <job_dir>/resume.tex`, argument list, `check=False`, captured output.
 - Isolation: fresh `TemporaryDirectory(prefix="resume-job-")` per compile; approved assets copied in; directory always removed.

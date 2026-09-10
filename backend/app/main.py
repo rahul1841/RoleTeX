@@ -51,7 +51,7 @@ from .llm import (
     LLMResult,
 )
 from .resume import (
-    PROJECT_ROOT,
+    REPO_ROOT,
     ProposalValidationError,
     ResumeError,
     ResumeRepository,
@@ -494,18 +494,17 @@ def create_app(
     )
     application.state.services = services
 
-    # Where the built frontend lives. The hand-written `static/` SPA this app
-    # shipped with has been replaced by the Next.js frontend, whose static
-    # export lands in `frontend/out` (`npm run build`). FRONTEND_DIR overrides
-    # it for a deployment that stages the export elsewhere; the explicit
-    # `static_dir` argument still wins, which is how the tests point it at a
-    # scratch directory.
+    # Where the built frontend lives: `npm run build` in frontend/ writes a
+    # static export to `frontend/out`, a sibling of this backend/ package.
+    # FRONTEND_DIR overrides it for a deployment that stages the export
+    # elsewhere, and a relative value is resolved against the repository root.
+    # The explicit `static_dir` argument still wins over both.
     frontend_dir_env = os.getenv("FRONTEND_DIR", "").strip()
     chosen_static_dir = Path(
-        static_dir or frontend_dir_env or (PROJECT_ROOT / "frontend" / "out")
+        static_dir or frontend_dir_env or (REPO_ROOT / "frontend" / "out")
     )
     if not chosen_static_dir.is_absolute():
-        chosen_static_dir = PROJECT_ROOT / chosen_static_dir
+        chosen_static_dir = REPO_ROOT / chosen_static_dir
 
     @application.exception_handler(RequestValidationError)
     async def handle_request_validation(
