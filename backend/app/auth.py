@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from fastapi import FastAPI, HTTPException, Request, Response
 
 from . import security
-from .db import DuplicateEmailError
+from .db import AuthTokenStore, DuplicateEmailError
 from .llm import PROVIDERS, provider_default_model, supported_providers
 from .schemas import (
     DeleteMeRequest,
@@ -376,6 +376,31 @@ def register_auth_routes(app: FastAPI, services: Any) -> None:
                 409, "email_taken", "An account with this email already exists."
             ) from exc
         await _open_session(request, response, user["_id"])
+        if services.config.require_email_verification:
+            # Auto-send the verification mail so a new account can prove
+            # mailbox ownership without a manual resend. Lazy import:
+            # routes_account imports from this module, so a top-level
+            # import would be circular.
+            from .routes_account import _link_base, _send, _verify_email
+
+            token = security.new_one_time_token()
+            await database.auth_tokens.create(
+                user["_id"],
+                AuthTokenStore.PURPOSE_EMAIL_VERIFY,
+                security.hash_token(token),
+                datetime.now(timezone.utc)
+                + timedelta(hours=services.config.email_verify_ttl_hours),
+            )
+            try:
+                base_url = _link_base(request, services)
+                subject, body, html_body = _verify_email(
+                    base_url, token, services.config.email_verify_ttl_hours
+                )
+                await _send(services, email, subject, body, html_body)
+            except Exception:
+                # Registration must not fail because mail could not be sent;
+                # the user can request a fresh link from the app.
+                logger.exception("Failed to send verification mail on register")
         return UserResponse(user=await build_user_out(services, user))
 
     @app.post("/api/auth/login", response_model=UserResponse)

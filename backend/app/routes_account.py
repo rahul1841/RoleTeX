@@ -130,7 +130,13 @@ async def _verify_password(password: str, stored: str) -> bool:
     )
 
 
-async def _send(services: Any, to: str, subject: str, body: str) -> bool:
+async def _send(
+    services: Any,
+    to: str,
+    subject: str,
+    body: str,
+    html_body: Optional[str] = None,
+) -> bool:
     """Best-effort delivery. A transport failure must not fail the request.
 
     Returning False (rather than raising) keeps the ``forgot`` response
@@ -139,7 +145,7 @@ async def _send(services: Any, to: str, subject: str, body: str) -> bool:
     """
 
     try:
-        await services.mailer.send(to, subject, body)
+        await services.mailer.send(to, subject, body, html_body)
         return True
     except MailDeliveryError:
         return False
@@ -165,7 +171,45 @@ def _token_link(base_url: str, path: str, token: str) -> str:
     return "{0}{1}#token={2}".format(base_url, path, token)
 
 
-def _reset_email(base_url: str, token: str, ttl_minutes: int) -> Tuple[str, str]:
+def _email_html(heading: str, intro: str, button_label: str, link: str, note: str) -> str:
+    """One shared, email-safe HTML template for the account mails.
+
+    Inline styles only: most mail clients (Gmail included) strip <style>
+    blocks and external stylesheets, so everything the layout needs lives
+    in ``style`` attributes.
+    """
+
+    return (
+        "<!DOCTYPE html><html><body style=\"margin:0;padding:0;"
+        "background-color:#f4f4f5;\">"
+        "<div style=\"max-width:560px;margin:0 auto;padding:32px 16px;\">"
+        "<div style=\"background-color:#ffffff;border:1px solid #e4e4e7;"
+        "border-radius:12px;padding:32px 28px;"
+        "font-family:Arial,Helvetica,sans-serif;\">"
+        "<div style=\"font-size:20px;font-weight:bold;color:#18181b;"
+        "margin-bottom:8px;\">RoleTeX</div>"
+        "<h1 style=\"font-size:22px;color:#18181b;margin:16px 0 12px;\">"
+        "{0}</h1>"
+        "<p style=\"font-size:15px;line-height:1.6;color:#3f3f46;\">{1}</p>"
+        "<div style=\"margin:28px 0;text-align:center;\">"
+        "<a href=\"{3}\" style=\"display:inline-block;background-color:#18181b;"
+        "color:#ffffff;text-decoration:none;font-size:15px;font-weight:bold;"
+        "padding:13px 32px;border-radius:8px;\">{2}</a></div>"
+        "<p style=\"font-size:13px;line-height:1.6;color:#71717a;\">{4}</p>"
+        "<p style=\"font-size:12px;line-height:1.6;color:#a1a1aa;"
+        "border-top:1px solid #e4e4e7;padding-top:16px;margin-top:24px;\">"
+        "If the button does not work, copy and paste this link into your "
+        "browser:<br><span style=\"word-break:break-all;\">{3}</span></p>"
+        "</div>"
+        "<p style=\"font-size:12px;color:#a1a1aa;text-align:center;"
+        "font-family:Arial,Helvetica,sans-serif;\">RoleTeX</p>"
+        "</div></body></html>"
+    ).format(heading, intro, button_label, link, note)
+
+
+def _reset_email(
+    base_url: str, token: str, ttl_minutes: int
+) -> Tuple[str, str, str]:
     link = _token_link(base_url, RESET_PATH, token)
     body = (
         "Someone asked to reset the password for your RoleTeX account.\n\n"
@@ -175,17 +219,35 @@ def _reset_email(base_url: str, token: str, ttl_minutes: int) -> Tuple[str, str]
         "for this, you can ignore this message — your password has not "
         "changed.\n".format(link, ttl_minutes)
     )
-    return "Reset your RoleTeX password", body
+    html = _email_html(
+        "Reset your password",
+        "Someone asked to reset the password for your RoleTeX account. "
+        "Click the button below to choose a new password.",
+        "Reset password",
+        link,
+        "The link works once and expires in {0} minutes. If you did not ask "
+        "for this, you can ignore this message — your password has not "
+        "changed.".format(ttl_minutes),
+    )
+    return "Reset your RoleTeX password", body, html
 
 
-def _verify_email(base_url: str, token: str, ttl_hours: int) -> Tuple[str, str]:
+def _verify_email(base_url: str, token: str, ttl_hours: int) -> Tuple[str, str, str]:
     link = _token_link(base_url, VERIFY_PATH, token)
     body = (
         "Confirm this address to finish setting up your RoleTeX account.\n\n"
         "{0}\n\n"
         "The link works once and expires in {1} hours.\n".format(link, ttl_hours)
     )
-    return "Confirm your RoleTeX email address", body
+    html = _email_html(
+        "Confirm your email address",
+        "Confirm this address to finish setting up your RoleTeX account. "
+        "Click the button below to verify.",
+        "Confirm email",
+        link,
+        "The link works once and expires in {0} hours.".format(ttl_hours),
+    )
+    return "Confirm your RoleTeX email address", body, html
 
 
 def register_account_routes(app: FastAPI, services: Any) -> None:
@@ -267,10 +329,10 @@ def register_account_routes(app: FastAPI, services: Any) -> None:
                     _utc_now()
                     + timedelta(minutes=services.config.password_reset_ttl_minutes),
                 )
-                subject, body = _reset_email(
+                subject, body, html_body = _reset_email(
                     base_url, token, services.config.password_reset_ttl_minutes
                 )
-                await _send(services, email, subject, body)
+                await _send(services, email, subject, body, html_body)
 
         # Deliberately identical for every input: see the module docstring.
         return MailDispatchResponse(delivered=services.mailer.delivers)
@@ -336,10 +398,10 @@ def register_account_routes(app: FastAPI, services: Any) -> None:
             security.hash_token(token),
             _utc_now() + timedelta(hours=services.config.email_verify_ttl_hours),
         )
-        subject, body = _verify_email(
+        subject, body, html_body = _verify_email(
             base_url, token, services.config.email_verify_ttl_hours
         )
-        await _send(services, email, subject, body)
+        await _send(services, email, subject, body, html_body)
         return MailDispatchResponse(delivered=services.mailer.delivers)
 
     @app.post("/api/auth/verify/confirm", response_model=OkResponse)

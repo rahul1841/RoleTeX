@@ -108,13 +108,90 @@ def dummy_password_hash() -> str:
     return cached
 
 
+_PASSWORD_SPECIAL_CHARS = frozenset("!@#$%^&*()-_=+[]{}|;:,.<>?/~`\"'\\")
+
+# Worst-password blocklist (NIST SP 800-63B guidance: reject known-common
+# values rather than imposing ever-stricter composition rules). These all
+# satisfy the length rule, so without this list they would be accepted.
+_COMMON_PASSWORDS = frozenset(
+    [
+        "password",
+        "password1",
+        "password12",
+        "password123",
+        "passw0rd",
+        "12345678",
+        "123456789",
+        "1234567890",
+        "123123",
+        "123123123",
+        "11111111",
+        "00000000",
+        "qwerty",
+        "qwerty123",
+        "qwertyuiop",
+        "abc123",
+        "abc12345",
+        "abcd1234",
+        "1q2w3e4r",
+        "1qaz2wsx",
+        "letmein",
+        "welcome",
+        "welcome1",
+        "welcome123",
+        "admin",
+        "admin123",
+        "administrator",
+        "monkey",
+        "dragon",
+        "football",
+        "baseball",
+        "sunshine",
+        "master",
+        "shadow",
+        "superman",
+        "michael",
+        "jennifer",
+        "hunter",
+        "iloveyou",
+        "princess",
+        "starwars",
+        "trustno1",
+        "whatever",
+        "freedom",
+        "hello123",
+        "changeme",
+        "changeme123",
+        "asdfgh",
+        "zxcvbnm",
+        "qazwsx",
+    ]
+)
+
+
 def password_policy_error(password: str) -> Optional[str]:
-    """Return a human-readable policy violation, or None when acceptable."""
+    """Return a human-readable policy violation, or None when acceptable.
+
+    Policy: 8-128 characters, at least one uppercase letter, one lowercase
+    letter, one digit, and one special character, and not a known-common
+    password. Only enforced when a password is set or changed; existing
+    stored hashes keep working on login.
+    """
 
     if not isinstance(password, str) or len(password) < PASSWORD_MIN_LENGTH:
         return "Password must be at least {0} characters".format(PASSWORD_MIN_LENGTH)
     if len(password) > PASSWORD_MAX_LENGTH:
         return "Password must be at most {0} characters".format(PASSWORD_MAX_LENGTH)
+    if password.lower() in _COMMON_PASSWORDS:
+        return "This password is too common. Choose a less predictable password."
+    if not any(char.isupper() for char in password):
+        return "Password must contain at least one uppercase letter."
+    if not any(char.islower() for char in password):
+        return "Password must contain at least one lowercase letter."
+    if not any(char.isdigit() for char in password):
+        return "Password must contain at least one digit."
+    if not any(char in _PASSWORD_SPECIAL_CHARS for char in password):
+        return "Password must contain at least one special character."
     return None
 
 
