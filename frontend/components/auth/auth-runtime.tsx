@@ -45,11 +45,13 @@ export function AuthRuntime() {
  *
  *   /#/reset-password?token=ABC   ->   /reset-password/#token=ABC
  *
- * Links in that first shape are already in people's inboxes — the backend
- * builds them from RESET_PATH/VERIFY_PATH in app/routes_account.py — and to a
- * server, a router, and `usePathname()` they are all simply "/". Without this
- * they land on the tailor page, and a signed-out visitor is then bounced to
- * /sign-in by the shell with the token dropped on the floor.
+ * The server no longer emits that first shape — `_token_link()` in
+ * app/routes_account.py builds the real route directly — but links sent before
+ * 2026-09-10 may still be in inboxes, and to a server, a router, and
+ * `usePathname()` they are all simply "/". Without this they land on the tailor
+ * page, and a signed-out visitor is then bounced to /sign-in with the token
+ * dropped on the floor. Deletable once those links have expired; see
+ * token-link.ts for the exact window.
  *
  * `location.replace`, not `router.replace`, on purpose:
  *

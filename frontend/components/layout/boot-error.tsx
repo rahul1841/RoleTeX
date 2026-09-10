@@ -10,9 +10,8 @@ import { isApiError } from "@/lib/api/errors";
  *
  * `GET /api/health` is the first request the app makes and the one that decides
  * which mode everything else runs in, so there is no useful UI to show until it
- * answers. This mirrors the old app's `#boot-error` panel: say what failed, say
- * what usually causes it, and offer a retry that refetches rather than a page
- * reload the user has to think of themselves.
+ * answers. Say what failed, say what usually causes it, and offer a retry that
+ * refetches rather than a page reload the user has to think of themselves.
  */
 export function BootError({
   error,

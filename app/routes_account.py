@@ -67,8 +67,11 @@ from .schemas import (
 logger = logging.getLogger(__name__)
 
 
-RESET_PATH = "/#/reset-password"
-VERIFY_PATH = "/#/verify-email"
+#: Real routes in the frontend's static export. ``trailingSlash: true`` in
+#: frontend/next.config.ts emits ``reset-password/index.html``, so the trailing
+#: slash is what FastAPI's ``StaticFiles(html=True)`` mount can actually serve.
+RESET_PATH = "/reset-password/"
+VERIFY_PATH = "/verify-email/"
 
 
 def _utc_now() -> datetime:
@@ -145,8 +148,25 @@ async def _send(services: Any, to: str, subject: str, body: str) -> bool:
         return False
 
 
+def _token_link(base_url: str, path: str, token: str) -> str:
+    """A one-time link with the token in the URL *fragment*, never the query.
+
+    A fragment is never put on the wire: it is not in the request line, so it
+    cannot reach an access log, a reverse proxy log, or an analytics pipeline,
+    and it is stripped from the ``Referer`` of any request the page then makes,
+    so a third-party script on the page cannot exfiltrate it. Moving the token
+    to a real query string would leak a live credential into all of those.
+
+    The page reads it with ``useFragmentToken()`` — see
+    frontend/components/auth/token-link.ts, which documents the same contract
+    from the other side.
+    """
+
+    return "{0}{1}#token={2}".format(base_url, path, token)
+
+
 def _reset_email(base_url: str, token: str, ttl_minutes: int) -> Tuple[str, str]:
-    link = "{0}{1}?token={2}".format(base_url, RESET_PATH, token)
+    link = _token_link(base_url, RESET_PATH, token)
     body = (
         "Someone asked to reset the password for your RoleTeX account.\n\n"
         "Open this link to choose a new password:\n\n"
@@ -159,7 +179,7 @@ def _reset_email(base_url: str, token: str, ttl_minutes: int) -> Tuple[str, str]
 
 
 def _verify_email(base_url: str, token: str, ttl_hours: int) -> Tuple[str, str]:
-    link = "{0}{1}?token={2}".format(base_url, VERIFY_PATH, token)
+    link = _token_link(base_url, VERIFY_PATH, token)
     body = (
         "Confirm this address to finish setting up your RoleTeX account.\n\n"
         "{0}\n\n"

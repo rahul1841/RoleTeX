@@ -13,7 +13,7 @@ Security rationale:
 - :class:`ConsoleMailer` is the default so a developer instance works with no
   mail server at all. It writes the message to the log, which is why the reset
   link may only be derived from the request's own ``Host`` header while this
-  driver is active — see ``routes_account._reset_base_url`` for the host-header
+  driver is active — see ``routes_account._link_base`` for the host-header
   poisoning argument.
 """
 

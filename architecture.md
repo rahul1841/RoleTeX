@@ -202,8 +202,8 @@ All via environment variables — see the README table for the full list. Key on
 
 ## 11. Deployment
 
-Single Docker image (see `Dockerfile`): checksum-pinned Tectonic 0.16.9 (x86-64 only, guarded), non-root UID 1000 (matches HF Spaces), `TECTONIC_UNTRUSTED_MODE=1`, two-pass cache pre-warm proving the `--only-cached` path, port 7860. Target: **private** Hugging Face Docker Space. *Known gaps: `CMD` hardcodes 7860 (ignores `$PORT`); deps range-pinned without a lockfile; deployment never verified end-to-end.*
+Single Docker image (see `Dockerfile`): checksum-pinned Tectonic 0.16.9 (x86-64 only, guarded), non-root UID 1000 (matches HF Spaces), `TECTONIC_UNTRUSTED_MODE=1`, two-pass cache pre-warm proving the `--only-cached` path, port 7860. Target: **private** Hugging Face Docker Space. *Known gaps: the image has no Node stage, so it ships no frontend and answers `/` with a "no UI installed" notice (see README, "The frontend is not in the image yet"); deps range-pinned without a lockfile; deployment never verified end-to-end.*
 
 ## 12. Testing architecture
 
-`create_app(repository, llm_client, compiler, static_dir, store)` accepts injected doubles — tests wire a `StubLLM` and a fake compiler subprocess; everything runs offline in <1s. Real Tectonic/poppler and real providers are **not** exercised by the suite (verified manually on 2026-07-14 — see memory.md). Frontend has no automated coverage.
+`create_app(repository, llm_client, compiler, static_dir, database, config, pdf_extractor, pdf_renderer, pdf_link_extractor, mailer)` accepts injected doubles — tests wire a `StubLLM` and a fake compiler subprocess; everything runs offline in <1s. Real Tectonic/poppler and real providers are **not** exercised by the suite (verified manually on 2026-07-14 — see memory.md). Frontend has no automated coverage.

@@ -5,8 +5,8 @@ Security rationale:
   with Fernet under the server secret, and stored per (user, provider). The
   plaintext is never persisted, logged, or echoed back — responses only carry
   a masked hint (ellipsis + last four characters).
-- ``custom`` is operator-only (its base URL comes
-  from server env), so neither accepts stored keys.
+- ``custom`` is operator-only — its base URL comes from server env — so it
+  accepts no stored key.
 """
 
 from __future__ import annotations

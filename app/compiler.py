@@ -10,7 +10,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 
 MAX_LOG_CHARACTERS = 12_000
@@ -54,8 +54,18 @@ class CompileService:
         concurrency: Optional[int] = None,
         only_cached: Optional[bool] = None,
         max_pages: Optional[int] = None,
+        pdfinfo_bin: Optional[str] = None,
+        pdftotext_bin: Optional[str] = None,
     ) -> None:
         self.tectonic_bin = tectonic_bin or os.getenv("TECTONIC_BIN", "tectonic")
+        # The same two poppler binaries app/config.py resolves for PDF import,
+        # read from the same environment variables. Hard-coding the names here
+        # would silently ignore an operator who installed poppler somewhere the
+        # PATH does not reach and configured it for the import path only.
+        self.pdfinfo_bin = pdfinfo_bin or os.getenv("PDFINFO_BIN", "pdfinfo") or "pdfinfo"
+        self.pdftotext_bin = (
+            pdftotext_bin or os.getenv("PDFTOTEXT_BIN", "pdftotext") or "pdftotext"
+        )
         self.timeout_seconds = timeout_seconds or _env_int(
             "COMPILE_TIMEOUT_SECONDS", 90, 10, 180
         )
@@ -196,7 +206,7 @@ class CompileService:
                 )
 
             warnings: List[str] = []
-            page_count, page_warning = _read_page_count(pdf_path)
+            page_count, page_warning = _read_page_count(pdf_path, self.pdfinfo_bin)
             if page_warning:
                 warnings.append(page_warning)
             if page_count is not None and page_count > self.max_pages:
@@ -206,7 +216,9 @@ class CompileService:
                     )
                 )
 
-            extracted_text, text_warning = _extract_pdf_text(pdf_path)
+            extracted_text, text_warning = _extract_pdf_text(
+                pdf_path, self.pdftotext_bin
+            )
             if text_warning:
                 warnings.append(text_warning)
             if not extracted_text.strip() and not text_warning:
@@ -296,10 +308,12 @@ def _run_inspector(command: List[str], timeout: int = 10) -> Tuple[int, str, str
     return result.returncode, result.stdout, result.stderr
 
 
-def _read_page_count(pdf_path: Path) -> Tuple[Optional[int], Optional[str]]:
-    if shutil.which("pdfinfo") is None:
+def _read_page_count(
+    pdf_path: Path, bin_path: str = "pdfinfo"
+) -> Tuple[Optional[int], Optional[str]]:
+    if shutil.which(bin_path) is None:
         return None, "pdfinfo is unavailable, so page count was not verified."
-    code, output, error = _run_inspector(["pdfinfo", str(pdf_path)])
+    code, output, error = _run_inspector([bin_path, str(pdf_path)])
     if code != 0:
         return None, "pdfinfo could not verify the generated page count: {0}".format(
             re.sub(r"\s+", " ", error).strip()[:200]
@@ -310,23 +324,14 @@ def _read_page_count(pdf_path: Path) -> Tuple[Optional[int], Optional[str]]:
     return int(match.group(1)), None
 
 
-def _extract_pdf_text(pdf_path: Path) -> Tuple[str, Optional[str]]:
-    if shutil.which("pdftotext") is None:
+def _extract_pdf_text(
+    pdf_path: Path, bin_path: str = "pdftotext"
+) -> Tuple[str, Optional[str]]:
+    if shutil.which(bin_path) is None:
         return "", "pdftotext is unavailable, so ATS readability was not verified."
-    code, output, error = _run_inspector(["pdftotext", "-layout", str(pdf_path), "-"])
+    code, output, error = _run_inspector([bin_path, "-layout", str(pdf_path), "-"])
     if code != 0:
         return "", "pdftotext could not inspect ATS readability: {0}".format(
             re.sub(r"\s+", " ", error).strip()[:200]
         )
     return output.strip(), None
-
-
-async def compile_latex(
-    latex_source: str,
-    assets_dir: Optional[Path] = None,
-    service: Optional[CompileService] = None,
-) -> CompileResult:
-    """Convenience function exposed for tests and CLI-style callers."""
-
-    compiler = service or CompileService()
-    return await compiler.compile(latex_source, assets_dir)

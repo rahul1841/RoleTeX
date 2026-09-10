@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 import httpx
 from pydantic import ValidationError
 
-from .resume import build_llm_resume_payload, flattened_skills
+from .resume import build_llm_resume_payload
 from .schemas import ResumeData, TailorProposal, validate_model
 
 

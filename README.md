@@ -170,7 +170,7 @@ app/config.py         Env-driven AppConfig with clamped bounds
 resume/data.json      Canonical seed resume facts and stable editable IDs
 resume/template.tex   Locked Tectonic-compatible LaTeX template
 resume/assets/        Approved local images/fonts, if the template needs them
-app/llm_stub.py       Deterministic offline LLM for tests and frontend development
+app/llm_stub.py       Deterministic offline LLM for frontend development
 frontend/             Next.js frontend (App Router, TypeScript, Tailwind, shadcn/ui)
 frontend/app/         Routes. (app) is the signed-in shell, (auth) the signed-out pages
 frontend/components/  Feature UI, plus common/ primitives and ui/ shadcn parts

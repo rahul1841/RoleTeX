@@ -19,21 +19,20 @@ class StrictModel(BaseModel):
 
 
 def validate_model(model_class: Any, value: Any) -> Any:
-    """Validate a value with either Pydantic 1 or Pydantic 2."""
+    """Validate ``value`` against ``model_class``, raising ``ValidationError``.
 
-    validator = getattr(model_class, "model_validate", None)
-    if validator is not None:
-        return validator(value)
-    return model_class.parse_obj(value)
+    A named function rather than a bare ``model_validate`` call so every
+    validation in the codebase reads the same way and there is one place to
+    change if the shape of validation ever needs to.
+    """
+
+    return model_class.model_validate(value)
 
 
 def dump_model(model: BaseModel, **kwargs: Any) -> Dict[str, Any]:
-    """Serialize a model with either Pydantic 1 or Pydantic 2."""
+    """Serialize a model to a plain dict. Counterpart to :func:`validate_model`."""
 
-    dumper = getattr(model, "model_dump", None)
-    if dumper is not None:
-        return dumper(**kwargs)
-    return model.dict(**kwargs)
+    return model.model_dump(**kwargs)
 
 
 class ResumeLink(StrictModel):
@@ -154,21 +153,6 @@ class ResumeStyle(StrictModel):
     font_size: str = Field(default="10pt", max_length=8)
     margin_cm: float = Field(default=2.0, ge=0.5, le=4.0)
     accent_hex: Optional[str] = Field(default=None, min_length=6, max_length=6)
-
-
-class ImportRequest(StrictModel):
-    latex: str = Field(..., min_length=40, max_length=200_000)
-    provider: Optional[str] = Field(default=None, min_length=1, max_length=40)
-    model: Optional[str] = Field(default=None, min_length=1, max_length=200)
-
-
-class ImportResponse(StrictModel):
-    id: str
-    provider: str
-    model: str
-    style: ResumeStyle
-    resume: ResumeData
-    warnings: List[str] = Field(default_factory=list)
 
 
 class ResumeChange(StrictModel):

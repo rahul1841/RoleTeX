@@ -5,9 +5,8 @@ import { cn } from "cn";
  * The product lockup: name plus the "AI + LaTeX" tagline.
  *
  * The tagline is not decoration — it is the one line that tells a first-time
- * visitor what the tool actually does, and it carried the same job in the old
- * static/index.html header. It is stacked under the name rather than beside it
- * so it survives narrow viewports without truncation.
+ * visitor what the tool actually does. It is stacked under the name rather
+ * than beside it so it survives narrow viewports without truncation.
  */
 export function Wordmark({ className }: { className?: string }) {
   return (

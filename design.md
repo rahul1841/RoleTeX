@@ -61,11 +61,11 @@ The model must return exactly:
 
 ### 2.2 Provider adapter (`app/llm.py`)
 
-- One `OpenAICompatibleLLM` client for all providers; `PROVIDERS` maps each of `groq, cerebras, gemini, openrouter, mistral, openai, custom` to `(base_url, key_env, default_model)`.
-- `resolve_config()` reads env: `LLM_PROVIDER` (default **mock**), `LLM_MODEL`, `${PROVIDER}_API_KEY` then `LLM_API_KEY` fallback, optional `${PROVIDER}_BASE_URL` (`LLM_BASE_URL` applies to the `custom` provider only). HTTPS is enforced by default (`ALLOW_INSECURE_LLM_BASE_URL=true` opts out).
+- One `OpenAICompatibleLLM` client for all providers; `PROVIDERS` maps each of `anthropic, groq, cerebras, grid, gemini, openrouter, mistral, openai, custom` to `(base_url, key_env, default_model, supports_vision)`.
+- `resolve_config()` reads env: `LLM_PROVIDER` (no default — a provider must be named per request or by the operator), `LLM_MODEL`, `${PROVIDER}_API_KEY` then `LLM_API_KEY` fallback, optional `${PROVIDER}_BASE_URL` (`LLM_BASE_URL` applies to the `custom` provider only). HTTPS is enforced by default (`ALLOW_INSECURE_LLM_BASE_URL=true` opts out).
 - Bounded knobs: timeout 5–180s (default 60), max tokens 256–8000 (default 3000), extraction max tokens 1000–8000 (default 6000), reasoning effort `none|minimal|low|medium|high` (default `low` for Gemini and Groq GPT-OSS).
 - Retry/backoff on 429 and transient 5xx; JSON-mode request with plain-completion fallback when a provider rejects `response_format`.
-- **`mock` provider:** deterministic, offline output for dev/tests (no network; skills are reordered by JD keyword frequency, so output does vary with the JD); excluded from compile-repair.
+- **`LLM_PROVIDER=stub`:** selects `app/llm_stub.py`, a deterministic offline client for tests and frontend development. Never a default and never reachable by accident; its copy is fixture text prefixed `[stub]`, not model output. (This replaced the former in-client `mock` provider, which was removed because its placeholder facts were indistinguishable from a real extraction.)
 
 ### 2.3 Prompt contract
 

@@ -450,10 +450,8 @@ def register_auth_routes(app: FastAPI, services: Any) -> None:
     async def update_me(payload: UpdateMeRequest, request: Request) -> UserResponse:
         user = await require_user(request, services)
         # ``model_fields_set`` distinguishes an explicit null (clear the field)
-        # from an omitted field (leave unchanged) on Pydantic v2 models.
-        fields_set = getattr(payload, "model_fields_set", None)
-        if fields_set is None:
-            fields_set = getattr(payload, "__fields_set__", set())
+        # from an omitted field (leave unchanged).
+        fields_set = payload.model_fields_set
         updates: Dict[str, Any] = {}
         if payload.name is not None:
             updates["name"] = payload.name.strip()

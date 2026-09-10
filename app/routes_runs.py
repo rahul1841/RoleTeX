@@ -34,6 +34,7 @@ from .schemas import (
     RunResponse,
     RunSummary,
     TailorProposal,
+    dump_model,
     validate_model,
 )
 
@@ -114,8 +115,7 @@ def _run_detail(doc: Dict[str, Any]) -> RunDetail:
         "latex_source": doc.get("latex_source", "") or "",
         "warnings": [str(item) for item in (doc.get("warnings") or [])],
     }
-    dumper = getattr(summary, "model_dump", None)
-    base = dumper() if dumper is not None else summary.dict()
+    base = dump_model(summary)
     base.update(values)
     return RunDetail(**base)
 

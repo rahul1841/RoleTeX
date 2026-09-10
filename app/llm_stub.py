@@ -1,4 +1,4 @@
-"""Deterministic offline LLM used by the test suite and by frontend development.
+"""Deterministic offline LLM for local development without a provider key.
 
 The real client (:class:`app.llm.OpenAICompatibleLLM`) needs a provider key and
 spends tokens on every call, which makes two of the product's flows — resume
@@ -10,8 +10,8 @@ Selected by ``LLM_PROVIDER=stub``. It is wired in :func:`app.main.create_app`,
 so nothing here runs unless that value is set explicitly.
 
 Every method is deterministic: the same input always yields the same output, so
-tests can assert on results and a developer sees a stable UI between reloads.
-No network, no filesystem, no clock.
+a developer sees a stable UI between reloads. No network, no filesystem, no
+clock.
 """
 
 from __future__ import annotations

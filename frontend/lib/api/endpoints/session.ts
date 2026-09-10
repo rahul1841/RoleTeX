@@ -62,8 +62,13 @@ export const resetPassword = (body: ResetPasswordRequest) =>
 export const requestVerification = () =>
   api.post<MailDispatchResponse>("/api/auth/verify/request");
 
+/**
+ * Redeeming a verification link answers `{"ok": true}` — the route's
+ * `response_model` is `OkResponse` and it is deliberately unauthenticated, so
+ * it has no user to return. The caller invalidates the session query instead.
+ */
 export const confirmVerification = (body: VerifyEmailRequest) =>
-  api.post<UserResponse>("/api/auth/verify/confirm", body);
+  api.post<OkResponse>("/api/auth/verify/confirm", body);
 
 export const listSessions = () =>
   api.get<SessionListResponse>("/api/sessions");

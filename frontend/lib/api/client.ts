@@ -15,9 +15,9 @@
 import { ApiError, parseApiError } from "./errors";
 
 /**
- * Matches the vanilla client's budget. Tailoring runs an LLM call plus a
- * Tectonic compile server-side and legitimately takes minutes; a shorter
- * timeout would abort work the server is still doing.
+ * Tailoring runs an LLM call plus a Tectonic compile server-side and
+ * legitimately takes minutes; a shorter timeout would abort work the server is
+ * still doing, after the provider tokens have already been spent.
  */
 export const LONG_REQUEST_TIMEOUT_MS = 180_000;
 

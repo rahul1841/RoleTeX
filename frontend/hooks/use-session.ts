@@ -37,9 +37,9 @@ export interface SessionState {
 /**
  * The app's single source of truth for "who is using this and what can they do".
  *
- * Mirrors the old two-step boot: health decides the mode, and only in
- * multi-user mode is `/api/me` consulted. A 401 there is the normal
- * signed-out state, so it resolves to `user: null` rather than an error.
+ * Boots in two steps: health decides the mode, and only in multi-user mode is
+ * `/api/me` consulted. A 401 there is the normal signed-out state, so it
+ * resolves to `user: null` rather than an error.
  */
 export function useSession(): SessionState {
   const health = useHealth();

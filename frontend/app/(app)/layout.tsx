@@ -19,10 +19,11 @@ import { AppShell } from "@/components/layout";
  *    a single module-level slot that a second mount would silently steal. A
  *    session can only be lost by a request that carried one, and every screen
  *    that makes such a request is inside this group.
- *  - It rewrites the legacy `/#/reset-password?token=…` links the backend has
- *    already emailed onto their real routes. Those links resolve to "/", which
- *    is this group's own index, and they must be caught before <AppShell>
- *    redirects the signed-out visitor to /sign-in and drops the token.
+ *  - It rewrites legacy `/#/reset-password?token=…` links — the shape the
+ *    backend emailed before 2026-09-10 — onto their real routes. Those links
+ *    resolve to "/", which is this group's own index, and they must be caught
+ *    before <AppShell> redirects the signed-out visitor to /sign-in and drops
+ *    the token.
  *
  * It is a sibling of <AppShell> rather than a child so it is not inside the
  * <main> landmark, and so the shell's own tree is untouched.

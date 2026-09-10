@@ -49,11 +49,6 @@ export function revokeAllObjectUrls(): void {
   liveUrls.clear();
 }
 
-/** How many URLs are currently held. Exported for leak debugging. */
-export function liveObjectUrlCount(): number {
-  return liveUrls.size;
-}
-
 /**
  * Decode a base64 PDF payload into bytes.
  *

@@ -20,9 +20,10 @@ import logging
 import math
 import os
 import re
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Tuple
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -395,10 +396,36 @@ def create_app(
 ) -> FastAPI:
     """Create an app with injectable filesystem, LLM, compiler, and DB dependencies."""
 
+    @asynccontextmanager
+    async def lifespan(instance: FastAPI) -> AsyncIterator[None]:
+        """Own the index-creation task and the database connection pool.
+
+        Index creation is deliberately a background task: an unreachable Mongo
+        would otherwise stall every ``create_index`` call for its full
+        server-selection timeout before uvicorn accepts a single connection.
+        """
+
+        database = instance.state.services.database
+        index_task: Optional["asyncio.Task[None]"] = None
+        if database is not None:
+            index_task = asyncio.create_task(_ensure_indexes_with_retry(database))
+        # Exposed so a caller can await or inspect the background work.
+        instance.state.index_task = index_task
+        try:
+            yield
+        finally:
+            if index_task is not None and not index_task.done():
+                index_task.cancel()
+            if database is not None:
+                # Release the motor pool and its monitor threads; a reload that
+                # leaves them running leaks a connection per restart.
+                database.close()
+
     application = FastAPI(
         title="RoleTeX",
         description="Tailor validated plain-text resume fields and compile a locked LaTeX template.",
         version=__version__,
+        lifespan=lifespan,
     )
     app_config = config or load_config()
     services = ApplicationServices(
@@ -479,23 +506,6 @@ def create_app(
     )
     if not chosen_static_dir.is_absolute():
         chosen_static_dir = PROJECT_ROOT / chosen_static_dir
-
-    @application.on_event("startup")
-    async def ensure_database_indexes() -> None:
-        if services.database is None:
-            return
-        # Never block startup on index creation: an unreachable Mongo would
-        # otherwise stall every create_index call for its full server-selection
-        # timeout before uvicorn accepts a single connection.
-        application.state.index_task = asyncio.create_task(
-            _ensure_indexes_with_retry(services.database)
-        )
-
-    @application.on_event("shutdown")
-    async def cancel_index_task() -> None:
-        task = getattr(application.state, "index_task", None)
-        if task is not None and not task.done():
-            task.cancel()
 
     @application.exception_handler(RequestValidationError)
     async def handle_request_validation(

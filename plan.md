@@ -9,7 +9,7 @@
 > **⚠️ HISTORICAL DOCUMENT — kept as the original feasibility record, not as a
 > description of the codebase.** It predates several shipped changes: the app is
 > now multi-user with MongoDB, and the frontend is a Next.js application in
-> `frontend/` (the `static/` vanilla SPA in §6.1 was removed in 2026-09-10).
+> `frontend/` (the hand-written vanilla SPA it replaced was deleted on 2026-09-10).
 > The repository layout and file names below are what was *planned*; several
 > never existed under those names.
 >
@@ -351,10 +351,7 @@ The app should be private or have explicit authentication and rate limiting. A p
 ├── resume/
 │   ├── template.tex
 │   └── assets/
-├── static/
-│   ├── index.html
-│   ├── app.js
-│   └── styles.css
+├── frontend/            # Next.js app; `npm run build` exports to frontend/out
 └── tests/
     ├── test_protected_regions.py
     ├── test_llm_schema.py
