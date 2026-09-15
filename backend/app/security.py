@@ -108,13 +108,90 @@ def dummy_password_hash() -> str:
     return cached
 
 
+_PASSWORD_SPECIAL_CHARS = frozenset("!@#$%^&*()-_=+[]{}|;:,.<>?/~`\"'\\")
+
+# Worst-password blocklist (NIST SP 800-63B guidance: reject known-common
+# values rather than imposing ever-stricter composition rules). These all
+# satisfy the length rule (>= 8 chars), so without this list they would be
+# accepted.  Only entries of 8+ characters are included — shorter ones are
+# unreachable because the length check fires first.
+_COMMON_PASSWORDS = frozenset(
+    [
+        "password",
+        "password1",
+        "password12",
+        "password123",
+        "passw0rd",
+        "p@ssw0rd",
+        "p@ssw0rd1",
+        "p@ssw0rd12",
+        "p@ssword",
+        "p@ssword1",
+        "pass@word",
+        "pass@word1",
+        "12345678",
+        "123456789",
+        "1234567890",
+        "123123123",
+        "11111111",
+        "00000000",
+        "qwerty123",
+        "qwertyuiop",
+        "abc12345",
+        "abcd1234",
+        "1q2w3e4r",
+        "1qaz2wsx",
+        "welcome1",
+        "welcome123",
+        "admin123",
+        "administrator",
+        "football",
+        "baseball",
+        "sunshine",
+        "superman",
+        "jennifer",
+        "iloveyou",
+        "princess",
+        "starwars",
+        "trustno1",
+        "tr@dstno1",
+        "whatever",
+        "hello123",
+        "changeme",
+        "changeme123",
+        "letmein1",
+        "welcome!",
+        "passw0rd!",
+        "p@ssw0rd!",
+        "admin!23",
+        "a]b=c1234",
+    ]
+)
+
+
 def password_policy_error(password: str) -> Optional[str]:
-    """Return a human-readable policy violation, or None when acceptable."""
+    """Return a human-readable policy violation, or None when acceptable.
+
+    Policy: 8-128 characters, at least one uppercase letter, one lowercase
+    letter, one digit, and one special character, and not a known-common
+    password. Only enforced when a password is set or changed; existing
+    stored hashes keep working on login.
+    """
 
     if not isinstance(password, str) or len(password) < PASSWORD_MIN_LENGTH:
         return "Password must be at least {0} characters".format(PASSWORD_MIN_LENGTH)
     if len(password) > PASSWORD_MAX_LENGTH:
         return "Password must be at most {0} characters".format(PASSWORD_MAX_LENGTH)
+    if password.lower() in _COMMON_PASSWORDS:
+        return "This password is too common. Choose a less predictable password."
+    if not any(char.isupper() for char in password):
+        return "Password must contain at least one uppercase letter."
+    if not any(char.islower() for char in password):
+        return "Password must contain at least one lowercase letter."
+    if not any(char.isdigit() for char in password):
+        return "Password must contain at least one digit."
+    if not any(char in _PASSWORD_SPECIAL_CHARS for char in password):
+        return "Password must contain at least one special character."
     return None
 
 
@@ -185,6 +262,19 @@ def should_secure_cookie(request: "object", cookie_secure_mode: str) -> bool:
     if mode == "false":
         return False
     return _request_scheme(request) == "https"
+
+
+def request_is_directly_https(request: "object") -> bool:
+    """True when the socket-level connection is HTTPS, ignoring forwarded headers.
+
+    Used for HSTS: an attacker who can spoof ``X-Forwarded-Proto: https`` on a
+    plaintext connection must not cause the server to emit
+    ``Strict-Transport-Security``, which would pin the victim's browser to the
+    spoofed scheme.
+    """
+
+    url = getattr(request, "url", None)
+    return (getattr(url, "scheme", "") or "").lower() == "https"
 
 
 # ---------------------------------------------------------------------------

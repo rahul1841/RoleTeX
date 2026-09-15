@@ -26,7 +26,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from fastapi import FastAPI, HTTPException, Request, Response
 
 from . import security
-from .db import DuplicateEmailError
+from .db import AuthTokenStore, DuplicateEmailError
+from .mailer import MailDeliveryError
 from .llm import PROVIDERS, provider_default_model, supported_providers
 from .schemas import (
     DeleteMeRequest,
@@ -376,6 +377,54 @@ def register_auth_routes(app: FastAPI, services: Any) -> None:
                 409, "email_taken", "An account with this email already exists."
             ) from exc
         await _open_session(request, response, user["_id"])
+        if services.config.require_email_verification:
+            # Auto-send the verification mail so a new account can prove
+            # mailbox ownership without a manual resend. Lazy import:
+            # routes_account imports from this module, so a top-level
+            # import would be circular.
+            from .routes_account import (
+                _check_email_budget,
+                _link_base,
+                _send,
+                _verify_email,
+            )
+
+            client_ip = _client_ip(request, services.config)
+            token = security.new_one_time_token()
+            await database.auth_tokens.create(
+                user["_id"],
+                AuthTokenStore.PURPOSE_EMAIL_VERIFY,
+                security.hash_token(token),
+                datetime.now(timezone.utc)
+                + timedelta(hours=services.config.email_verify_ttl_hours),
+            )
+            try:
+                _check_email_budget(services, client_ip, email)
+            except HTTPException:
+                # Rate-limiting must not roll back registration; the user
+                # already has an account and can request a fresh link later.
+                logger.info(
+                    "Email budget exhausted during registration for %s", email
+                )
+            else:
+                try:
+                    base_url = _link_base(request, services)
+                    subject, body, html_body = _verify_email(
+                        base_url, token, services.config.email_verify_ttl_hours
+                    )
+                    await _send(services, email, subject, body, html_body)
+                except HTTPException:
+                    # 503 from _link_base (PUBLIC_BASE_URL not set) — the
+                    # user can request a fresh link from the app.
+                    logger.info(
+                        "Verification mail skipped: PUBLIC_BASE_URL not configured"
+                    )
+                except (MailDeliveryError, OSError):
+                    # Transport failure must not fail registration; the user
+                    # can request a fresh link from the app.
+                    logger.exception(
+                        "Failed to send verification mail on register"
+                    )
         return UserResponse(user=await build_user_out(services, user))
 
     @app.post("/api/auth/login", response_model=UserResponse)

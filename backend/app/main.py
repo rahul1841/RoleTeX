@@ -606,6 +606,51 @@ def create_app(
 
         return await call_next(request)
 
+    # Registered after api_request_guard so it sits *outside* it: headers
+    # are applied even to early rejections (403 bad_origin, 429, ...).
+    @application.middleware("http")
+    async def security_headers(request: Request, call_next: Any) -> Any:
+        """Stamp every response with baseline security headers.
+
+        The Content-Security-Policy differs by surface. ``/api/`` serves JSON
+        only, so it gets the tightest policy (``default-src 'none'``). Every
+        other path serves the static frontend export, which ships Next.js
+        inline bootstrap scripts — ``script-src`` therefore allows
+        ``'unsafe-inline'`` there. External script loading stays forbidden in
+        both cases, which blocks the usual XSS payload pattern; user content
+        (resume text) is rendered into LaTeX/PDF server-side and through
+        React's escaping client-side, never as raw HTML.
+        """
+
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        # Legacy XSS auditors are disabled: the mode that "protects" (1) has
+        # historically introduced vulnerabilities of its own.
+        response.headers["X-XSS-Protection"] = "0"
+        if request.url.path.startswith("/api/"):
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'none'; base-uri 'none'; "
+                "frame-ancestors 'none'; form-action 'none'"
+            )
+        else:
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+                "style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data: blob:; connect-src 'self'; "
+                "font-src 'self' data:; object-src 'none'; "
+                "base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+            )
+        # HSTS uses the direct request scheme (not X-Forwarded-Proto) to avoid
+        # spoofing: an attacker who can forge the header on a plaintext
+        # connection must not pin the victim's browser to a fake HTTPS origin.
+        if security.request_is_directly_https(request):
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=63072000; includeSubDomains"
+            )
+        return response
+
     @application.get("/api/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
         checks: Dict[str, Any] = {}
