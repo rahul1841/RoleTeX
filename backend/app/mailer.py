@@ -20,6 +20,7 @@ Security rationale:
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import logging
 import smtplib
 from email.message import EmailMessage
@@ -27,6 +28,15 @@ from typing import Any, Optional
 
 
 logger = logging.getLogger(__name__)
+
+# Dedicated thread pool for blocking SMTP sends.  The default executor is
+# shared with PBKDF2 hashing (login, registration, password-change); a slow
+# or unreachable SMTP server would consume all its threads and stall every
+# auth operation.  A separate pool with a modest cap keeps the two workloads
+# isolated.
+_SMTP_POOL = concurrent.futures.ThreadPoolExecutor(
+    max_workers=4, thread_name_prefix="smtp"
+)
 
 
 class MailDeliveryError(RuntimeError):
@@ -125,7 +135,7 @@ class SmtpMailer(Mailer):
         message = self._build(to, subject, body, html_body)
         loop = asyncio.get_running_loop()
         try:
-            await loop.run_in_executor(None, self._send_blocking, message)
+            await loop.run_in_executor(_SMTP_POOL, self._send_blocking, message)
         except Exception as exc:
             # Log the class only: an SMTP exception can quote the server banner
             # and, on an auth failure, the username that was attempted.

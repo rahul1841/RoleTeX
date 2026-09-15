@@ -112,7 +112,9 @@ _PASSWORD_SPECIAL_CHARS = frozenset("!@#$%^&*()-_=+[]{}|;:,.<>?/~`\"'\\")
 
 # Worst-password blocklist (NIST SP 800-63B guidance: reject known-common
 # values rather than imposing ever-stricter composition rules). These all
-# satisfy the length rule, so without this list they would be accepted.
+# satisfy the length rule (>= 8 chars), so without this list they would be
+# accepted.  Only entries of 8+ characters are included — shorter ones are
+# unreachable because the length check fires first.
 _COMMON_PASSWORDS = frozenset(
     [
         "password",
@@ -120,51 +122,49 @@ _COMMON_PASSWORDS = frozenset(
         "password12",
         "password123",
         "passw0rd",
+        "p@ssw0rd",
+        "p@ssw0rd1",
+        "p@ssw0rd12",
+        "p@ssword",
+        "p@ssword1",
+        "pass@word",
+        "pass@word1",
         "12345678",
         "123456789",
         "1234567890",
-        "123123",
         "123123123",
         "11111111",
         "00000000",
-        "qwerty",
         "qwerty123",
         "qwertyuiop",
-        "abc123",
         "abc12345",
         "abcd1234",
         "1q2w3e4r",
         "1qaz2wsx",
-        "letmein",
-        "welcome",
         "welcome1",
         "welcome123",
-        "admin",
         "admin123",
         "administrator",
-        "monkey",
-        "dragon",
         "football",
         "baseball",
         "sunshine",
-        "master",
-        "shadow",
         "superman",
-        "michael",
         "jennifer",
-        "hunter",
         "iloveyou",
         "princess",
         "starwars",
         "trustno1",
+        "tr@dstno1",
         "whatever",
-        "freedom",
         "hello123",
         "changeme",
         "changeme123",
-        "asdfgh",
-        "zxcvbnm",
-        "qazwsx",
+        "letmein1",
+        "welcome!",
+        "passw0rd!",
+        "p@ssw0rd!",
+        "admin!23",
+        "a]b=c1234",
     ]
 )
 
@@ -262,6 +262,19 @@ def should_secure_cookie(request: "object", cookie_secure_mode: str) -> bool:
     if mode == "false":
         return False
     return _request_scheme(request) == "https"
+
+
+def request_is_directly_https(request: "object") -> bool:
+    """True when the socket-level connection is HTTPS, ignoring forwarded headers.
+
+    Used for HSTS: an attacker who can spoof ``X-Forwarded-Proto: https`` on a
+    plaintext connection must not cause the server to emit
+    ``Strict-Transport-Security``, which would pin the victim's browser to the
+    spoofed scheme.
+    """
+
+    url = getattr(request, "url", None)
+    return (getattr(url, "scheme", "") or "").lower() == "https"
 
 
 # ---------------------------------------------------------------------------

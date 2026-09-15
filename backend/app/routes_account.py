@@ -33,6 +33,7 @@ cheaply the oracle can be sampled.
 from __future__ import annotations
 
 import asyncio
+import html
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Tuple
@@ -179,6 +180,7 @@ def _email_html(heading: str, intro: str, button_label: str, link: str, note: st
     in ``style`` attributes.
     """
 
+    safe_link = html.escape(link, quote=True)
     return (
         "<!DOCTYPE html><html><body style=\"margin:0;padding:0;"
         "background-color:#f4f4f5;\">"
@@ -192,19 +194,19 @@ def _email_html(heading: str, intro: str, button_label: str, link: str, note: st
         "{0}</h1>"
         "<p style=\"font-size:15px;line-height:1.6;color:#3f3f46;\">{1}</p>"
         "<div style=\"margin:28px 0;text-align:center;\">"
-        "<a href=\"{3}\" style=\"display:inline-block;background-color:#18181b;"
+        "<a href=\"{5}\" style=\"display:inline-block;background-color:#18181b;"
         "color:#ffffff;text-decoration:none;font-size:15px;font-weight:bold;"
         "padding:13px 32px;border-radius:8px;\">{2}</a></div>"
         "<p style=\"font-size:13px;line-height:1.6;color:#71717a;\">{4}</p>"
         "<p style=\"font-size:12px;line-height:1.6;color:#a1a1aa;"
         "border-top:1px solid #e4e4e7;padding-top:16px;margin-top:24px;\">"
         "If the button does not work, copy and paste this link into your "
-        "browser:<br><span style=\"word-break:break-all;\">{3}</span></p>"
+        "browser:<br><span style=\"word-break:break-all;\">{5}</span></p>"
         "</div>"
         "<p style=\"font-size:12px;color:#a1a1aa;text-align:center;"
         "font-family:Arial,Helvetica,sans-serif;\">RoleTeX</p>"
         "</div></body></html>"
-    ).format(heading, intro, button_label, link, note)
+    ).format(heading, intro, button_label, link, note, safe_link)
 
 
 def _reset_email(
