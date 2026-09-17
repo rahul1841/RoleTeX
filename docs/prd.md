@@ -98,7 +98,7 @@ Paste a job description → an LLM proposes structured, fact-preserving edits (s
 | NFR-3 | **Sandbox:** per-request temp dir, `tectonic --untrusted --only-cached`, bounded timeout (10–180s), POSIX rlimits, concurrency semaphore (1–4) |
 | NFR-4 | **Availability:** graceful degraded health, structured API errors, 413 body guards (64KB API / 260KB import) |
 | NFR-5 | **Cost:** runs within free tiers; no database; single Docker container |
-| NFR-6 | **Compatibility:** Python 3.9+ (dev venv is 3.9), Pydantic v2 (≥2.9; the `validate_model`/`dump_model` shims keep call sites version-agnostic), ATS-readable PDF output |
+| NFR-6 | **Compatibility:** Python 3.9+ (dev venv is 3.12, matching the image; the 3.9 floor is upheld by convention, not by the venv), Pydantic v2 (≥2.9; the `validate_model`/`dump_model` shims keep call sites version-agnostic), ATS-readable PDF output |
 
 ## 9. Acceptance criteria (from plan.md §7, current status)
 

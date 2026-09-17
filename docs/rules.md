@@ -29,7 +29,7 @@
 
 ## 3. Coding conventions
 
-- **C-1 · Python 3.9 compatible.** The dev venv is Python 3.9 while the Docker image is newer. No `X | Y` unions, no `match`, no 3.10+ stdlib features in `app/`.
+- **C-1 · Python 3.9 compatible.** The floor is a stated compatibility requirement (prd NFR-6), but the dev venv no longer enforces it: it now matches the Docker image at 3.12, so 3.10+ syntax compiles locally and fails only on a 3.9 deployment. Keep it out by hand — no `X | Y` unions, no `match`, no 3.10+ stdlib features in `app/`.
 - **C-2 · Version-agnostic Pydantic call sites.** The models themselves are Pydantic v2 (`ConfigDict`, `>=2.9` pinned); still use `schemas.validate_model` / `schemas.dump_model` instead of calling `model_validate`/`model_dump` directly so call sites stay version-agnostic.
 - **C-3 · Dependency injection via `create_app`.** New services get constructor/factory parameters with production defaults, so tests can inject doubles. Don't reach for module-level singletons.
 - **C-4 · Structured errors.** API failures go through `_api_error` → `{code, message, ...details}`. No bare `HTTPException(detail="string")` in new endpoints.
@@ -44,7 +44,7 @@
 
 - **T-1 · Verification stays offline and fast.** No network and no real LLM call is needed to exercise the API: `LLM_PROVIDER=stub` plus an `httpx.ASGITransport` client against `create_app()` drives the real routes through the real middleware stack. Keep every boundary injectable (`create_app` already takes the filesystem, LLM, compiler, database, PDF tooling, and mailer) so that stays true.
 - **T-2 · Security invariants are verified before they ship.** Validation, escaping, redaction, token handling, and the compiler sandbox are the code this project exists to get right. A change to any of them gets an explicit check — a driven request, a rendered document read back — recorded in [memory.md](memory.md), not just a reading of the diff.
-- **T-3 · Use the project venv:** `PYTHONPATH=backend .venv/bin/python …` (Python 3.9.6). The `PYTHONPATH` is what makes `app.main` importable now that the service lives in `backend/`.
+- **T-3 · Use the project venv:** `PYTHONPATH=backend .venv/bin/python …` (Python 3.12.14, Homebrew). The `PYTHONPATH` is what makes `app.main` importable now that the service lives in `backend/`. Rebuild it from `/opt/homebrew/opt/python@3.12/bin/python3.12`, never from macOS's `/usr/bin/python3`: that one links LibreSSL 2.8.3, which fails concurrent Atlas TLS handshakes with `BAD_PSK_IDENTITY` and pauses the PyMongo pool into intermittent 503s (README, Local development).
 - **T-4 · The LaTeX pipeline is verified by the Docker build.** Its prewarm renders the seed resume and every offered font size and compiles each with real Tectonic, so a broken template or an uncached package fails the build rather than the first request.
 
 ## 5. Change management

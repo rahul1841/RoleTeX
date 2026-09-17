@@ -215,9 +215,21 @@ Do not rename, duplicate, or delete them without updating the renderer.
 
 ## Local development
 
-Use Python 3.9 or newer. Tectonic 0.16.9 and Poppler (`pdfinfo`, `pdftotext`,
-and `pdftoppm`) must also be available on `PATH` for real PDF compilation and
-resume import. All three poppler binaries ship in `poppler-utils`.
+Use Python 3.9 or newer, linked against **OpenSSL** — not LibreSSL. Tectonic
+0.16.9 and Poppler (`pdfinfo`, `pdftotext`, and `pdftoppm`) must also be
+available on `PATH` for real PDF compilation and resume import. All three
+poppler binaries ship in `poppler-utils`.
+
+> **macOS: do not build the venv on the system Python.** `/usr/bin/python3` and
+> the Command Line Tools interpreter link LibreSSL 2.8.3, whose TLS session
+> resumption corrupts concurrent handshakes. PyMongo reuses TLS sessions and
+> opens pool connections in parallel, so against Atlas this surfaces as
+> intermittent `SSL handshake failed: [SSL: BAD_PSK_IDENTITY] bad message type`.
+> One failed handshake pauses the whole connection pool, so a burst of parallel
+> requests returns `503 database_unavailable` (the siblings report `connection
+> pool paused`) and then recovers on the next heartbeat. Verify the interpreter
+> with `python3 -c 'import ssl; print(ssl.OPENSSL_VERSION)'` — it must print
+> OpenSSL.
 
 On macOS with Homebrew:
 
@@ -228,10 +240,12 @@ brew install tectonic poppler
 Create the environment and install the application:
 
 ```bash
-python3 -m venv .venv
+# macOS: the Homebrew interpreter, never /usr/bin/python3 (see the note above).
+/opt/homebrew/opt/python@3.12/bin/python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r backend/requirements.txt
+python -c 'import ssl; print(ssl.OPENSSL_VERSION)'  # must print OpenSSL
 ```
 
 Configure Groq without writing the key into the repository:
@@ -245,12 +259,24 @@ export GROQ_API_KEY='your-secret-key'
 Start the API from the repository root:
 
 ```bash
-PYTHONPATH=backend uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+PYTHONPATH=backend uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload \
+  --timeout-keep-alive 65
 ```
 
 `PYTHONPATH=backend` is what makes `app.main` importable; running from the root
 rather than from inside `backend/` is what lets the server find the frontend
 build at `frontend/out`. The Docker image sets the same two things.
+
+`--timeout-keep-alive 65` is for the dev proxy only. Uvicorn drops idle
+keep-alive connections after 5s by default, while the Node agent behind
+`next dev`'s `/api` rewrite pools and reuses them for longer. Whenever a pause
+outlasts the 5s — the OS file picker sitting open during a PDF import is the
+usual one — the proxy writes the next request into a socket the server has
+already closed, and `next dev` reports `Failed to proxy ... socket hang up
+(ECONNRESET)` while the API logs nothing at all, because the request never
+arrived. Raising the server's timeout above the client's ends the race. The
+Docker image does not need it: production serves the static export from FastAPI
+itself, so there is no Node proxy in front.
 
 ### Running the frontend
 
@@ -296,7 +322,8 @@ then return fixture text, cost nothing, and never touch the network, so the
 whole UI can be exercised offline:
 
 ```bash
-LLM_PROVIDER=stub PYTHONPATH=backend uvicorn app.main:app --port 8000 --reload
+LLM_PROVIDER=stub PYTHONPATH=backend uvicorn app.main:app --port 8000 --reload \
+  --timeout-keep-alive 65
 ```
 
 Generated copy is prefixed `[stub]` so fixture text is never mistaken for a
