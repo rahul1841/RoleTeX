@@ -22,8 +22,8 @@ import { AppShell } from "@/components/layout";
  *  - It rewrites legacy `/#/reset-password?token=…` links — the shape the
  *    backend emailed before 2026-09-10 — onto their real routes. Those links
  *    resolve to "/", which is this group's own index, and they must be caught
- *    before <AppShell> redirects the signed-out visitor to /sign-in and drops
- *    the token.
+ *    before <AppShell> redirects the signed-out visitor away and drops the
+ *    token.
  *
  * It is a sibling of <AppShell> rather than a child so it is not inside the
  * <main> landmark, and so the shell's own tree is untouched.

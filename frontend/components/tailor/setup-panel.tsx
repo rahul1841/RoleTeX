@@ -28,6 +28,7 @@ import {
   Spinner,
   TextSkeleton,
 } from "@/components/common";
+import { sourceLabel } from "@/components/resumes";
 import {
   JD_MAX_CHARACTERS,
   useJdOptions,
@@ -77,6 +78,13 @@ const JD_ID = "tailor-jd";
 const JD_TEXT_ID = "tailor-jd-text";
 const PROVIDER_ID = "tailor-provider";
 const MODEL_ID = "tailor-model";
+
+/**
+ * The resume and job-description fields share a row, and only the second has
+ * a control beside its label (the Saved / Paste switch). Holding both label
+ * rows at that control's height keeps the two pickers level.
+ */
+const PAIRED_LABEL_ROW = "lg:min-h-7";
 
 export type { RunLabels } from "./form-values";
 
@@ -207,6 +215,10 @@ export function SetupPanel({
   const effectiveModel =
     values.model.trim() || selectedProvider?.default_model || "";
 
+  // The human label ("OpenAI"), not the id: it goes into sentences like
+  // "spends one OpenAI completion".
+  const providerName = selectedProvider?.label || values.provider;
+
   const labels: RunLabels = {
     resume: storage
       ? (selectedResume?.name ?? "No resume selected")
@@ -215,14 +227,17 @@ export function SetupPanel({
       storage && values.jdSource === "saved"
         ? (selectedJd?.title ?? "No job description selected")
         : "Pasted job description",
-    // The human label ("OpenAI"), not the id: these strings go into sentences
-    // like "spends one OpenAI completion".
-    provider:
-      selectedProvider?.label ||
-      values.provider ||
-      "the server's configured provider",
+    provider: providerName || "the server's configured provider",
     model: effectiveModel || "its default model",
   };
+
+  // With no name to put in front of "completion" (the server picks the
+  // provider), the phrase has to be built the other way round, or it reads
+  // "one the server's configured provider completion".
+  const completion = (count: "one" | "another") =>
+    providerName
+      ? `${count} ${providerName} completion`
+      : `${count} completion from the server's configured provider`;
 
   const resumeOptions: PickerOption[] = resumes.map((resume) => ({
     value: resume.id,
@@ -277,7 +292,10 @@ export function SetupPanel({
 
   return (
     <Card>
-      <CardHeader className="border-b">
+      {/* Ruled off only while the inputs are showing. Collapsed, the footer's
+          own top border already separates the summary from the run button, and
+          a second rule above it read as an empty gap. */}
+      <CardHeader className={cn(open && "border-b")}>
         <CardTitle>Inputs</CardTitle>
         <CardDescription>
           {open ? (
@@ -326,7 +344,7 @@ export function SetupPanel({
             <div className="grid gap-5 lg:grid-cols-2">
               {/* --- Resume ------------------------------------------------ */}
               {!storage ? (
-                <FormField id={RESUME_ID} label="Resume">
+                <FormField id={RESUME_ID} label="Resume" labelClassName={PAIRED_LABEL_ROW}>
                   <div className="text-muted-foreground flex items-start gap-2 rounded-lg border border-dashed px-3 py-2.5 text-sm">
                     <DatabaseIcon
                       aria-hidden="true"
@@ -340,11 +358,11 @@ export function SetupPanel({
                   </div>
                 </FormField>
               ) : resumesQuery.isPending ? (
-                <FormField id={RESUME_ID} label="Resume">
+                <FormField id={RESUME_ID} label="Resume" labelClassName={PAIRED_LABEL_ROW}>
                   <TextSkeleton lines={2} />
                 </FormField>
               ) : resumesQuery.isError ? (
-                <FormField id={RESUME_ID} label="Resume">
+                <FormField id={RESUME_ID} label="Resume" labelClassName={PAIRED_LABEL_ROW}>
                   <ErrorState
                     variant="bare"
                     error={resumesQuery.error}
@@ -353,7 +371,7 @@ export function SetupPanel({
                   />
                 </FormField>
               ) : noResumes ? (
-                <FormField id={RESUME_ID} label="Resume">
+                <FormField id={RESUME_ID} label="Resume" labelClassName={PAIRED_LABEL_ROW}>
                   <div className="rounded-lg border border-dashed px-3 py-2.5 text-sm">
                     <p className="text-muted-foreground text-pretty">
                       You have no saved resumes yet. Import one — from a PDF,
@@ -374,10 +392,11 @@ export function SetupPanel({
                 <FormField
                   id={RESUME_ID}
                   label="Resume"
+                  labelClassName={PAIRED_LABEL_ROW}
                   error={errors.resumeId?.message}
                   hint={
                     selectedResume
-                      ? `Version ${selectedResume.version} · ${selectedResume.source_type} import`
+                      ? `Version ${selectedResume.version} · ${sourceLabel(selectedResume.source_type)}`
                       : "Your saved resumes."
                   }
                 >
@@ -403,6 +422,7 @@ export function SetupPanel({
               <FormField
                 id={usingSavedJd ? JD_ID : JD_TEXT_ID}
                 label="Job description"
+                labelClassName={PAIRED_LABEL_ROW}
                 action={
                   storage ? (
                     <Controller
@@ -618,7 +638,7 @@ export function SetupPanel({
           <p className="text-muted-foreground min-w-0 flex-1 text-xs text-pretty">
             Running spends{" "}
             <span className="text-foreground font-medium">
-              one {labels.provider} completion
+              {completion("one")}
             </span>
             {values.compile ? " and one Tectonic compile" : ""}. Your name,
             email, phone and links are never sent to the model.
@@ -640,7 +660,7 @@ export function SetupPanel({
         destructive={false}
         title="Run tailoring again?"
         confirmLabel="Run again"
-        description={`This replaces the result you are reviewing and spends another ${labels.provider} completion${values.compile ? " and another Tectonic compile" : ""}.`}
+        description={`This replaces the result you are reviewing and spends ${completion("another")}${values.compile ? " and another Tectonic compile" : ""}.`}
         onConfirm={() => {
           const pending = pendingRef.current;
           pendingRef.current = null;

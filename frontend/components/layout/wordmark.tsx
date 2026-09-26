@@ -7,11 +7,21 @@ import { cn } from "cn";
  * The tagline is not decoration — it is the one line that tells a first-time
  * visitor what the tool actually does. It is stacked under the name rather
  * than beside it so it survives narrow viewports without truncation.
+ *
+ * `href` is the product's home by default. The landing page points it at
+ * itself: "/" would bounce a signed-out visitor straight back there through
+ * the app shell's redirect.
  */
-export function Wordmark({ className }: { className?: string }) {
+export function Wordmark({
+  className,
+  href = "/",
+}: {
+  className?: string;
+  href?: string;
+}) {
   return (
     <Link
-      href="/"
+      href={href}
       className={cn(
         "focus-visible:ring-ring/50 flex items-center gap-2.5 rounded-md outline-none focus-visible:ring-3",
         className,

@@ -71,7 +71,10 @@ function SectionRail() {
 
   return (
     <nav aria-label="Resume sections" className="min-w-0 flex-1">
-      <ul className="flex gap-1 overflow-x-auto pb-0.5">
+      {/* Beside the save button the rail rarely fits, and a hard edge cuts a
+          label mid-word. The fade says "scroll for more" instead; the end
+          padding lets the last link scroll clear of it. */}
+      <ul className="flex gap-1 overflow-x-auto pr-6 pb-0.5 [mask-image:linear-gradient(to_right,#000_calc(100%_-_1.5rem),transparent)]">
         {SECTIONS.map((section) => {
           const invalid = Boolean(errors[section.key as keyof typeof errors]);
           return (

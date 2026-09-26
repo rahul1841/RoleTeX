@@ -29,7 +29,7 @@ export const metadata: Metadata = {
  */
 export default function ResumesPage() {
   return (
-    <RequiresStorage feature="Saved resumes">
+    <RequiresStorage feature="Saved resumes" title="Resumes">
       <Suspense
         fallback={
           <PageContainer>

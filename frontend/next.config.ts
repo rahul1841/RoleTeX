@@ -37,16 +37,24 @@ const nextConfig: NextConfig = {
   // Dev-only: this key has no effect on `next build`.
   allowedDevOrigins: ["127.0.0.1", "localhost"],
 
-  // Without this, `trailingSlash` also applies to the /api rewrite and Next
-  // answers every API call with a 308 to `/api/<path>/` before the request
-  // ever reaches FastAPI (verified: `curl -i localhost:3000/api/health` ->
-  // "308 Permanent Redirect, location: /api/health/"). FastAPI's routes are
-  // declared without trailing slashes, so the redirect target 404s.
-  skipTrailingSlashRedirect: true,
-
   ...(isProd
     ? {}
     : {
+        // Without this, `trailingSlash` also applies to the /api rewrite and
+        // Next answers every API call with a 308 to `/api/<path>/` before the
+        // request ever reaches FastAPI (verified: `curl -i
+        // localhost:3000/api/health` -> "308 Permanent Redirect, location:
+        // /api/health/"). FastAPI's routes are declared without trailing
+        // slashes, so the redirect target 404s.
+        //
+        // Dev-only because the flag also reaches the client, where it stops
+        // <Link> and `router.push` from adding the trailing slash. In the
+        // export that sends a client navigation to "/settings" looking for
+        // `/settings.txt`, which never exists (only `/settings/index.txt`
+        // does), so every one that was not prefetched 404s and falls back to
+        // a full page load.
+        skipTrailingSlashRedirect: true,
+
         async rewrites() {
           return [
             { source: "/api/:path*", destination: `${API_ORIGIN}/api/:path*` },

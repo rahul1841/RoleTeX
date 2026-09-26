@@ -265,7 +265,7 @@ function JdListRow({ jd, selected }: { jd: JdSummary; selected: boolean }) {
         </p>
       ) : null}
       <p
-        className="text-muted-foreground/80 mt-1.5 text-[0.6875rem]"
+        className="text-muted-foreground mt-1.5 text-[0.6875rem]"
         title={formatAbsolute(jd.updated_at)}
       >
         Updated {formatRelative(jd.updated_at)}

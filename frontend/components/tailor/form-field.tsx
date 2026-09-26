@@ -29,6 +29,11 @@ export interface FormFieldProps {
    * of the <label>, never a child: a control inside a label steals its clicks.
    */
   action?: React.ReactNode;
+  /**
+   * For the label row. Fields side by side in a grid pass the same minimum
+   * height so their controls line up when only one of them has an `action`.
+   */
+  labelClassName?: string;
   children: React.ReactNode;
   className?: string;
 }
@@ -62,12 +67,18 @@ export function FormField({
   error,
   hint,
   action,
+  labelClassName,
   children,
   className,
 }: FormFieldProps) {
   return (
     <div className={cn("space-y-1.5", className)}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div
+        className={cn(
+          "flex flex-wrap items-center justify-between gap-2",
+          labelClassName,
+        )}
+      >
         <Label htmlFor={id}>{label}</Label>
         {action}
       </div>

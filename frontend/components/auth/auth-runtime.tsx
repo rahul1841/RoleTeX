@@ -49,8 +49,8 @@ export function AuthRuntime() {
  * backend/app/routes_account.py builds the real route directly — but links sent before
  * 2026-09-10 may still be in inboxes, and to a server, a router, and
  * `usePathname()` they are all simply "/". Without this they land on the tailor
- * page, and a signed-out visitor is then bounced to /sign-in with the token
- * dropped on the floor. Deletable once those links have expired; see
+ * page, and a signed-out visitor is then bounced to the landing page with the
+ * token dropped on the floor. Deletable once those links have expired; see
  * token-link.ts for the exact window.
  *
  * `location.replace`, not `router.replace`, on purpose:

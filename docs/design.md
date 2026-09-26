@@ -127,10 +127,13 @@ a server that the browser cannot fetch itself.
 
 Routes: `/` (tailor), `/resumes`, `/jds`, `/history`, `/settings`, plus the
 signed-out group `/sign-in`, `/register`, `/forgot-password`, `/reset-password`,
-`/verify-email`. Boot mirrors the API: `GET /api/health` decides the mode
-(`demo` → seed tailoring only, storage screens explain themselves via
-`<RequiresStorage>`; `multi_user` → `GET /api/me`, where a 401 is the normal
-signed-out state).
+`/verify-email`, and the public landing page `/welcome`. Boot mirrors the API:
+`GET /api/health` decides the mode (`demo` → seed tailoring only, storage
+screens explain themselves via `<RequiresStorage>`; `multi_user` →
+`GET /api/me`, where a 401 is the normal signed-out state). A signed-out visitor
+at `/` is sent to `/welcome`; one following a deeper link goes to `/sign-in`.
+Any other address gets `app/not-found.tsx`, exported as `404.html`, which
+FastAPI's `StaticFiles` serves with a 404 status for every missing path.
 
 - **Entity selection is a query parameter, never a route segment** (`/resumes?id=…`,
   `/history?run=…`). A static export cannot prerender `[id]` without

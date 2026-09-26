@@ -145,7 +145,7 @@ function RunRow({ run, selected }: { run: RunSummary; selected: boolean }) {
         </p>
 
         <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="text-muted-foreground/80 truncate font-mono text-[0.6875rem]">
+          <span className="text-muted-foreground truncate font-mono text-[0.6875rem]">
             v{run.resume_version} · {formatEngine(run.provider, run.model)}
             {pages ? ` · ${pages}` : ""}
           </span>

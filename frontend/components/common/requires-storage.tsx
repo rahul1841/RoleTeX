@@ -3,6 +3,7 @@
 import { DatabaseIcon } from "lucide-react";
 import { EmptyState } from "./empty-state";
 import { PageContainer } from "./page-container";
+import { PageHeader } from "./page-header";
 import { useSession } from "@/hooks/use-session";
 import { LoadingState } from "./loading-state";
 
@@ -28,10 +29,16 @@ export interface RequiresStorageProps {
    * explanation so the message names the thing they actually wanted.
    */
   feature: string;
+  /**
+   * The page's own heading, for screens whose <PageHeader> lives inside the
+   * gated content (the resumes route renders a different one per view). Without
+   * it a demo server would show that page with no <h1> at all.
+   */
+  title?: string;
   children: React.ReactNode;
 }
 
-export function RequiresStorage({ feature, children }: RequiresStorageProps) {
+export function RequiresStorage({ feature, title, children }: RequiresStorageProps) {
   const { mode, isLoading } = useSession();
 
   // Render nothing decisive until the mode is known, or the page would flash
@@ -43,6 +50,7 @@ export function RequiresStorage({ feature, children }: RequiresStorageProps) {
   if (mode === "demo") {
     return (
       <PageContainer>
+        {title ? <PageHeader title={title} className="mb-8" /> : null}
         <EmptyState
           icon={DatabaseIcon}
           title={`${feature} need a database`}

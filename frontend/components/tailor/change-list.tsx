@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState } from "@/components/common";
 import type { ResumeChange } from "@/lib/api/types";
-import { describeFieldId } from "./field-id";
+import { CHANGE_KIND_LABEL, describeFieldId } from "./field-id";
 import { wordDiff, type DiffSpan } from "./word-diff";
 
 /**
@@ -126,13 +126,6 @@ export function ChangeList({ changes, compiled, className }: ChangeListProps) {
   );
 }
 
-const KIND_LABEL = {
-  summary: "Headline",
-  skills: "Reordered",
-  bullet: "Rewritten",
-  other: "Edited",
-} as const;
-
 function ChangeCard({
   change,
   reviewed,
@@ -176,9 +169,9 @@ function ChangeCard({
           ) : null}
         </label>
         <Badge variant="outline" className="ml-auto shrink-0">
-          {KIND_LABEL[location.kind]}
+          {CHANGE_KIND_LABEL[location.kind]}
         </Badge>
-        <code className="text-muted-foreground/70 hidden shrink-0 text-[0.7rem] sm:inline">
+        <code className="text-muted-foreground hidden shrink-0 text-[0.7rem] sm:inline">
           {change.field_id}
         </code>
       </div>

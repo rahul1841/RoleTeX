@@ -15,6 +15,20 @@
 
 export type ChangeKind = "summary" | "skills" | "bullet" | "other";
 
+/**
+ * The badge each kind of change wears in a change list.
+ *
+ * Lives here, in a module with no client code, so the landing page can render
+ * the same words from a server component; a constant exported from a
+ * "use client" file reaches server code only as a reference, not a value.
+ */
+export const CHANGE_KIND_LABEL: Record<ChangeKind, string> = {
+  summary: "Headline",
+  skills: "Reordered",
+  bullet: "Rewritten",
+  other: "Edited",
+};
+
 export interface FieldLocation {
   /** The resume section: "Experience 2", "Summary", "Skills". */
   section: string;

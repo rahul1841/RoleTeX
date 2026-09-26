@@ -181,7 +181,8 @@ backend/                  The FastAPI service — nothing outside it is imported
   requirements.txt        Runtime dependencies
 
 frontend/                 Next.js app (App Router, TypeScript, Tailwind, shadcn/ui)
-  app/                    Routes. (app) is the signed-in shell, (auth) the signed-out pages
+  app/                    Routes. (app) is the signed-in shell, (auth) the signed-out pages,
+                          welcome/ the public landing page
   components/             Feature UI, plus common/ primitives and ui/ shadcn parts
   lib/api/                The only place that talks to FastAPI; schema.d.ts is generated
   hooks/                  TanStack Query hooks, one module per domain
