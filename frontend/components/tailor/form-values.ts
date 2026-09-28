@@ -37,6 +37,7 @@ export interface RunLabels {
   resume: string;
   jd: string;
   provider: string;
+  /** Empty when the run uses the provider's default model. */
   model: string;
 }
 

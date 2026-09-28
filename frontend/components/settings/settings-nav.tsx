@@ -62,10 +62,10 @@ export function SettingsNav({
   return (
     <nav
       aria-label="Settings sections"
-      className={cn("sticky top-20 self-start", className)}
+      className={cn("sticky top-24 self-start", className)}
     >
       <ul className="space-y-0.5 text-sm">
-        {items.map((item) => {
+        {items.map((item, index) => {
           const isActive = item.id === active;
           return (
             <li key={item.id}>
@@ -73,12 +73,21 @@ export function SettingsNav({
                 href={`#${item.id}`}
                 aria-current={isActive ? "true" : undefined}
                 className={cn(
-                  "focus-visible:ring-ring/50 block rounded-md px-2 py-1 transition-colors outline-none focus-visible:ring-2",
+                  "focus-visible:ring-ring/50 relative flex items-center gap-3 rounded-lg px-3 py-2 transition-colors outline-none focus-visible:ring-2",
                   isActive
-                    ? "bg-muted text-foreground font-medium"
+                    ? "bg-card text-foreground font-medium shadow-[0_1px_2px_rgb(21_24_31/0.06)] ring-1 ring-foreground/10"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
                 )}
               >
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "font-mono text-[0.6875rem]",
+                    isActive ? "text-primary" : "text-muted-foreground/70",
+                  )}
+                >
+                  {String(index + 1).padStart(2, "0")}
+                </span>
                 {item.label}
               </a>
             </li>

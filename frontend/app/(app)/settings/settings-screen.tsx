@@ -78,14 +78,22 @@ export function SettingsScreen() {
     [storageAvailable],
   );
 
+  // Numbered in the order the index lists them, so "03" means the same
+  // section in the nav and on the card.
+  const number = (id: string) => {
+    const index = navItems.findIndex((item) => item.id === id);
+    return index >= 0 ? String(index + 1).padStart(2, "0") : undefined;
+  };
+
   return (
-    <div className="mt-8 gap-10 lg:grid lg:grid-cols-[minmax(0,11rem)_minmax(0,1fr)]">
+    <div className="mt-10 gap-10 lg:grid lg:grid-cols-[minmax(0,14rem)_minmax(0,56rem)]">
       <SettingsNav items={navItems} className="hidden lg:block" />
 
-      <div className="min-w-0 space-y-10">
+      <div className="min-w-0 space-y-5">
         <RequiresStorage feature="Account settings">
           <SettingsSection
             id="providers"
+            number={number("providers")}
             title="AI providers and keys"
             description="RoleTeX calls the provider you choose with the key you store here. Keys are encrypted before they are saved and cannot be read back."
           >
@@ -94,6 +102,7 @@ export function SettingsScreen() {
 
           <SettingsSection
             id="defaults"
+            number={number("defaults")}
             title="Tailoring defaults"
             description="What a tailoring run uses when it does not name a provider or model itself."
           >
@@ -102,6 +111,7 @@ export function SettingsScreen() {
 
           <SettingsSection
             id="account"
+            number={number("account")}
             title="Account"
             description="The address you sign in with and the name shown around the app."
           >
@@ -110,6 +120,7 @@ export function SettingsScreen() {
 
           <SettingsSection
             id="password"
+            number={number("password")}
             title="Password"
             description="Changing your password signs out every other device."
           >
@@ -118,6 +129,7 @@ export function SettingsScreen() {
 
           <SettingsSection
             id="sessions"
+            number={number("sessions")}
             title="Active sessions"
             description="Every browser and device currently signed in to this account."
           >
@@ -127,6 +139,7 @@ export function SettingsScreen() {
 
         <SettingsSection
           id="appearance"
+          number={number("appearance")}
           title="Appearance"
           description="Stored in this browser only; it is not part of your account."
         >
@@ -135,6 +148,7 @@ export function SettingsScreen() {
 
         <SettingsSection
           id="deployment"
+          number={number("deployment")}
           title="Deployment"
           description="What this RoleTeX server is configured with, and what that means for what you can do."
         >
@@ -144,6 +158,8 @@ export function SettingsScreen() {
         {storageAvailable ? (
           <SettingsSection
             id="danger"
+            number={number("danger")}
+            tone="danger"
             title="Danger zone"
             description="Irreversible actions on this account."
           >

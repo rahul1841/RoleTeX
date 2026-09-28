@@ -21,6 +21,7 @@ export { ImportResumeDialog, type ImportTarget } from "./import-dialog";
 export { RenameResumeDialog } from "./rename-dialog";
 export { VersionsPanel } from "./versions-panel";
 export { ResumeCard } from "./resume-card";
+export { ResumeSheet } from "./resume-sheet";
 export {
   resumeErrorGuidance,
   resumeErrorTitle,

@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   LoadingState,
   PageContainer,
-  PageHeader,
+  PageHero,
   RequiresStorage,
 } from "@/components/common";
 import { useSession } from "@/hooks/use-session";
@@ -23,7 +23,7 @@ import { JdWorkspace } from "./jd-workspace";
  *
  * The header sits OUTSIDE <RequiresStorage> on purpose. The gate replaces its
  * children with an explanation when the server has no database, and the page's
- * single <h1> lives in <PageHeader> — if the heading went inside the gate,
+ * single <h1> lives in <PageHero> — if the heading went inside the gate,
  * demo mode would render a page with no <h1> at all and the shell's
  * route-change focus would have nothing to move to.
  *
@@ -36,13 +36,14 @@ export function JdScreen() {
   const [createOpen, setCreateOpen] = React.useState(false);
 
   return (
-    <PageContainer width="wide">
-      <PageHeader
+    <PageContainer width="wide" className="sm:pt-12 sm:pb-16">
+      <PageHero
+        eyebrow="Library"
         title="Job descriptions"
         description="Postings you have saved, ready to tailor any resume against. Editing one records a new version rather than overwriting it."
         actions={
           mode === "multi_user" ? (
-            <Button onClick={() => setCreateOpen(true)}>
+            <Button className="h-10 rounded-xl px-4" onClick={() => setCreateOpen(true)}>
               <PlusIcon data-icon="inline-start" />
               New job description
             </Button>
@@ -72,13 +73,13 @@ function JdWorkspaceFallback() {
     <LoadingState label="Loading job descriptions…">
       <div
         aria-hidden="true"
-        className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,21rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,23rem)_minmax(0,1fr)]"
+        className="mt-10 grid gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]"
       >
         <div className="space-y-3">
-          <Skeleton className="h-8 w-full" />
-          <Skeleton className="h-64 w-full rounded-xl" />
+          <Skeleton className="h-10 w-full rounded-xl" />
+          <Skeleton className="h-72 w-full rounded-[1.25rem]" />
         </div>
-        <Skeleton className="hidden h-80 w-full rounded-xl lg:block" />
+        <Skeleton className="hidden h-96 w-full rounded-[1.25rem] lg:block" />
       </div>
     </LoadingState>
   );

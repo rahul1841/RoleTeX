@@ -3,9 +3,18 @@
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "cn";
-import { FileSearchIcon, HistoryIcon, SparklesIcon } from "lucide-react";
+import {
+  FileCode2Icon,
+  HistoryIcon,
+  ListChecksIcon,
+  MousePointerClickIcon,
+  RefreshCwIcon,
+  SparklesIcon,
+  type LucideIcon,
+} from "lucide-react";
 import { Button, ButtonLink } from "@/components/ui/button";
 import {
+  Canvas,
   CardSkeleton,
   EmptyState,
   ErrorState,
@@ -48,8 +57,8 @@ export function HistoryWorkspace() {
 
   if (runs.isPending) {
     return (
-      <LoadingState label="Loading your tailoring history…" className="mt-6">
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,21rem)_minmax(0,1fr)]">
+      <LoadingState label="Loading your tailoring history…" className="mt-10">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] xl:gap-8">
           <ListSkeleton rows={5} />
           <CardSkeleton className="hidden lg:block" />
         </div>
@@ -60,7 +69,7 @@ export function HistoryWorkspace() {
   if (runs.isError) {
     return (
       <ErrorState
-        className="mt-6"
+        className="mt-10"
         error={runs.error}
         title="Your history could not be loaded"
         onRetry={() => void runs.refetch()}
@@ -69,41 +78,37 @@ export function HistoryWorkspace() {
   }
 
   if (runs.data.length === 0) {
-    return (
-      <div className="mt-6">
-        <EmptyState
-          icon={HistoryIcon}
-          title="No tailoring runs yet"
-          description="Every time you tailor a resume to a job description, the run is kept here with its change list, its diff and the LaTeX it produced — so you can recompile the PDF later without spending tokens again."
-          action={
-            <ButtonLink href="/">
-              <SparklesIcon data-icon="inline-start" />
-              Tailor a resume
-            </ButtonLink>
-          }
-        />
-      </div>
-    );
+    return <EmptyHistory />;
   }
 
   return (
-    <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,21rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,23rem)_minmax(0,1fr)]">
+    <div className="mt-10 grid items-start gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] xl:gap-8">
       <RunList
         runs={runs.data}
         selectedId={selectedId}
         className={cn(
-          "lg:sticky lg:top-[4.5rem] lg:max-h-[calc(100svh-6.5rem)]",
+          "lg:sticky lg:top-[5.5rem] lg:max-h-[calc(100svh-7.5rem)]",
           selectedId && "hidden lg:flex",
         )}
       />
 
       <div className={cn("min-w-0", !selectedId && "hidden lg:block")}>
         {!selectedId ? (
-          <EmptyState
-            icon={FileSearchIcon}
-            title="Select a run"
-            description="Pick a run to see the changes it proposed, the diff, the LaTeX it produced, and to recompile its PDF."
-          />
+          <Canvas className="flex min-h-[28rem] flex-col items-center justify-center gap-4 px-6 text-center">
+            <span
+              aria-hidden="true"
+              className="bg-card text-muted-foreground flex size-11 items-center justify-center rounded-xl shadow-[0_6px_20px_rgb(21_24_31/0.08)] ring-1 ring-foreground/10"
+            >
+              <MousePointerClickIcon className="size-5" />
+            </span>
+            <p className="font-heading text-lg font-semibold tracking-tight">
+              Pick a run to open
+            </p>
+            <p className="text-muted-foreground max-w-sm text-sm leading-6 text-pretty">
+              See the changes it proposed, the diff and the LaTeX it produced,
+              and recompile its PDF without spending tokens.
+            </p>
+          </Canvas>
         ) : detail.isPending ? (
           <LoadingState label="Loading this run…">
             <div className="space-y-4">
@@ -142,5 +147,71 @@ export function HistoryWorkspace() {
         )}
       </div>
     </div>
+  );
+}
+
+const KEPT: { icon: LucideIcon; title: string; body: string }[] = [
+  {
+    icon: ListChecksIcon,
+    title: "The changes and the diff",
+    body: "Every edit the model proposed, before and after, exactly as you reviewed it.",
+  },
+  {
+    icon: FileCode2Icon,
+    title: "The LaTeX it produced",
+    body: "The source the server rendered, so the document can be rebuilt without the model.",
+  },
+  {
+    icon: RefreshCwIcon,
+    title: "A PDF on demand",
+    body: "Recompile any run later. Only the LaTeX compiler runs — no AI call, no tokens.",
+  },
+];
+
+/**
+ * No runs yet: what a run leaves behind, in the landing page's numbered
+ * style, and the way to make the first one.
+ */
+function EmptyHistory() {
+  return (
+    <section aria-labelledby="history-empty-heading" className="mt-10 space-y-8">
+      <div className="bg-card flex flex-col items-start gap-5 rounded-[1.25rem] p-7 ring-1 ring-foreground/10 sm:flex-row sm:items-center sm:justify-between sm:p-9">
+        <div className="space-y-2">
+          <h2
+            id="history-empty-heading"
+            className="font-heading text-2xl font-semibold tracking-tight"
+          >
+            No tailoring runs yet
+          </h2>
+          <p className="text-muted-foreground max-w-xl text-[0.9375rem] leading-6 text-pretty">
+            Each run you save while tailoring is kept here, so you can come back
+            to it after the job description or the resume has changed.
+          </p>
+        </div>
+        <ButtonLink href="/tailor" className="h-11 shrink-0 rounded-xl px-5 text-[0.9375rem]">
+          <SparklesIcon data-icon="inline-start" />
+          Tailor a resume
+        </ButtonLink>
+      </div>
+
+      <ol className="grid gap-5 md:grid-cols-3">
+        {KEPT.map(({ icon: Icon, title, body }, index) => (
+          <li
+            key={title}
+            className="bg-card flex flex-col gap-2 rounded-[1.25rem] p-6 ring-1 ring-foreground/10"
+          >
+            {/* The <ol> already numbers these for assistive tech. */}
+            <span aria-hidden="true" className="text-muted-foreground flex items-center gap-2 font-mono text-xs">
+              {String(index + 1).padStart(2, "0")}
+              <Icon className="size-3.5" />
+            </span>
+            <h3 className="font-heading text-lg font-semibold tracking-tight">{title}</h3>
+            <p className="text-muted-foreground text-[0.9375rem] leading-6 text-pretty">
+              {body}
+            </p>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }

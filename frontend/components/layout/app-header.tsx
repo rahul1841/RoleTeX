@@ -1,8 +1,11 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { AppMode, User } from "@/lib/api/types";
+import { AppNav } from "./app-nav";
 import { MobileNav } from "./mobile-nav";
+import { NAV_ITEMS } from "./nav";
 import { ThemeToggle } from "./theme-toggle";
 import { UserMenu } from "./user-menu";
 import { Wordmark } from "./wordmark";
@@ -14,10 +17,14 @@ export interface AppHeaderProps {
   needsEmailVerification: boolean;
   /** False while the session is still resolving, or when it failed to. */
   showNav: boolean;
+  /** The session is still resolving: hold the nav's place with skeletons. */
+  loading?: boolean;
 }
 
 /**
- * The one persistent bar across the top of the app.
+ * The one persistent bar across the top of the app, and — from `lg` up — the
+ * navigation too, as a line of text tabs in the landing page's style. Below
+ * `lg` the same items live in the <MobileNav> drawer.
  *
  * It renders in every shell state — booting, failed, signed out, ready — so the
  * product identity and the theme control never disappear. Only the parts that
@@ -34,9 +41,11 @@ export function AppHeader({
   user,
   needsEmailVerification,
   showNav,
+  loading = false,
 }: AppHeaderProps) {
   return (
-    <header className="bg-background/90 supports-backdrop-filter:bg-background/70 sticky top-0 z-40 flex h-14 shrink-0 items-center gap-2 border-b px-3 backdrop-blur sm:px-4">
+    <header className="bg-background/90 supports-backdrop-filter:bg-background/70 sticky top-0 z-40 shrink-0 border-b backdrop-blur">
+      <div className="mx-auto flex h-16 w-full max-w-[96rem] items-center gap-2 px-4 sm:px-6 lg:h-18 lg:gap-10 lg:px-8">
       {showNav ? (
         <MobileNav storageAvailable={storageAvailable} />
       ) : (
@@ -45,7 +54,21 @@ export function AppHeader({
         <div aria-hidden="true" className="size-7 lg:hidden" />
       )}
 
-      <Wordmark />
+      <Wordmark href="/tailor" />
+
+      {showNav ? (
+        <AppNav
+          storageAvailable={storageAvailable}
+          orientation="horizontal"
+          className="hidden lg:block"
+        />
+      ) : loading ? (
+        <div aria-hidden="true" className="hidden items-center gap-5 px-3 lg:flex">
+          {NAV_ITEMS.map((item) => (
+            <Skeleton key={item.href} className="h-3.5 w-16" />
+          ))}
+        </div>
+      ) : null}
 
       <div className="ml-auto flex items-center gap-1.5">
         {/* Demo mode has no accounts, so the header says what the server is
@@ -64,6 +87,7 @@ export function AppHeader({
             needsEmailVerification={needsEmailVerification}
           />
         ) : null}
+      </div>
       </div>
     </header>
   );

@@ -114,7 +114,7 @@ function LandingHeader() {
   return (
     <header className="border-b">
       <div className={cn(CONTAINER, "flex h-18 items-center gap-4 md:gap-12")}>
-        <Wordmark href="/welcome" />
+        <Wordmark />
         <nav aria-label="On this page" className="hidden items-center gap-7 md:flex">
           {SECTION_LINKS.map((link) => (
             <a
@@ -354,7 +354,7 @@ function LandingFooter() {
   return (
     <footer className="border-t">
       <div className={cn(CONTAINER, "flex flex-wrap items-center gap-x-6 gap-y-4 py-9")}>
-        <Wordmark href="/welcome" />
+        <Wordmark />
         <p className="text-muted-foreground font-mono text-xs">Typeset with Tectonic</p>
         <FooterLinks className="ml-auto" />
       </div>

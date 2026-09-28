@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "cn";
 import { Controller, type Control } from "react-hook-form";
 import {
   Select,
@@ -38,6 +39,8 @@ export interface PickerSelectProps {
   invalid?: boolean;
   describedBy?: string;
   triggerRef?: (element: HTMLElement | null) => void;
+  /** Extra classes for the trigger — the setup form draws taller fields. */
+  className?: string;
 }
 
 export function PickerSelect({
@@ -49,6 +52,7 @@ export function PickerSelect({
   invalid,
   describedBy,
   triggerRef,
+  className,
 }: PickerSelectProps) {
   return (
     <Controller
@@ -62,7 +66,7 @@ export function PickerSelect({
           <SelectTrigger
             id={id}
             ref={triggerRef}
-            className="w-full"
+            className={cn("w-full", className)}
             aria-invalid={invalid}
             aria-describedby={describedBy}
           >

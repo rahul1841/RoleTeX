@@ -11,7 +11,7 @@ import {
 } from "react-hook-form";
 import { SaveIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ErrorState, Spinner } from "@/components/common";
+import { Canvas, ErrorState, Spinner } from "@/components/common";
 import { ReorderAnnouncer } from "./entry-card";
 import { resumeErrorGuidance } from "./errors";
 import { TextField } from "./fields";
@@ -82,7 +82,7 @@ function SectionRail() {
               <a
                 href={`#${section.id}`}
                 className={cn(
-                  "hover:bg-muted focus-visible:ring-ring/50 flex items-center gap-1 rounded-md px-2 py-1 text-xs whitespace-nowrap transition-colors focus-visible:ring-3 focus-visible:outline-none",
+                  "hover:bg-muted hover:text-foreground focus-visible:ring-ring/50 flex h-8 items-center gap-1.5 rounded-full px-3 text-[0.8125rem] whitespace-nowrap transition-colors focus-visible:ring-3 focus-visible:outline-none",
                   invalid
                     ? "text-destructive font-medium"
                     : "text-muted-foreground",
@@ -227,20 +227,23 @@ export function ResumeBuilder({
       <ReorderAnnouncer>
         <div
           className={cn(
-            "grid min-h-0 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(24rem,32rem)]",
+            "grid min-h-0 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(24rem,34rem)] xl:gap-8",
             className,
           )}
         >
           <form onSubmit={handleSubmit} noValidate className="min-w-0">
-            <div className="bg-background/90 supports-backdrop-filter:bg-background/70 sticky top-14 z-20 -mx-1 mb-5 flex flex-wrap items-center gap-2 border-b px-1 py-2 backdrop-blur">
+            {/* Floats under the app header: the section jumps on the left, the
+                save on the right, both reachable from anywhere in a long form. */}
+            <div className="bg-card/90 supports-backdrop-filter:bg-card/75 sticky top-[4.75rem] z-20 mb-6 flex flex-wrap items-center gap-2 rounded-2xl py-1.5 pr-1.5 pl-1.5 shadow-[0_8px_24px_rgb(21_24_31/0.06)] ring-1 ring-foreground/10 backdrop-blur lg:top-[5.25rem]">
               <SectionRail />
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2.5">
                 {isDirty ? (
-                  <span className="text-muted-foreground text-xs">
+                  <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
+                    <span aria-hidden="true" className="bg-warning-foreground/70 size-1.5 rounded-full" />
                     Unsaved changes
                   </span>
                 ) : null}
-                <Button type="submit" size="sm" disabled={isSaving}>
+                <Button type="submit" disabled={isSaving} className="h-9 rounded-xl px-4">
                   {isSaving ? (
                     <Spinner data-icon="inline-start" />
                   ) : (
@@ -251,15 +254,17 @@ export function ResumeBuilder({
               </div>
             </div>
 
-            <div className="space-y-8">
+            <div className="space-y-5">
               {mode === "create" ? (
-                <TextField
-                  name="resumeName"
-                  label="Resume name"
-                  placeholder="Backend roles — 2026"
-                  hint="Just for your library. Leave it empty and your own name is used."
-                  className="max-w-md"
-                />
+                <div className="bg-card rounded-[1.25rem] px-5 py-6 ring-1 ring-foreground/10 sm:px-7">
+                  <TextField
+                    name="resumeName"
+                    label="Resume name"
+                    placeholder="Backend roles — 2026"
+                    hint="Just for your library. Leave it empty and your own name is used."
+                    className="max-w-md"
+                  />
+                </div>
               ) : null}
 
               <IdentitySection />
@@ -295,7 +300,7 @@ export function ResumeBuilder({
 
               <div className="flex flex-wrap items-center justify-between gap-3">
                 {footer}
-                <Button type="submit" size="sm" disabled={isSaving}>
+                <Button type="submit" disabled={isSaving} className="h-11 rounded-xl px-5 text-[0.9375rem]">
                   {isSaving ? (
                     <Spinner data-icon="inline-start" />
                   ) : (
@@ -307,8 +312,10 @@ export function ResumeBuilder({
             </div>
           </form>
 
-          <aside className="lg:sticky lg:top-[4.5rem] lg:h-[calc(100svh-6.5rem)]">
-            <LivePreviewPane className="h-full" />
+          <aside className="lg:sticky lg:top-[5.25rem] lg:h-[calc(100svh-6.5rem)]">
+            <Canvas className="flex h-full flex-col p-3 sm:p-4">
+              <LivePreviewPane className="h-full" />
+            </Canvas>
           </aside>
         </div>
       </ReorderAnnouncer>

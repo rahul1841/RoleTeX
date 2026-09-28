@@ -10,20 +10,14 @@ import { AppShell } from "@/components/layout";
  * signed-out user, which is exactly the state this shell redirects away from.
  * They are in app/(auth)/, which has its own layout and its own <main>.
  *
- * `(app)` adds no URL segment, so this layout's route is still "/".
+ * `(app)` adds no URL segment, so its pages keep their own paths (/tailor,
+ * /resumes, …). The public landing page is app/page.tsx, outside this group.
  *
- * <AuthRuntime> renders nothing. It is mounted here, and only here, because
- * this is the narrowest scope that covers both of the things it does:
- *
- *  - It is the sole owner of `setSessionLostHandler()` from lib/api/client.ts,
- *    a single module-level slot that a second mount would silently steal. A
- *    session can only be lost by a request that carried one, and every screen
- *    that makes such a request is inside this group.
- *  - It rewrites legacy `/#/reset-password?token=…` links — the shape the
- *    backend emailed before 2026-09-10 — onto their real routes. Those links
- *    resolve to "/", which is this group's own index, and they must be caught
- *    before <AppShell> redirects the signed-out visitor away and drops the
- *    token.
+ * <AuthRuntime> renders nothing. It is mounted here, and only here, because it
+ * is the sole owner of `setSessionLostHandler()` from lib/api/client.ts, a
+ * single module-level slot that a second mount would silently steal. A session
+ * can only be lost by a request that carried one, and every screen that makes
+ * such a request is inside this group.
  *
  * It is a sibling of <AppShell> rather than a child so it is not inside the
  * <main> landmark, and so the shell's own tree is untouched.

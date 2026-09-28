@@ -6,13 +6,22 @@ import {
   ArrowLeftIcon,
   DownloadIcon,
   HistoryIcon,
+  MoreHorizontalIcon,
   PencilIcon,
+  SparklesIcon,
   SquarePenIcon,
   TrashIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button, ButtonLink } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   CardSkeleton,
@@ -20,7 +29,7 @@ import {
   ErrorState,
   LoadingState,
   PageContainer,
-  PageHeader,
+  PageHero,
   Spinner,
   TextSkeleton,
 } from "@/components/common";
@@ -98,9 +107,9 @@ export function ResumeDetailView({ id }: { id: string }) {
 
   if (query.isLoading) {
     return (
-      <PageContainer width="wide">
-        <PageHeader title="Resume" />
-        <div className="mt-8">
+      <PageContainer width="wide" className="sm:pt-12 sm:pb-16">
+        <PageHero eyebrow="Resume" title="Loading…" />
+        <div className="mt-10">
           <LoadingState label="Loading this resume…">
             <div className="grid gap-6 lg:grid-cols-2">
               <div className="space-y-4">
@@ -117,9 +126,9 @@ export function ResumeDetailView({ id }: { id: string }) {
 
   if (query.isError || !resume || !defaultValues) {
     return (
-      <PageContainer>
-        <PageHeader title="Resume" />
-        <div className="mt-8 space-y-3">
+      <PageContainer width="wide" className="sm:pt-12 sm:pb-16">
+        <PageHero eyebrow="Resume" title="Resume unavailable" />
+        <div className="mt-10 space-y-3">
           <ErrorState
             error={query.error ?? new Error("This resume could not be loaded.")}
             title={resumeErrorGuidance(query.error)?.title}
@@ -139,50 +148,45 @@ export function ResumeDetailView({ id }: { id: string }) {
   const scanned = isLowConfidenceSource(resume.source_type);
 
   return (
-    <PageContainer width="wide">
-      <PageHeader
+    <PageContainer width="wide" className="sm:pt-12 sm:pb-16">
+      <PageHero
+        eyebrow={
+          <span className="tabular-nums">
+            {sourceLabel(resume.source_type)} · v{resume.version}
+          </span>
+        }
         title={resume.name}
         description={
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span title={sourceHint(resume.source_type)}>
-              {sourceLabel(resume.source_type)}
-            </span>
-            <span aria-hidden="true">·</span>
-            <span className="tabular-nums">
-              version {resume.version}
-            </span>
             {updated ? (
+              <time dateTime={updated} title={absoluteTime(updated)}>
+                Updated {relativeTime(updated)}
+              </time>
+            ) : null}
+            {resume.model ? (
               <>
-                <span aria-hidden="true">·</span>
-                <time dateTime={updated} title={absoluteTime(updated)}>
-                  updated {relativeTime(updated)}
-                </time>
+                <span aria-hidden="true" className="opacity-50">·</span>
+                <span className="font-mono text-[0.8125rem]" title={sourceHint(resume.source_type)}>
+                  read by {resume.model}
+                </span>
               </>
             ) : null}
             {scanned ? (
               <Badge className="border-warning-border bg-warning text-warning-foreground">
-                Read from page images
+                Read from page images — check every field
               </Badge>
             ) : null}
           </span>
         }
         actions={
           <>
-            <ButtonLink variant="ghost" size="sm" href="/resumes">
+            <ButtonLink variant="ghost" href="/resumes" className="h-10 rounded-xl px-3">
               <ArrowLeftIcon data-icon="inline-start" />
               All resumes
             </ButtonLink>
             <Button
               variant="outline"
-              size="sm"
-              onClick={() => setRenaming(true)}
-            >
-              <PencilIcon data-icon="inline-start" />
-              Rename
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
+              className="h-10 rounded-xl px-4"
               onClick={() => void handleDownload()}
               disabled={compile.isPending}
             >
@@ -191,33 +195,63 @@ export function ResumeDetailView({ id }: { id: string }) {
               ) : (
                 <DownloadIcon data-icon="inline-start" />
               )}
-              Download saved PDF
+              Download PDF
             </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setConfirmingDelete(true)}
+            <ButtonLink
+              href={{ pathname: "/tailor", query: { resume: resume.id } }}
+              className="h-10 rounded-xl px-4"
             >
-              <TrashIcon data-icon="inline-start" />
-              Delete
-            </Button>
+              <SparklesIcon data-icon="inline-start" />
+              Tailor this resume
+            </ButtonLink>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="size-10 rounded-xl"
+                    aria-label={`More actions for ${resume.name}`}
+                  >
+                    <MoreHorizontalIcon />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setRenaming(true)}>
+                  <PencilIcon data-icon="inline-start" />
+                  Rename
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={() => setConfirmingDelete(true)}
+                >
+                  <TrashIcon data-icon="inline-start" />
+                  Delete resume
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         }
       />
 
-      <Tabs defaultValue="edit" className="mt-6">
-        <TabsList variant="line">
-          <TabsTrigger value="edit">
+      <Tabs defaultValue="edit" className="mt-10 gap-6">
+        <TabsList className="bg-card h-10 rounded-xl p-1 ring-1 ring-foreground/10 group-data-horizontal/tabs:h-10">
+          <TabsTrigger value="edit" className="rounded-lg px-4">
             <SquarePenIcon data-icon="inline-start" />
             Edit
           </TabsTrigger>
-          <TabsTrigger value="versions">
+          <TabsTrigger value="versions" className="rounded-lg px-4">
             <HistoryIcon data-icon="inline-start" />
             Versions
+            <span className="text-muted-foreground font-mono text-[0.6875rem] tabular-nums">
+              {resume.version}
+            </span>
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="edit" className="pt-6">
+        <TabsContent value="edit">
           <ResumeBuilder
             // Remounting on id alone: a save changes the version but the form
             // already holds exactly what was saved, and remounting there would
@@ -240,7 +274,7 @@ export function ResumeDetailView({ id }: { id: string }) {
           />
         </TabsContent>
 
-        <TabsContent value="versions" className="pt-6">
+        <TabsContent value="versions">
           <VersionsPanel resume={resume} />
         </TabsContent>
       </Tabs>

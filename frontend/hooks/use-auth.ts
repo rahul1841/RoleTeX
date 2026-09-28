@@ -103,7 +103,7 @@ export function useLogin() {
       adoptSession(queryClient, response);
       // `replace`, so Back does not return to a sign-in form that would
       // immediately bounce the now-authenticated user back out.
-      router.replace("/");
+      router.replace("/tailor");
     },
   });
 }
@@ -120,7 +120,7 @@ export function useRegister() {
     mutationFn: (body: RegisterRequest) => register(body),
     onSuccess: (response) => {
       adoptSession(queryClient, response);
-      router.replace("/");
+      router.replace("/tailor");
     },
   });
 }

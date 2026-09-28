@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { PageContainer, PageHeader } from "@/components/common";
+import { PageContainer, PageHero } from "@/components/common";
 import { SettingsScreen } from "./settings-screen";
 
 export const metadata: Metadata = {
@@ -13,8 +13,9 @@ export const metadata: Metadata = {
  */
 export default function SettingsPage() {
   return (
-    <PageContainer>
-      <PageHeader
+    <PageContainer width="wide" className="sm:pt-12 sm:pb-16">
+      <PageHero
+        eyebrow="Account & server"
         title="Settings"
         description="Your AI provider keys, your tailoring defaults, your account, and what this server can do."
       />

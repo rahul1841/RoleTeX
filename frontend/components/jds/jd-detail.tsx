@@ -2,11 +2,23 @@
 
 import * as React from "react";
 import { cn } from "cn";
-import { PencilIcon, Trash2Icon } from "lucide-react";
+import {
+  HistoryIcon,
+  MoreHorizontalIcon,
+  PencilIcon,
+  ScrollTextIcon,
+  SparklesIcon,
+  Trash2Icon,
+} from "lucide-react";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardAction, CardContent, CardHeader } from "@/components/ui/card";
+import { Button, ButtonLink } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tabs,
@@ -15,6 +27,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import {
+  Canvas,
   ConfirmDialog,
   CopyButton,
   ErrorState,
@@ -100,65 +113,109 @@ function JdDetailCard({
   const remove = useDeleteJd();
 
   return (
-    <Card>
-      <CardHeader>
-        <h2 className="font-heading min-w-0 text-base leading-snug font-medium text-pretty">
-          {jd.title}
-        </h2>
-        <p className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-          <Badge variant="secondary" className="font-mono">
-            v{jd.version}
-          </Badge>
-          <span title={formatAbsolute(jd.created_at)}>
-            Added {formatRelative(jd.created_at)}
-          </span>
-          <span aria-hidden="true" className="opacity-40">
-            ·
-          </span>
-          <span title={formatAbsolute(jd.updated_at)}>
-            Updated {formatRelative(jd.updated_at)}
-          </span>
-          <span aria-hidden="true" className="opacity-40">
-            ·
-          </span>
-          <span>{formatNumber(jd.content.length)} characters</span>
-        </p>
+    <article aria-labelledby="jd-title" className="space-y-6">
+      <div className="bg-card rounded-[1.25rem] p-6 ring-1 ring-foreground/10 sm:p-7">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+          <div className="min-w-0 space-y-3">
+            <p className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs">
+              <span className="bg-muted text-foreground rounded-full px-2 py-0.5">
+                v{jd.version}
+              </span>
+              <span title={formatAbsolute(jd.created_at)}>
+                added {formatRelative(jd.created_at)}
+              </span>
+              <span aria-hidden="true" className="opacity-40">·</span>
+              <span title={formatAbsolute(jd.updated_at)}>
+                updated {formatRelative(jd.updated_at)}
+              </span>
+              <span aria-hidden="true" className="opacity-40">·</span>
+              <span className="tabular-nums">
+                {formatNumber(jd.content.length)} characters
+              </span>
+            </p>
+            <h2
+              id="jd-title"
+              className="font-heading text-2xl leading-tight font-semibold tracking-[-0.02em] text-balance sm:text-3xl"
+            >
+              {jd.title}
+            </h2>
+          </div>
 
-        <CardAction className="flex items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              className="h-10 rounded-xl px-4"
+              onClick={() => setEditing(true)}
+            >
+              <PencilIcon data-icon="inline-start" />
+              Edit
+            </Button>
+            <ButtonLink
+              href={{ pathname: "/tailor", query: { jd: jd.id } }}
+              className="h-10 rounded-xl px-4"
+            >
+              <SparklesIcon data-icon="inline-start" />
+              Tailor against this
+            </ButtonLink>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="size-10 rounded-xl"
+                    aria-label={`More actions for ${jd.title}`}
+                  >
+                    <MoreHorizontalIcon />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={() => setConfirmingDelete(true)}
+                >
+                  <Trash2Icon data-icon="inline-start" />
+                  Delete job description
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </div>
+
+      <Tabs defaultValue="text" className="gap-5">
+        <div className="flex items-center justify-between gap-3">
+          <TabsList className="bg-card h-10 rounded-xl p-1 ring-1 ring-foreground/10 group-data-horizontal/tabs:h-10">
+            <TabsTrigger value="text" className="rounded-lg px-4">
+              <ScrollTextIcon data-icon="inline-start" />
+              Posting
+            </TabsTrigger>
+            <TabsTrigger value="history" className="rounded-lg px-4">
+              <HistoryIcon data-icon="inline-start" />
+              Versions
+              <span className="text-muted-foreground font-mono text-[0.6875rem] tabular-nums">
+                {jd.version}
+              </span>
+            </TabsTrigger>
+          </TabsList>
           <CopyButton
             value={jd.content}
             subject="Job description"
-            size="icon-sm"
-          />
-          <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-            <PencilIcon data-icon="inline-start" />
-            Edit
-          </Button>
-          <Button
-            variant="destructive"
+            label="Copy text"
+            variant="ghost"
             size="sm"
-            onClick={() => setConfirmingDelete(true)}
-          >
-            <Trash2Icon data-icon="inline-start" />
-            Delete
-          </Button>
-        </CardAction>
-      </CardHeader>
-
-      <CardContent>
-        <Tabs defaultValue="text">
-          <TabsList variant="line">
-            <TabsTrigger value="text">Text</TabsTrigger>
-            <TabsTrigger value="history">Version history</TabsTrigger>
-          </TabsList>
-          <TabsContent value="text" className="pt-3">
-            <JdText content={jd.content} />
-          </TabsContent>
-          <TabsContent value="history" className="pt-3">
+          />
+        </div>
+        <TabsContent value="text">
+          <JdText content={jd.content} />
+        </TabsContent>
+        <TabsContent value="history">
+          <div className="bg-card rounded-[1.25rem] p-6 ring-1 ring-foreground/10 sm:p-7">
             <JdVersionHistory jd={jd} />
-          </TabsContent>
-        </Tabs>
-      </CardContent>
+          </div>
+        </TabsContent>
+      </Tabs>
 
       <JdFormDialog open={editing} onOpenChange={setEditing} jd={jd} />
 
@@ -185,7 +242,7 @@ function JdDetailCard({
           }
         }}
       />
-    </Card>
+    </article>
   );
 }
 
@@ -193,48 +250,51 @@ function JdDetailCard({
 const COLLAPSE_ABOVE_CHARACTERS = 1_800;
 
 /**
- * The posting itself, verbatim.
+ * The posting itself, verbatim — as a page on the landing page's dotted
+ * canvas, because it is a document the user reads, not machine output.
  *
- * Code tokens rather than card tokens because this is untrusted text the app
- * stores and replays exactly — the same treatment LaTeX source and compiler
- * logs get, and the visual cue that nothing here has been interpreted.
+ * Still exact: `whitespace-pre-wrap` keeps every line break and indent the
+ * user pasted, and nothing is parsed or linkified. It is untrusted text the
+ * app stores and replays, and it is shown as such.
  *
  * The height cap is not cosmetic. A 20,000-character posting rendered in full
- * makes the page tens of screens tall and buries the version history and every
- * other control below it, so a long one scrolls inside its own box until the
- * user asks for the whole thing. The box is `tabIndex={0}` and labelled,
- * because a scrollable region that cannot be reached or scrolled from the
- * keyboard is a trap.
+ * makes the page tens of screens tall and buries every other control below
+ * it, so a long one scrolls inside its own page until the user asks for the
+ * whole thing. The page is `tabIndex={0}` and labelled, because a scrollable
+ * region that cannot be reached or scrolled from the keyboard is a trap.
  */
 function JdText({ content }: { content: string }) {
   const [expanded, setExpanded] = React.useState(false);
   const long = content.length > COLLAPSE_ABOVE_CHARACTERS;
 
   return (
-    <div className="space-y-2">
-      <pre
+    <Canvas className="px-3 py-5 sm:px-8 sm:py-8">
+      <div
         role="region"
         aria-label="Job description text"
         tabIndex={0}
         className={cn(
-          "bg-code text-code-foreground border-code-border focus-visible:ring-ring/50 overflow-auto rounded-lg border p-3 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap outline-none focus-visible:ring-3",
-          long && !expanded && "max-h-[26rem]",
+          "bg-card focus-visible:ring-ring/50 mx-auto max-w-3xl overflow-auto rounded-sm px-6 py-7 text-[0.9375rem] leading-7 break-words whitespace-pre-wrap shadow-[0_0_0_1px_rgb(21_24_31/0.06),0_16px_48px_rgb(21_24_31/0.10)] outline-none focus-visible:ring-3 sm:px-12 sm:py-10",
+          long && !expanded && "max-h-[36rem]",
         )}
       >
         {content}
-      </pre>
+      </div>
       {long ? (
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-expanded={expanded}
-          onClick={() => setExpanded((value) => !value)}
-        >
-          {expanded
-            ? "Collapse"
-            : `Show all ${formatNumber(content.length)} characters`}
-        </Button>
+        <div className="mt-4 flex justify-center">
+          <Button
+            variant="outline"
+            size="sm"
+            className="bg-card rounded-lg"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded
+              ? "Collapse"
+              : `Show all ${formatNumber(content.length)} characters`}
+          </Button>
+        </div>
       ) : null}
-    </div>
+    </Canvas>
   );
 }

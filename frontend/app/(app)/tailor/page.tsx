@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { CardSkeleton, LoadingState, PageContainer, PageHeader } from "@/components/common";
+import { CardSkeleton, LoadingState, PageContainer } from "@/components/common";
 import { TailorWorkspace } from "@/components/tailor";
 
 export const metadata: Metadata = {
@@ -17,19 +17,15 @@ export const metadata: Metadata = {
  * string — `?resume=…&jd=…` is how the resume and job-description screens hand
  * a selection over, since `output: "export"` rules out dynamic route segments.
  * `useSearchParams()` under a static export must sit inside <Suspense>.
+ * The workspace renders its own heading, because the heading follows the run.
  *
- * The wide container is deliberate: the change list, the unified diff and the
- * PDF preview share the viewport, and rules.md R-14 does not allow trading one
- * away for the other.
+ * The wide container is deliberate: the change list and the PDF preview share
+ * the viewport, and rules.md R-14 does not allow trading one away for the
+ * other.
  */
 export default function TailorPage() {
   return (
-    <PageContainer width="wide">
-      <PageHeader
-        title="Tailor a resume"
-        description="Point a resume at a job description, let the model propose changes, review every one of them, then take the compiled PDF."
-        className="mb-6"
-      />
+    <PageContainer width="wide" className="sm:pt-12 sm:pb-16">
       <Suspense
         fallback={
           <LoadingState label="Loading the tailoring workspace…">

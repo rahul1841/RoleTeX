@@ -5,30 +5,20 @@ import Link from "next/link";
 import { Controller, useForm, useWatch, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { cn } from "cn";
-import { DatabaseIcon, SparklesIcon } from "lucide-react";
+import { ArrowRightIcon, CheckIcon, DatabaseIcon, LockIcon } from "lucide-react";
 import { Button, ButtonLink } from "@/components/ui/button";
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Canvas,
   ConfirmDialog,
   ErrorState,
   Spinner,
   TextSkeleton,
 } from "@/components/common";
-import { sourceLabel } from "@/components/resumes";
+import { ResumeSheet, relativeTime, sourceLabel } from "@/components/resumes";
+import { useResume } from "@/hooks/use-resumes";
 import {
   JD_MAX_CHARACTERS,
   useJdOptions,
@@ -62,10 +52,12 @@ import { PickerSelect, type PickerOption } from "./picker-select";
  * text, which is a real product mode rather than a degraded one, so the resume
  * picker and the saved-JD tab simply do not appear there.
  *
- * The panel collapses to a one-line summary once a result is on screen — the
- * review is what deserves the viewport at that point — and re-opens itself
- * whenever a submit fails validation or a run comes back with an error, since
- * neither is fixable from a hidden form.
+ * Laid out like the landing page's "How it works": three numbered steps in one
+ * card, a run bar along its foot that says what the run will spend, and — on
+ * wide screens — the resume about to be tailored, drawn on the same dotted
+ * canvas the landing page uses. The workspace hides the whole panel while a
+ * run is in flight or a result is under review, and shows it again for
+ * "Edit inputs" or after a failure, since neither is fixable from a hidden form.
  */
 
 // Stable identities, so the preselection effects do not re-run every render.
@@ -79,27 +71,18 @@ const JD_TEXT_ID = "tailor-jd-text";
 const PROVIDER_ID = "tailor-provider";
 const MODEL_ID = "tailor-model";
 
-/**
- * The resume and job-description fields share a row, and only the second has
- * a control beside its label (the Saved / Paste switch). Holding both label
- * rows at that control's height keeps the two pickers level.
- */
-const PAIRED_LABEL_ROW = "lg:min-h-7";
-
 export type { RunLabels } from "./form-values";
 
 export interface SetupPanelProps {
   storage: boolean;
   user: User | null;
-  /** Preselections from the query string: /?resume=…&jd=… */
+  /** Preselections from the query string: /tailor?resume=…&jd=… */
   initialResumeId?: string;
   initialJdId?: string;
   isRunning: boolean;
   /** A result is on screen, so running again replaces it and spends a call. */
   hasResult: boolean;
   onRun: (request: TailorRequest, labels: RunLabels) => void;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
 }
 
 export function SetupPanel({
@@ -110,8 +93,6 @@ export function SetupPanel({
   isRunning,
   hasResult,
   onRun,
-  open,
-  onOpenChange,
 }: SetupPanelProps) {
   const resumesQuery = useResumeOptions(storage);
   const jdsQuery = useJdOptions(storage);
@@ -228,7 +209,7 @@ export function SetupPanel({
         ? (selectedJd?.title ?? "No job description selected")
         : "Pasted job description",
     provider: providerName || "the server's configured provider",
-    model: effectiveModel || "its default model",
+    model: effectiveModel,
   };
 
   // With no name to put in front of "completion" (the server picks the
@@ -270,11 +251,9 @@ export function SetupPanel({
   }
 
   function onInvalid(formErrors: FieldErrors<TailorFormValues>) {
-    // A collapsed panel cannot show the user what is wrong with it.
-    onOpenChange(true);
     const first = FOCUS_ORDER.find((name) => formErrors[name]);
     if (!first) return;
-    // The panel may have been un-hidden a moment ago; focus after it paints.
+    // Focus after the error text paints, so it is announced with the field.
     requestAnimationFrame(() => fieldRefs.current[first]?.focus());
   }
 
@@ -291,368 +270,341 @@ export function SetupPanel({
     storage && Boolean(values.provider) && !keyedProviders.has(values.provider);
 
   return (
-    <Card>
-      {/* Ruled off only while the inputs are showing. Collapsed, the footer's
-          own top border already separates the summary from the run button, and
-          a second rule above it read as an empty gap. */}
-      <CardHeader className={cn(open && "border-b")}>
-        <CardTitle>Inputs</CardTitle>
-        <CardDescription>
-          {open ? (
-            storage ? (
-              "Pick a resume and a job description, then choose the model that will read them."
-            ) : (
-              "This server has no database, so it tailors its own sample resume against the job description you paste."
-            )
-          ) : (
-            <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-              <span className="text-foreground font-medium">{labels.resume}</span>
-              <span aria-hidden="true">→</span>
-              <span className="text-foreground font-medium">{labels.jd}</span>
-              <span aria-hidden="true">·</span>
-              <span className="font-mono text-xs">
-                {values.provider || "server default"}
-                {effectiveModel ? `/${effectiveModel}` : ""}
-              </span>
-            </span>
-          )}
-        </CardDescription>
-        <CardAction>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-expanded={open}
-            aria-controls="tailor-inputs"
-            onClick={() => onOpenChange(!open)}
-          >
-            {open ? "Hide" : "Change inputs"}
-          </Button>
-        </CardAction>
-      </CardHeader>
-
-      <form
-        noValidate
-        // `handleSubmit` is invoked here rather than during render so the
-        // validation callbacks are unambiguously event handlers.
-        onSubmit={(event) => {
-          void handleSubmit(onValid, onInvalid)(event);
-        }}
-      >
-        <div id="tailor-inputs" hidden={!open}>
-          <CardContent className="space-y-5">
-            <div className="grid gap-5 lg:grid-cols-2">
-              {/* --- Resume ------------------------------------------------ */}
-              {!storage ? (
-                <FormField id={RESUME_ID} label="Resume" labelClassName={PAIRED_LABEL_ROW}>
-                  <div className="text-muted-foreground flex items-start gap-2 rounded-lg border border-dashed px-3 py-2.5 text-sm">
-                    <DatabaseIcon
-                      aria-hidden="true"
-                      className="mt-0.5 size-4 shrink-0"
-                    />
-                    <p className="text-pretty">
-                      The server&apos;s built-in sample resume is used. Saved
-                      resumes need a database, which this deployment does not
-                      have.
-                    </p>
-                  </div>
-                </FormField>
-              ) : resumesQuery.isPending ? (
-                <FormField id={RESUME_ID} label="Resume" labelClassName={PAIRED_LABEL_ROW}>
-                  <TextSkeleton lines={2} />
-                </FormField>
-              ) : resumesQuery.isError ? (
-                <FormField id={RESUME_ID} label="Resume" labelClassName={PAIRED_LABEL_ROW}>
-                  <ErrorState
-                    variant="bare"
-                    error={resumesQuery.error}
-                    title="Could not load your resumes"
-                    onRetry={() => resumesQuery.refetch()}
-                  />
-                </FormField>
-              ) : noResumes ? (
-                <FormField id={RESUME_ID} label="Resume" labelClassName={PAIRED_LABEL_ROW}>
-                  <div className="rounded-lg border border-dashed px-3 py-2.5 text-sm">
-                    <p className="text-muted-foreground text-pretty">
-                      You have no saved resumes yet. Import one — from a PDF,
-                      from LaTeX, or by typing it — and it becomes selectable
-                      here.
-                    </p>
-                    <ButtonLink
-                      className="mt-2"
-                      variant="outline"
-                      size="sm"
-                      href="/resumes"
-                    >
-                      Add a resume
-                    </ButtonLink>
-                  </div>
-                </FormField>
-              ) : (
-                <FormField
-                  id={RESUME_ID}
-                  label="Resume"
-                  labelClassName={PAIRED_LABEL_ROW}
-                  error={errors.resumeId?.message}
-                  hint={
-                    selectedResume
-                      ? `Version ${selectedResume.version} · ${sourceLabel(selectedResume.source_type)}`
-                      : "Your saved resumes."
-                  }
-                >
-                  <PickerSelect
-                    id={RESUME_ID}
-                    name="resumeId"
-                    control={control}
-                    options={resumeOptions}
-                    placeholder="Choose a resume"
-                    invalid={Boolean(errors.resumeId)}
-                    describedBy={describedBy(RESUME_ID, {
-                      error: errors.resumeId,
-                      hint: true,
-                    })}
-                    triggerRef={(element) => {
-                      fieldRefs.current.resumeId = element;
-                    }}
-                  />
-                </FormField>
-              )}
-
-              {/* --- Job description --------------------------------------- */}
-              <FormField
-                id={usingSavedJd ? JD_ID : JD_TEXT_ID}
-                label="Job description"
-                labelClassName={PAIRED_LABEL_ROW}
-                action={
-                  storage ? (
-                    <Controller
-                      control={control}
-                      name="jdSource"
-                      render={({ field }) => (
-                        <Tabs
-                          value={field.value}
-                          onValueChange={(next) =>
-                            field.onChange(next as TailorFormValues["jdSource"])
-                          }
-                        >
-                          <TabsList className="h-7">
-                            <TabsTrigger
-                              value="saved"
-                              disabled={savedJdsUnavailable}
-                            >
-                              Saved
-                            </TabsTrigger>
-                            <TabsTrigger value="paste">Paste</TabsTrigger>
-                          </TabsList>
-                        </Tabs>
-                      )}
-                    />
-                  ) : null
-                }
-                error={
-                  usingSavedJd
-                    ? errors.jdId?.message
-                    : errors.jobDescription?.message
-                }
-                hint={
-                  usingSavedJd ? (
-                    <span className="line-clamp-2">
-                      {selectedJd?.excerpt || "Your saved job descriptions."}
-                    </span>
-                  ) : (
-                    <span className="flex flex-wrap items-baseline justify-between gap-2">
-                      <span>
-                        Not saved anywhere
-                        {storage
-                          ? " — keep it under Job descriptions to reuse it"
-                          : ""}
-                        .
-                      </span>
-                      <span
-                        className={cn(
-                          "tabular-nums",
-                          jdLength > JD_MAX_CHARACTERS
-                            ? "text-destructive"
-                            : "text-muted-foreground/70",
-                        )}
-                      >
-                        {jdLength.toLocaleString()} /{" "}
-                        {JD_MAX_CHARACTERS.toLocaleString()}
-                      </span>
-                    </span>
-                  )
-                }
-              >
-                {usingSavedJd ? (
-                  jdsQuery.isPending ? (
-                    <TextSkeleton lines={2} />
-                  ) : jdsQuery.isError ? (
-                    <ErrorState
-                      variant="bare"
-                      error={jdsQuery.error}
-                      title="Could not load your job descriptions"
-                      onRetry={() => jdsQuery.refetch()}
-                    />
-                  ) : (
-                    <PickerSelect
-                      id={JD_ID}
-                      name="jdId"
-                      control={control}
-                      options={jdOptions}
-                      placeholder="Choose a job description"
-                      invalid={Boolean(errors.jdId)}
-                      describedBy={
-                        errors.jdId ? fieldErrorId(JD_ID) : fieldHintId(JD_ID)
-                      }
-                      triggerRef={(element) => {
-                        fieldRefs.current.jdId = element;
-                      }}
-                    />
-                  )
-                ) : (
-                  <Textarea
-                    id={JD_TEXT_ID}
-                    rows={6}
-                    spellCheck={false}
-                    placeholder="Paste the full job description — responsibilities, requirements, the lot. The model reads it as reference data, never as instructions."
-                    className="max-h-64 min-h-32"
-                    aria-invalid={Boolean(errors.jobDescription)}
-                    aria-describedby={
-                      errors.jobDescription
-                        ? fieldErrorId(JD_TEXT_ID)
-                        : fieldHintId(JD_TEXT_ID)
-                    }
-                    {...jobDescriptionField}
-                    ref={(element) => {
-                      jobDescriptionField.ref(element);
-                      fieldRefs.current.jobDescription = element;
-                    }}
-                  />
-                )}
-              </FormField>
-            </div>
-
-            <Separator />
-
-            {/* --- Model and run options ---------------------------------- */}
-            <div className="grid gap-5 lg:grid-cols-2">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <FormField
-                  id={PROVIDER_ID}
-                  label="Provider"
-                  error={errors.provider?.message}
-                  hint={
-                    providerNeedsKey ? (
-                      <span className="text-warning-foreground">
-                        No API key saved for this provider.{" "}
-                        <Link
-                          href="/settings"
-                          className="underline underline-offset-3"
-                        >
-                          Add one in Settings
-                        </Link>{" "}
-                        or the run will fail.
-                      </span>
-                    ) : storage ? (
-                      "Your key, your account."
-                    ) : (
-                      "Optional override."
-                    )
-                  }
-                >
-                  <PickerSelect
-                    id={PROVIDER_ID}
-                    name="provider"
-                    control={control}
-                    options={providerOptions}
-                    placeholder={storage ? "Choose a provider" : "Server default"}
-                    invalid={Boolean(errors.provider)}
-                    describedBy={describedBy(PROVIDER_ID, {
-                      error: errors.provider,
-                      hint: true,
-                    })}
-                    triggerRef={(element) => {
-                      fieldRefs.current.provider = element;
-                    }}
-                  />
-                </FormField>
-
-                <FormField
-                  id={MODEL_ID}
-                  label="Model"
-                  hint={
-                    selectedProvider?.default_model
-                      ? `Blank uses ${selectedProvider.default_model}.`
-                      : "Blank uses the provider's default."
-                  }
-                >
-                  <Input
-                    id={MODEL_ID}
-                    spellCheck={false}
-                    autoComplete="off"
-                    placeholder={selectedProvider?.default_model || "Default"}
-                    aria-describedby={fieldHintId(MODEL_ID)}
-                    {...modelField}
-                    ref={(element) => {
-                      modelField.ref(element);
-                      fieldRefs.current.model = element;
-                    }}
-                  />
-                </FormField>
+    <form
+      noValidate
+      // `handleSubmit` is invoked here rather than during render so the
+      // validation callbacks are unambiguously event handlers.
+      onSubmit={(event) => {
+        void handleSubmit(onValid, onInvalid)(event);
+      }}
+      className="grid items-stretch gap-6 xl:grid-cols-[minmax(0,1fr)_30rem]"
+    >
+      <div className="bg-card flex min-w-0 flex-col overflow-hidden rounded-[1.25rem] ring-1 ring-foreground/10">
+        {/* --- 01 Resume ------------------------------------------------- */}
+        <Step number="01">
+          {!storage ? (
+            <FormField id={RESUME_ID} label={<StepTitle>Resume</StepTitle>}>
+              <div className="text-muted-foreground flex items-start gap-2.5 rounded-xl border border-dashed px-3.5 py-3 text-sm">
+                <DatabaseIcon aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+                <p className="text-pretty">
+                  The server&apos;s built-in sample resume is used. Saved
+                  resumes need a database, which this deployment does not have.
+                </p>
               </div>
+            </FormField>
+          ) : resumesQuery.isPending ? (
+            <FormField id={RESUME_ID} label={<StepTitle>Resume</StepTitle>}>
+              <TextSkeleton lines={2} />
+            </FormField>
+          ) : resumesQuery.isError ? (
+            <FormField id={RESUME_ID} label={<StepTitle>Resume</StepTitle>}>
+              <ErrorState
+                variant="bare"
+                error={resumesQuery.error}
+                title="Could not load your resumes"
+                onRetry={() => resumesQuery.refetch()}
+              />
+            </FormField>
+          ) : noResumes ? (
+            <FormField id={RESUME_ID} label={<StepTitle>Resume</StepTitle>}>
+              <div className="rounded-xl border border-dashed px-4 py-3.5 text-sm">
+                <p className="text-muted-foreground text-pretty">
+                  You have no saved resumes yet. Import one — from a PDF, from
+                  LaTeX, or by typing it — and it becomes selectable here.
+                </p>
+                <ButtonLink className="mt-3" variant="outline" size="sm" href="/resumes">
+                  Add a resume
+                </ButtonLink>
+              </div>
+            </FormField>
+          ) : (
+            <FormField
+              id={RESUME_ID}
+              label={<StepTitle>Resume</StepTitle>}
+              action={
+                <Link
+                  href="/resumes"
+                  className="text-primary rounded-sm text-sm underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+                >
+                  Manage resumes
+                </Link>
+              }
+              error={errors.resumeId?.message}
+              hint={
+                selectedResume
+                  ? [
+                      `Version ${selectedResume.version}`,
+                      sourceLabel(selectedResume.source_type),
+                      selectedResume.updated_at
+                        ? `updated ${relativeTime(selectedResume.updated_at)}`
+                        : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")
+                  : "Your saved resumes."
+              }
+            >
+              <PickerSelect
+                id={RESUME_ID}
+                name="resumeId"
+                control={control}
+                options={resumeOptions}
+                placeholder="Choose a resume"
+                invalid={Boolean(errors.resumeId)}
+                describedBy={describedBy(RESUME_ID, {
+                  error: errors.resumeId,
+                  hint: true,
+                })}
+                triggerRef={(element) => {
+                  fieldRefs.current.resumeId = element;
+                }}
+                className={TALL_FIELD}
+              />
+            </FormField>
+          )}
+        </Step>
 
-              <fieldset className="space-y-2.5">
-                <legend className="mb-1.5 text-sm font-medium">
-                  Run options
-                </legend>
-                <OptionSwitch
-                  id="tailor-compile"
-                  label="Compile the PDF"
-                  hint="Off returns the changes, the diff and the LaTeX in seconds, with no Tectonic run."
-                  checked={values.compile}
-                  onChange={(next) => setValue("compile", next)}
+        {/* --- 02 Job description ---------------------------------------- */}
+        <Step number="02">
+          <FormField
+            id={usingSavedJd ? JD_ID : JD_TEXT_ID}
+            label={<StepTitle>Job description</StepTitle>}
+            action={
+              storage ? (
+                <Controller
+                  control={control}
+                  name="jdSource"
+                  render={({ field }) => (
+                    <Tabs
+                      value={field.value}
+                      onValueChange={(next) =>
+                        field.onChange(next as TailorFormValues["jdSource"])
+                      }
+                    >
+                      <TabsList>
+                        <TabsTrigger value="saved" disabled={savedJdsUnavailable}>
+                          Saved
+                        </TabsTrigger>
+                        <TabsTrigger value="paste">Paste</TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                  )}
                 />
-                <OptionSwitch
-                  id="tailor-one-page"
-                  label="Require one page"
-                  hint="Lets the server spend its single repair attempt shortening a resume that spills onto page two."
-                  checked={values.requireOnePage}
-                  onChange={(next) => setValue("requireOnePage", next)}
-                  disabled={!values.compile}
+              ) : null
+            }
+            error={
+              usingSavedJd ? errors.jdId?.message : errors.jobDescription?.message
+            }
+            hint={
+              <span className="flex flex-wrap items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-1.5">
+                  <LockIcon aria-hidden="true" className="size-3.5 shrink-0" />
+                  Read as reference data, never as instructions.
+                  {!usingSavedJd && storage
+                    ? " Not saved — keep it under Job descriptions to reuse it."
+                    : ""}
+                </span>
+                {usingSavedJd ? null : (
+                  <span
+                    className={cn(
+                      "font-mono tabular-nums",
+                      jdLength > JD_MAX_CHARACTERS
+                        ? "text-destructive"
+                        : "text-muted-foreground/70",
+                    )}
+                  >
+                    {jdLength.toLocaleString()} / {JD_MAX_CHARACTERS.toLocaleString()}
+                  </span>
+                )}
+              </span>
+            }
+          >
+            {usingSavedJd ? (
+              jdsQuery.isPending ? (
+                <TextSkeleton lines={2} />
+              ) : jdsQuery.isError ? (
+                <ErrorState
+                  variant="bare"
+                  error={jdsQuery.error}
+                  title="Could not load your job descriptions"
+                  onRetry={() => jdsQuery.refetch()}
                 />
-                {storage ? (
-                  <OptionSwitch
-                    id="tailor-save-run"
-                    label="Save to History"
-                    hint="Keeps the proposal, diff and LaTeX so this run can be re-compiled without paying for the model again."
-                    checked={values.saveRun}
-                    onChange={(next) => setValue("saveRun", next)}
+              ) : (
+                <div className="space-y-2.5">
+                  <PickerSelect
+                    id={JD_ID}
+                    name="jdId"
+                    control={control}
+                    options={jdOptions}
+                    placeholder="Choose a job description"
+                    invalid={Boolean(errors.jdId)}
+                    describedBy={errors.jdId ? fieldErrorId(JD_ID) : fieldHintId(JD_ID)}
+                    triggerRef={(element) => {
+                      fieldRefs.current.jdId = element;
+                    }}
+                    className={TALL_FIELD}
                   />
-                ) : null}
-              </fieldset>
-            </div>
-          </CardContent>
-        </div>
-
-        <CardFooter className="flex-wrap gap-x-4 gap-y-3">
-          <p className="text-muted-foreground min-w-0 flex-1 text-xs text-pretty">
-            Running spends{" "}
-            <span className="text-foreground font-medium">
-              {completion("one")}
-            </span>
-            {values.compile ? " and one Tectonic compile" : ""}. Your name,
-            email, phone and links are never sent to the model.
-          </p>
-          <Button type="submit" size="lg" disabled={isRunning || noResumes}>
-            {isRunning ? (
-              <Spinner data-icon="inline-start" />
+                  {selectedJd?.excerpt ? (
+                    <div className="bg-code text-code-foreground border-code-border relative max-h-28 overflow-hidden rounded-xl border px-4 py-3 text-sm leading-6 whitespace-pre-line">
+                      {selectedJd.excerpt}
+                      <div
+                        aria-hidden="true"
+                        className="from-code/0 to-code absolute inset-x-0 bottom-0 h-12 bg-gradient-to-b"
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              )
             ) : (
-              <SparklesIcon data-icon="inline-start" />
+              <Textarea
+                id={JD_TEXT_ID}
+                rows={7}
+                spellCheck={false}
+                placeholder="Paste the full job description — responsibilities, requirements, the lot."
+                className="max-h-72 min-h-40 rounded-xl px-3.5 py-3 leading-6"
+                aria-invalid={Boolean(errors.jobDescription)}
+                aria-describedby={
+                  errors.jobDescription ? fieldErrorId(JD_TEXT_ID) : fieldHintId(JD_TEXT_ID)
+                }
+                {...jobDescriptionField}
+                ref={(element) => {
+                  jobDescriptionField.ref(element);
+                  fieldRefs.current.jobDescription = element;
+                }}
+              />
             )}
-            {isRunning ? "Tailoring…" : hasResult ? "Run again" : "Run tailoring"}
+          </FormField>
+        </Step>
+
+        {/* --- 03 Model and output --------------------------------------- */}
+        <Step number="03" className="space-y-4">
+          <p className="font-heading text-[1.0625rem] leading-7 font-semibold tracking-tight">
+            Model and output
+          </p>
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,13rem)_minmax(0,1fr)]">
+            <FormField
+              id={PROVIDER_ID}
+              label="Provider"
+              error={errors.provider?.message}
+              hint={
+                providerNeedsKey ? (
+                  <span className="text-warning-foreground">
+                    No API key saved for this provider.{" "}
+                    <Link href="/settings" className="underline underline-offset-3">
+                      Add one in Settings
+                    </Link>{" "}
+                    or the run will fail.
+                  </span>
+                ) : storage ? (
+                  "Your key, your account."
+                ) : (
+                  "Optional override."
+                )
+              }
+            >
+              <PickerSelect
+                id={PROVIDER_ID}
+                name="provider"
+                control={control}
+                options={providerOptions}
+                placeholder={storage ? "Choose a provider" : "Server default"}
+                invalid={Boolean(errors.provider)}
+                describedBy={describedBy(PROVIDER_ID, {
+                  error: errors.provider,
+                  hint: true,
+                })}
+                triggerRef={(element) => {
+                  fieldRefs.current.provider = element;
+                }}
+                className={TALL_FIELD}
+              />
+            </FormField>
+
+            <FormField
+              id={MODEL_ID}
+              label="Model"
+              hint={
+                selectedProvider?.default_model
+                  ? `Blank uses ${selectedProvider.default_model}.`
+                  : "Blank uses the provider's default."
+              }
+            >
+              <Input
+                id={MODEL_ID}
+                spellCheck={false}
+                autoComplete="off"
+                placeholder={selectedProvider?.default_model || "Default"}
+                aria-describedby={fieldHintId(MODEL_ID)}
+                className="h-11 rounded-xl px-3.5 font-mono md:text-[0.8125rem]"
+                {...modelField}
+                ref={(element) => {
+                  modelField.ref(element);
+                  fieldRefs.current.model = element;
+                }}
+              />
+            </FormField>
+          </div>
+
+          <fieldset>
+            <legend className="sr-only">Run options</legend>
+            <div className="flex flex-wrap gap-2">
+              <OptionPill
+                id="tailor-compile"
+                label="Compile the PDF"
+                hint="Off returns the changes, the diff and the LaTeX in seconds, with no Tectonic run."
+                checked={values.compile}
+                onChange={(next) => setValue("compile", next)}
+              />
+              <OptionPill
+                id="tailor-one-page"
+                label="Keep to one page"
+                hint="Lets the server spend its single repair attempt shortening a resume that spills onto page two."
+                checked={values.requireOnePage}
+                onChange={(next) => setValue("requireOnePage", next)}
+                disabled={!values.compile}
+              />
+              {storage ? (
+                <OptionPill
+                  id="tailor-save-run"
+                  label="Save to History"
+                  hint="Keeps the proposal, diff and LaTeX so this run can be re-compiled without paying for the model again."
+                  checked={values.saveRun}
+                  onChange={(next) => setValue("saveRun", next)}
+                />
+              ) : null}
+            </div>
+          </fieldset>
+        </Step>
+
+        {/* --- Run bar ---------------------------------------------------- */}
+        <div className="bg-code mt-auto flex flex-col gap-4 border-t px-5 py-5 sm:flex-row sm:items-center sm:px-7">
+          <div className="min-w-0 flex-1 space-y-1">
+            <p className="text-code-foreground font-mono text-xs">
+              {completion("one")}
+              {values.compile ? " · one Tectonic compile" : ""}
+            </p>
+            <p className="text-muted-foreground text-[0.8125rem] leading-5 text-pretty">
+              Your name, email, phone and links are never sent to the model.
+            </p>
+          </div>
+          <Button
+            type="submit"
+            disabled={isRunning || noResumes}
+            className="h-12 rounded-xl px-6 text-[0.9375rem]"
+          >
+            {isRunning ? <Spinner data-icon="inline-start" /> : null}
+            {isRunning ? "Tailoring…" : hasResult ? "Run again" : "Tailor resume"}
+            {isRunning ? null : <ArrowRightIcon data-icon="inline-end" />}
           </Button>
-        </CardFooter>
-      </form>
+        </div>
+      </div>
+
+      <ResumePreviewPanel
+        storage={storage}
+        resumeId={selectedResume?.id ?? null}
+        version={selectedResume?.version ?? null}
+        noResumes={noResumes}
+      />
 
       <ConfirmDialog
         open={confirmOpen}
@@ -670,11 +622,50 @@ export function SetupPanel({
           if (pending) onRun(pending.request, pending.labels);
         }}
       />
-    </Card>
+    </form>
   );
 }
 
-function OptionSwitch({
+/** Taller select triggers, matching the landing page's larger controls. */
+const TALL_FIELD = "data-[size=default]:h-11 rounded-xl pl-3.5 pr-3";
+
+/**
+ * One numbered section of the form, the way the landing page numbers its
+ * steps: a mono `01` in its own column, the content beside it.
+ */
+function Step({
+  number,
+  className,
+  children,
+}: {
+  number: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] border-b px-5 py-6 last-of-type:border-b-0 sm:grid-cols-[3.5rem_minmax(0,1fr)] sm:px-7">
+      <span aria-hidden="true" className="text-muted-foreground pt-1 font-mono text-xs">
+        {number}
+      </span>
+      <div className={cn("min-w-0", className)}>{children}</div>
+    </div>
+  );
+}
+
+function StepTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="font-heading text-[1.0625rem] leading-7 font-semibold tracking-tight">
+      {children}
+    </span>
+  );
+}
+
+/**
+ * A run option as a toggle pill. A real checkbox underneath — visually hidden,
+ * still focusable and announced with its hint — so it keeps native keyboard
+ * and form behaviour.
+ */
+function OptionPill({
   id,
   label,
   hint,
@@ -690,23 +681,117 @@ function OptionSwitch({
   disabled?: boolean;
 }) {
   return (
-    <div className={cn("flex items-start gap-2.5", disabled && "opacity-50")}>
-      <Switch
+    <label
+      htmlFor={id}
+      title={hint}
+      className={cn(
+        "relative inline-flex h-9 cursor-pointer items-center gap-2 rounded-full pr-3.5 pl-2 text-[0.8125rem] transition-colors select-none has-focus-visible:ring-3 has-focus-visible:ring-ring/50",
+        checked
+          ? "bg-primary/10 text-primary font-medium dark:bg-primary/15"
+          : "bg-card text-muted-foreground ring-1 ring-border hover:text-foreground",
+        disabled && "pointer-events-none opacity-50",
+      )}
+    >
+      <input
         id={id}
+        type="checkbox"
+        className="sr-only"
         checked={checked}
-        onCheckedChange={onChange}
         disabled={disabled}
         aria-describedby={`${id}-hint`}
-        className="mt-0.5"
+        onChange={(event) => onChange(event.target.checked)}
       />
-      <div className="min-w-0">
-        <Label htmlFor={id} className="cursor-pointer">
-          {label}
-        </Label>
-        <p id={`${id}-hint`} className="text-muted-foreground text-xs text-pretty">
-          {hint}
-        </p>
+      <span
+        aria-hidden="true"
+        className={cn(
+          "flex size-5 items-center justify-center rounded-full",
+          checked ? "bg-primary text-primary-foreground" : "ring-input ring-[1.5px] ring-inset",
+        )}
+      >
+        {checked ? <CheckIcon className="size-3" strokeWidth={3} /> : null}
+      </span>
+      {label}
+      <span id={`${id}-hint`} className="sr-only">
+        {hint}
+      </span>
+    </label>
+  );
+}
+
+/** The picture beside the form of what is about to be tailored. */
+function ResumePreviewPanel({
+  storage,
+  resumeId,
+  version,
+  noResumes,
+}: {
+  storage: boolean;
+  resumeId: string | null;
+  version: number | null;
+  noResumes: boolean;
+}) {
+  const detail = useResume(storage ? resumeId : null);
+
+  let body: React.ReactNode;
+  if (!storage) {
+    body = (
+      <PanelNote>
+        This server tailors its own built-in sample resume. The compiled PDF
+        appears beside the changes once the run finishes.
+      </PanelNote>
+    );
+  } else if (noResumes) {
+    body = <PanelNote>Add a resume and it will be shown here before you tailor it.</PanelNote>;
+  } else if (detail.data) {
+    body = (
+      <div role="img" aria-label={`${detail.data.resume.name}, as currently saved`} className="mx-auto w-full max-w-[25rem]">
+        <ResumeSheet data={detail.data.resume.data} />
       </div>
-    </div>
+    );
+  } else if (detail.isError) {
+    body = <PanelNote>This resume could not be loaded for preview. Tailoring still works.</PanelNote>;
+  } else {
+    body = (
+      <div aria-hidden="true" className="mx-auto aspect-[210/297] w-full max-w-[25rem] bg-white/70 shadow-[0_0_0_1px_rgb(21_24_31/0.06)]" />
+    );
+  }
+
+  return (
+    <Canvas className="hidden flex-col gap-5 px-8 pt-6 pb-6 xl:flex">
+      <div className="flex items-center gap-3">
+        <span className="text-sm font-medium">
+          {storage ? "Current version" : "Sample resume"}
+        </span>
+        <span className="text-muted-foreground ml-auto font-mono text-[0.6875rem]">
+          {version !== null ? `v${version} · ` : ""}unchanged until you download
+        </span>
+      </div>
+      <div className="flex flex-1 items-center">{body}</div>
+      <div className="flex flex-wrap justify-center gap-1.5">
+        {SAFEGUARD_RULES.map((rule) => (
+          <code
+            key={rule}
+            className="bg-card text-code-foreground border-code-border rounded-md border px-2 py-0.5 font-mono text-[0.6875rem]"
+          >
+            {rule}
+          </code>
+        ))}
+      </div>
+    </Canvas>
+  );
+}
+
+/** Restated from the landing page's safeguards; the server enforces each. */
+const SAFEGUARD_RULES = [
+  "identity → never sent",
+  "bullet_rewrites ≤ 6",
+  "no new numbers",
+] as const;
+
+function PanelNote({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-muted-foreground mx-auto max-w-72 text-center text-sm leading-6 text-pretty">
+      {children}
+    </p>
   );
 }

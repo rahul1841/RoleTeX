@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { cn } from "cn";
 import { DownloadIcon, FileWarningIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,13 @@ export interface ResultPdfProps {
   filename: string;
   pageCount: number | null;
   compiler: CompilerReport;
+  /**
+   * False where the surrounding screen already names the panel — the tailor
+   * review's PDF / diff / LaTeX tabs — so the heading is not said twice.
+   */
+  showHeader?: boolean;
+  /** Height of the viewer itself. */
+  viewerClassName?: string;
   className?: string;
 }
 
@@ -31,6 +39,8 @@ export function ResultPdf({
   filename,
   pageCount,
   compiler,
+  showHeader = true,
+  viewerClassName = "h-[36rem] max-h-[calc(100svh-13rem)]",
   className,
 }: ResultPdfProps) {
   // Decoded once per payload. `PdfViewer` compares `bytes` by identity and
@@ -45,28 +55,39 @@ export function ResultPdf({
 
   return (
     <section
-      aria-labelledby="preview-heading"
+      aria-labelledby={showHeader ? "preview-heading" : undefined}
+      aria-label={showHeader ? undefined : "Compiled PDF"}
       className={className}
     >
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <h2 id="preview-heading" className="font-heading text-sm font-medium">
-          Compiled PDF
-        </h2>
-        {pages !== null ? (
-          <Badge variant={pages > 1 ? "outline" : "secondary"} className="tabular-nums">
-            {pages} {pages === 1 ? "page" : "pages"}
-          </Badge>
-        ) : null}
-      </div>
+      {showHeader ? (
+        <>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <h2
+              id="preview-heading"
+              className="font-heading text-sm font-medium"
+            >
+              Compiled PDF
+            </h2>
+            {pages !== null ? (
+              <Badge
+                variant={pages > 1 ? "outline" : "secondary"}
+                className="tabular-nums"
+              >
+                {pages} {pages === 1 ? "page" : "pages"}
+              </Badge>
+            ) : null}
+          </div>
 
-      <p className="text-muted-foreground mt-1.5 text-xs text-pretty">
-        {base64
-          ? "Rendered by Tectonic from the server-assembled template. Check it against the changes before you send it anywhere."
-          : "No PDF was produced for this run."}
-      </p>
+          <p className="text-muted-foreground mt-1.5 text-xs text-pretty">
+            {base64
+              ? "Rendered by Tectonic from the server-assembled template. Check it against the changes before you send it anywhere."
+              : "No PDF was produced for this run."}
+          </p>
+        </>
+      ) : null}
 
       <PdfViewer
-        className="mt-3 h-[36rem] max-h-[calc(100svh-13rem)]"
+        className={cn(showHeader && "mt-3", viewerClassName)}
         bytes={bytes}
         label="Tailored resume preview"
         placeholder={

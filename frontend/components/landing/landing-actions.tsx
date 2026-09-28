@@ -32,7 +32,7 @@ export function HeaderActions() {
 
   if (straightIn) {
     return (
-      <ButtonLink href="/" size="lg">
+      <ButtonLink href="/tailor" size="lg">
         Open RoleTeX
       </ButtonLink>
     );
@@ -57,7 +57,7 @@ export function HeroActions({ className }: { className?: string }) {
 
   return (
     <div className={cn("flex flex-wrap items-center justify-center gap-3", className)}>
-      <ButtonLink href={straightIn ? "/" : "/register"} size="lg" className={LARGE}>
+      <ButtonLink href={straightIn ? "/tailor" : "/register"} size="lg" className={LARGE}>
         {straightIn ? "Open RoleTeX" : "Create an account"}
         <ArrowRightIcon aria-hidden="true" />
       </ButtonLink>
@@ -73,7 +73,7 @@ export function ClosingActions({ className }: { className?: string }) {
 
   return (
     <div className={cn("flex flex-wrap items-center justify-center gap-3", className)}>
-      <ButtonLink href={straightIn ? "/" : "/register"} size="lg" className={LARGE}>
+      <ButtonLink href={straightIn ? "/tailor" : "/register"} size="lg" className={LARGE}>
         {straightIn ? "Open RoleTeX" : "Create an account"}
         <ArrowRightIcon aria-hidden="true" />
       </ButtonLink>
@@ -92,7 +92,7 @@ export function FooterLinks({ className }: { className?: string }) {
   return (
     <nav aria-label="Account" className={cn("flex items-center gap-6", className)}>
       {straightIn ? (
-        <Link href="/" className={TEXT_LINK}>
+        <Link href="/tailor" className={TEXT_LINK}>
           Open RoleTeX
         </Link>
       ) : (

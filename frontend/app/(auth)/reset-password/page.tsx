@@ -8,8 +8,7 @@ export const metadata: Metadata = {
 /**
  * Target of the reset link the backend emails.
  *
- * The one-time token arrives in the URL FRAGMENT as `/reset-password/#token=...`,
- * or as the legacy `/#/reset-password?token=...` that <AuthRuntime> rewrites.
+ * The one-time token arrives in the URL FRAGMENT as `/reset-password/#token=...`.
  * It is read with `location.hash`, never `useSearchParams()`, so it is never
  * put on the wire. See components/auth/token-link.ts.
  */

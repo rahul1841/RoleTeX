@@ -85,10 +85,16 @@ export function RecompilePanel({ runId, hasLatex }: RecompilePanelProps) {
   const headingId = `recompile-${runId}`;
 
   return (
-    <section aria-labelledby={headingId} className="bg-card rounded-xl border p-4">
+    <section
+      aria-labelledby={headingId}
+      className="bg-card rounded-[1.25rem] p-6 ring-1 ring-foreground/10 sm:p-7"
+    >
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div className="min-w-0 space-y-1">
-          <h3 id={headingId} className="font-heading text-sm font-medium">
+          <h3
+            id={headingId}
+            className="font-heading text-[1.0625rem] font-semibold tracking-tight"
+          >
             Recompile to a fresh PDF
           </h3>
           <p className="text-muted-foreground max-w-prose text-sm text-pretty">
@@ -112,6 +118,7 @@ export function RecompilePanel({ runId, hasLatex }: RecompilePanelProps) {
         <Button
           type="button"
           variant={result ? "outline" : "default"}
+          className="h-10 rounded-xl px-4"
           onClick={handleCompile}
           disabled={!hasLatex || compile.isPending}
         >
@@ -142,7 +149,7 @@ export function RecompilePanel({ runId, hasLatex }: RecompilePanelProps) {
         ) : null}
 
         {result ? (
-          <div className="border-diff-added-border bg-diff-added mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border px-3 py-2.5">
+          <div className="border-diff-added-border bg-diff-added mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border px-4 py-3">
             <CheckCircle2Icon
               aria-hidden="true"
               className="text-diff-added-foreground size-4 shrink-0"
@@ -216,14 +223,14 @@ function CompileError({
   if (code === "run_has_no_latex") {
     title = "This run has no stored LaTeX";
     action = (
-      <ButtonLink variant="outline" size="sm" href="/">
+      <ButtonLink variant="outline" size="sm" href="/tailor">
         Tailor again
       </ButtonLink>
     );
   } else if (code === "latex_compile_failed") {
     title = "The stored LaTeX did not compile";
     action = (
-      <ButtonLink variant="outline" size="sm" href="/">
+      <ButtonLink variant="outline" size="sm" href="/tailor">
         Tailor again
       </ButtonLink>
     );

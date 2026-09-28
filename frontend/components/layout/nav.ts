@@ -34,7 +34,7 @@ export interface NavItem {
 
 export const NAV_ITEMS: readonly NavItem[] = [
   {
-    href: "/",
+    href: "/tailor",
     label: "Tailor",
     icon: SparklesIcon,
     description: "Match a resume to a job description and review every change.",

@@ -82,7 +82,16 @@ export function ChangeList({ changes, compiled, className }: ChangeListProps) {
         <Badge variant="secondary" className="tabular-nums">
           {changes.length}
         </Badge>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-2.5">
+          <span
+            aria-hidden="true"
+            className="bg-border hidden h-1.5 w-24 overflow-hidden rounded-full sm:block"
+          >
+            <span
+              className="bg-primary block h-full rounded-full transition-[width]"
+              style={{ width: `${(reviewed.size / changes.length) * 100}%` }}
+            />
+          </span>
           <span
             aria-live="polite"
             className="text-muted-foreground text-xs tabular-nums"
@@ -145,8 +154,10 @@ function ChangeCard({
   return (
     <li
       className={cn(
-        "bg-card overflow-hidden rounded-xl ring-1 transition-opacity",
-        reviewed ? "ring-border/60 opacity-70" : "ring-foreground/10",
+        "bg-card overflow-hidden rounded-xl ring-1 transition-[opacity,box-shadow]",
+        reviewed
+          ? "ring-border/60 opacity-70"
+          : "shadow-[0_8px_24px_rgb(21_24_31/0.06)] ring-foreground/10",
       )}
     >
       <div className="flex items-center gap-2 px-3 py-2">

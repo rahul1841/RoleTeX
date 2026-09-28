@@ -9,11 +9,7 @@ export const metadata: Metadata = {
 };
 
 /**
- * The public front door.
- *
- * <AppShell> sends a signed-out visitor who lands on "/" here; deeper links go
- * straight to /sign-in, because someone following one already knows what
- * RoleTeX is.
+ * The public front door, at "/". The app itself starts at /tailor.
  *
  * Outside both route groups on purpose: it is neither the signed-in shell nor
  * a single-task auth screen, and it has to render for everyone — signed out,

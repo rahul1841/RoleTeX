@@ -164,7 +164,7 @@ export function EntryCard({
   return (
     <fieldset
       className={cn(
-        "bg-card relative rounded-lg border p-3 sm:p-4",
+        "bg-muted/40 relative rounded-xl border p-4 sm:p-5",
         className,
       )}
     >

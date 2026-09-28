@@ -50,7 +50,7 @@ export function AuthGate({
 
   React.useEffect(() => {
     if (!shouldLeave) return;
-    router.replace("/");
+    router.replace("/tailor");
   }, [shouldLeave, router]);
 
   const retryBoot = React.useCallback(() => {
@@ -101,7 +101,7 @@ export function AuthGate({
           tone="info"
           icon={DatabaseIcon}
           actions={
-            <ButtonLink href="/" size="sm">
+            <ButtonLink href="/tailor" size="sm">
               Go to RoleTeX
             </ButtonLink>
           }

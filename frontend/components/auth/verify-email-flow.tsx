@@ -57,7 +57,7 @@ export function VerifyEmailFlow() {
   }, [confirm.isSuccess]);
 
   const continueAction = session.isAuthenticated ? (
-    <ButtonLink href="/" size="sm">
+    <ButtonLink href="/tailor" size="sm">
       Continue to RoleTeX
     </ButtonLink>
   ) : (

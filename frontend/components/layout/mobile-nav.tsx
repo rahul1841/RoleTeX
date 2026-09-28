@@ -16,7 +16,7 @@ import { AppNav } from "./app-nav";
 /**
  * The navigation drawer below the `lg` breakpoint.
  *
- * The desktop sidebar is `display: none` at these widths, so it is out of the
+ * The header's desktop nav is `display: none` at these widths, so it is out of the
  * accessibility tree and the two navs never both exist for the same user —
  * which is why both are allowed to be labelled "Main".
  *

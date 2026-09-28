@@ -7,6 +7,7 @@
  * components that already agree with each other.
  */
 export { PageHeader, type PageHeaderProps } from "./page-header";
+export { PageHero, Canvas, type PageHeroProps } from "./page-hero";
 export { PageContainer, type PageContainerProps } from "./page-container";
 export { EmptyState, type EmptyStateProps } from "./empty-state";
 export { ErrorState, type ErrorStateProps } from "./error-state";

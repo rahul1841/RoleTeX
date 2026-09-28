@@ -2,12 +2,14 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { cn } from "cn";
 import { useQuery } from "@tanstack/react-query";
 import {
   CheckIcon,
   FileUpIcon,
   ScrollTextIcon,
   TriangleAlertIcon,
+  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -152,7 +154,7 @@ function ProviderPicker({
   }
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5">
       <Label htmlFor={id}>AI provider</Label>
       <Select
         value={value}
@@ -161,7 +163,7 @@ function ProviderPicker({
         }}
         disabled={disabled}
       >
-        <SelectTrigger id={id} size="sm" className="w-full">
+        <SelectTrigger id={id} className="w-full rounded-lg data-[size=default]:h-10">
           <SelectValue placeholder="Choose a provider" />
         </SelectTrigger>
         <SelectContent>
@@ -172,11 +174,38 @@ function ProviderPicker({
           ))}
         </SelectContent>
       </Select>
-      <p className="text-muted-foreground text-xs">
-        Only providers with a saved key are listed. Extraction sends the whole
-        document to this provider.
+      <p className="text-muted-foreground text-xs text-pretty">
+        Providers with a saved key. The whole document is sent to it.
       </p>
     </div>
+  );
+}
+
+/** One of the two sources, drawn as a choice card inside the tab list. */
+function SourceTab({
+  value,
+  icon: Icon,
+  title,
+  hint,
+}: {
+  value: string;
+  icon: LucideIcon;
+  title: string;
+  hint: string;
+}) {
+  return (
+    <TabsTrigger
+      value={value}
+      className="data-active:border-primary data-active:bg-primary/5 dark:data-active:border-primary dark:data-active:bg-primary/10 bg-card border-border h-auto flex-col items-start gap-1 rounded-xl border px-4 py-3 text-left data-active:shadow-none"
+    >
+      <span className="flex items-center gap-2 text-sm font-medium">
+        <Icon aria-hidden="true" className="size-4" />
+        {title}
+      </span>
+      <span className="text-muted-foreground font-mono text-[0.6875rem] font-normal">
+        {hint}
+      </span>
+    </TabsTrigger>
   );
 }
 
@@ -202,7 +231,8 @@ function ImportDialogBody({
     staleTime: Infinity,
   });
 
-  const [tab, setTab] = React.useState("latex");
+  const [tab, setTab] = React.useState("pdf");
+  const [dragging, setDragging] = React.useState(false);
   const [chosenProvider, setChosenProvider] = React.useState<string | null>(null);
   const [name, setName] = React.useState("");
   const [latex, setLatex] = React.useState("");
@@ -324,11 +354,8 @@ function ImportDialogBody({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          <p className="flex items-center gap-2 text-sm font-medium">
-            <CheckIcon
-              aria-hidden="true"
-              className="text-diff-added-foreground size-4"
-            />
+          <p className="bg-diff-added text-diff-added-foreground border-diff-added-border flex items-center gap-2.5 rounded-xl border px-4 py-3 text-sm font-medium">
+            <CheckIcon aria-hidden="true" className="size-4" strokeWidth={2.5} />
             {isVersion
               ? "The new version is now the current one."
               : "Saved to your library."}
@@ -374,98 +401,95 @@ function ImportDialogBody({
         </DialogDescription>
       </DialogHeader>
 
-      <div className="space-y-4 py-2">
-        {providers.isLoading ? (
-          <p className="text-muted-foreground flex items-center gap-2 text-xs">
-            <Spinner className="size-3" />
-            Checking your providers…
-          </p>
-        ) : (
-          <ProviderPicker
-            value={provider}
-            options={options}
-            onChange={setChosenProvider}
-            disabled={pending}
-          />
-        )}
-
+      <div className="space-y-5 py-2">
         <Tabs
           value={tab}
           onValueChange={(value) => {
             if (typeof value === "string") setTab(value);
           }}
+          className="gap-4"
         >
-          <TabsList className="w-full">
-            <TabsTrigger value="latex">
-              <ScrollTextIcon data-icon="inline-start" />
-              Paste LaTeX
-            </TabsTrigger>
-            <TabsTrigger value="pdf">
-              <FileUpIcon data-icon="inline-start" />
-              Upload a PDF
-            </TabsTrigger>
+          {/* The two sources as choice cards; still a real tab list, so the
+              arrow keys and the selected state work as they should. */}
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-2 bg-transparent p-0 group-data-horizontal/tabs:h-auto">
+            <SourceTab
+              value="pdf"
+              icon={FileUpIcon}
+              title="Upload a PDF"
+              hint={`Up to ${MAX_PDF_PAGES} pages`}
+            />
+            <SourceTab
+              value="latex"
+              icon={ScrollTextIcon}
+              title="Paste LaTeX"
+              hint="The .tex source"
+            />
           </TabsList>
 
-          <TabsContent value="latex" className="space-y-3 pt-3">
-            {!isVersion ? (
-              <div className="space-y-1">
-                <Label htmlFor="import-latex-name">Name (optional)</Label>
-                <Input
-                  id="import-latex-name"
-                  value={name}
-                  maxLength={LIMITS.resumeName}
-                  placeholder="Taken from the document if left empty"
-                  onChange={(event) => setName(event.target.value)}
+          <TabsContent value="pdf" className="space-y-4">
+            <div className="space-y-1.5">
+              <label
+                htmlFor="import-pdf"
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  setDragging(true);
+                }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setDragging(false);
+                  void handleFileChange(event.dataTransfer.files?.[0] ?? null);
+                }}
+                className={cn(
+                  "has-focus-visible:ring-ring/50 flex cursor-pointer flex-col items-center gap-3 rounded-2xl border-2 border-dashed px-6 py-8 text-center transition-colors has-focus-visible:ring-3",
+                  dragging
+                    ? "border-primary bg-primary/5"
+                    : fileError
+                      ? "border-destructive/40 bg-destructive/5"
+                      : "bg-muted/40 hover:border-foreground/25",
+                )}
+              >
+                <input
+                  id="import-pdf"
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  className="sr-only"
+                  aria-invalid={fileError ? true : undefined}
+                  aria-describedby="import-pdf-hint"
+                  onChange={(event) =>
+                    void handleFileChange(event.target.files?.[0] ?? null)
+                  }
                 />
-              </div>
-            ) : null}
-            <div className="space-y-1">
-              <Label htmlFor="import-latex">LaTeX source</Label>
-              <Textarea
-                id="import-latex"
-                value={latex}
-                rows={10}
-                spellCheck={false}
-                placeholder={"\\documentclass{article}\n\\begin{document}\n…"}
-                className="bg-code text-code-foreground border-code-border font-mono text-xs"
-                aria-describedby="import-latex-hint"
-                onChange={(event) => setLatex(event.target.value)}
-              />
-              <p id="import-latex-hint" className="text-muted-foreground text-xs">
-                {latex.trim().length < MIN_LATEX_CHARS
-                  ? `At least ${MIN_LATEX_CHARS} characters.`
-                  : `${latex.length.toLocaleString()} characters.`}
-              </p>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="pdf" className="space-y-3 pt-3">
-            {!isVersion ? (
-              <div className="space-y-1">
-                <Label htmlFor="import-pdf-name">Name (optional)</Label>
-                <Input
-                  id="import-pdf-name"
-                  value={name}
-                  maxLength={LIMITS.resumeName}
-                  placeholder="Taken from the document if left empty"
-                  onChange={(event) => setName(event.target.value)}
-                />
-              </div>
-            ) : null}
-            <div className="space-y-1">
-              <Label htmlFor="import-pdf">PDF file</Label>
-              <Input
-                id="import-pdf"
-                type="file"
-                accept="application/pdf,.pdf"
-                aria-invalid={fileError ? true : undefined}
-                aria-describedby="import-pdf-hint"
-                className="file:text-foreground h-auto py-1.5 file:mr-3 file:text-xs"
-                onChange={(event) =>
-                  void handleFileChange(event.target.files?.[0] ?? null)
-                }
-              />
-              <p id="import-pdf-hint" className="text-muted-foreground text-xs">
+                {file ? (
+                  <span className="bg-card flex max-w-full items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium shadow-[0_6px_20px_rgb(21_24_31/0.08)]">
+                    {checkingFile ? (
+                      <Spinner className="size-4" />
+                    ) : fileError ? (
+                      <TriangleAlertIcon aria-hidden="true" className="text-destructive size-4 shrink-0" />
+                    ) : (
+                      <CheckIcon aria-hidden="true" className="text-diff-added-foreground size-4 shrink-0" />
+                    )}
+                    <span className="truncate">{file.name}</span>
+                    <span className="text-muted-foreground font-mono text-xs font-normal">
+                      {(file.size / 1_000_000).toFixed(1)} MB
+                    </span>
+                  </span>
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    className="bg-card text-primary flex size-11 items-center justify-center rounded-xl shadow-[0_6px_20px_rgb(21_24_31/0.08)] ring-1 ring-foreground/10"
+                  >
+                    <FileUpIcon className="size-5" />
+                  </span>
+                )}
+                <span className="text-sm">
+                  <span className="text-primary font-medium">
+                    {file ? "Choose another file" : "Choose a PDF"}
+                  </span>{" "}
+                  <span className="text-muted-foreground">or drop it here</span>
+                </span>
+              </label>
+              <p id="import-pdf-hint" className="text-muted-foreground text-xs text-pretty">
                 At most {MAX_PDF_BYTES / 1_000_000} MB and {MAX_PDF_PAGES} pages.
                 A scan with no text layer is read from page images instead, and
                 is marked as such.
@@ -483,7 +507,57 @@ function ImportDialogBody({
               ) : null}
             </div>
           </TabsContent>
+
+          <TabsContent value="latex" className="space-y-1.5">
+            <Label htmlFor="import-latex">LaTeX source</Label>
+            <Textarea
+              id="import-latex"
+              value={latex}
+              rows={9}
+              spellCheck={false}
+              placeholder={"\\documentclass{article}\n\\begin{document}\n…"}
+              className="bg-code text-code-foreground border-code-border rounded-xl font-mono text-xs"
+              aria-describedby="import-latex-hint"
+              onChange={(event) => setLatex(event.target.value)}
+            />
+            <p id="import-latex-hint" className="text-muted-foreground text-xs">
+              {latex.trim().length < MIN_LATEX_CHARS
+                ? `At least ${MIN_LATEX_CHARS} characters.`
+                : `${latex.length.toLocaleString()} characters.`}
+            </p>
+          </TabsContent>
         </Tabs>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          {!isVersion ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="import-name">Name (optional)</Label>
+              <Input
+                id="import-name"
+                value={name}
+                maxLength={LIMITS.resumeName}
+                placeholder="Taken from the document"
+                className="h-10 rounded-lg"
+                onChange={(event) => setName(event.target.value)}
+              />
+            </div>
+          ) : null}
+          <div className={cn(isVersion && "sm:col-span-2")}>
+            {providers.isLoading ? (
+              <p className="text-muted-foreground flex items-center gap-2 pt-7 text-xs">
+                <Spinner className="size-3" />
+                Checking your providers…
+              </p>
+            ) : (
+              <ProviderPicker
+                value={provider}
+                options={options}
+                onChange={setChosenProvider}
+                disabled={pending}
+              />
+            )}
+          </div>
+        </div>
 
         {error ? (
           <div className="space-y-2">
@@ -512,7 +586,7 @@ function ImportDialogBody({
           onClick={() => void submit()}
         >
           {pending ? <Spinner data-icon="inline-start" /> : null}
-          {pending ? "Reading the document…" : "Import"}
+          {pending ? "Reading the document…" : isVersion ? "Add version" : "Import resume"}
         </Button>
       </DialogFooter>
     </>
@@ -532,7 +606,7 @@ export function ImportResumeDialog({
 }: ImportResumeDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="sm:max-w-2xl sm:p-7">
         <ImportDialogBody target={target} onClose={() => onOpenChange(false)} />
       </DialogContent>
     </Dialog>

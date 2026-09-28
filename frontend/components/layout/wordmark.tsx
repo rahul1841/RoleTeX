@@ -8,9 +8,8 @@ import { cn } from "cn";
  * visitor what the tool actually does. It is stacked under the name rather
  * than beside it so it survives narrow viewports without truncation.
  *
- * `href` is the product's home by default. The landing page points it at
- * itself: "/" would bounce a signed-out visitor straight back there through
- * the app shell's redirect.
+ * `href` is the landing page by default; the signed-in app header points it
+ * at /tailor instead.
  */
 export function Wordmark({
   className,

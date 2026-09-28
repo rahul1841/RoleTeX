@@ -125,13 +125,13 @@ Next.js App Router + React + TypeScript + Tailwind + shadcn/ui, built to a
 screen sits behind an HttpOnly session cookie, so there is nothing to render on
 a server that the browser cannot fetch itself.
 
-Routes: `/` (tailor), `/resumes`, `/jds`, `/history`, `/settings`, plus the
-signed-out group `/sign-in`, `/register`, `/forgot-password`, `/reset-password`,
-`/verify-email`, and the public landing page `/welcome`. Boot mirrors the API:
+Routes: the public landing page `/`, the app `/tailor`, `/resumes`, `/jds`,
+`/history`, `/settings`, plus the signed-out group `/sign-in`, `/register`,
+`/forgot-password`, `/reset-password`, `/verify-email`. Boot mirrors the API:
 `GET /api/health` decides the mode (`demo` → seed tailoring only, storage
 screens explain themselves via `<RequiresStorage>`; `multi_user` →
 `GET /api/me`, where a 401 is the normal signed-out state). A signed-out visitor
-at `/` is sent to `/welcome`; one following a deeper link goes to `/sign-in`.
+on any app screen is sent to `/sign-in`.
 Any other address gets `app/not-found.tsx`, exported as `404.html`, which
 FastAPI's `StaticFiles` serves with a 404 status for every missing path.
 
@@ -152,20 +152,48 @@ FastAPI's `StaticFiles` serves with a 404 status for every missing path.
 - **Server state is TanStack Query**, keyed centrally in `lib/api/query-keys.ts`.
   Mutations never auto-retry; queries never retry a 4xx or a timeout, because
   every expensive call either spends provider tokens or runs Tectonic.
-- Results view: reviewable change cards plus a unified diff rendered with
-  dedicated `--diff-added` / `--diff-removed` design tokens (legible in both
-  themes), the PDF preview alongside — never instead of — the changes (R-14),
-  and downloads decoded from base64 into revoked object URLs.
+- **One visual language, taken from the landing page.** The app shell is a
+  top bar with the navigation as text tabs (a drawer below `lg`); there is no
+  sidebar. The tailor screen follows the landing page's style: a mono status
+  chip over a large tight headline, numbered `01`/`02`/`03` steps, and the
+  dotted canvas the landing page draws its product pictures on. It has three
+  states — setup, running (real clock, estimated stages), review. `/resumes`
+  follows the same language: a library of cards with typeset thumbnails (from
+  stored facts, never compiled), a two-way empty state (write it / import it),
+  numbered builder sections with a floating section bar and the live PDF on the
+  canvas, and an import dialog with source cards and a PDF drop zone.
+  `/jds` keeps its two panes (searchable list, reading pane) in the same style:
+  the posting reads as a page on the canvas — still verbatim, whitespace kept —
+  with "Tailor against this" handing it to `/tailor?jd=…`, and an empty library
+  explains itself in three numbered steps.
+  `/history` follows suit: a runs rail, a run header card (resume → posting,
+  engine, output, run id) with "Tailor again" preselecting the same resume and
+  posting on `/tailor`, a recompile card, and pill tabs with the change list on
+  the canvas.
+  `/settings` stays one scrolling document (deliberately not tabs), now as
+  numbered section cards with a matching numbered, sticky index.
+  `<PageHero>` and `<Canvas>` in `components/common` are the shared pieces.
+- Results view: reviewable change cards in the left column, always rendered in
+  full, with the output beside them in tabs — the PDF, the unified diff, or the
+  LaTeX. The tabs only choose how to read the output; the changes are never
+  behind one, so the document is never shown without them (R-14). Diffs use
+  the dedicated `--diff-added` / `--diff-removed` tokens (legible in both
+  themes), and downloads are decoded from base64 into revoked object URLs.
+- The setup screen shows the chosen resume as a typeset page drawn from its
+  stored facts, not a compiled PDF: compiling costs a Tectonic run, and
+  nothing compiles on mount.
 - PDF preview uses `pdfjs-dist` from npm, dynamically imported client-side with
   the worker resolved via `new URL(..., import.meta.url)` so the bundler emits
   it; the old hand-vendored copy and its hard-coded worker path are gone.
-- Accessibility: skip link, one `<h1>` per page owned by `<PageHeader>` with
+- Accessibility: skip link, one `<h1>` per page owned by `<PageHeader>` (on
+  the redesigned tailor and resumes screens, `<PageHero>`) with
   focus moved to it on navigation, `aria-current` on active nav, labelled inputs
   with `aria-invalid`/`aria-describedby`, and focus traps from the underlying
   Base UI primitives.
 - *Known gap: no automated frontend tests. `npm run typecheck`, `npm run lint`
-  and `npm run build` are the only gate, and no browser-driven verification has
-  been run.*
+  and `npm run build` are the only gate. The tailor redesign was checked by
+  driving headless Chrome through setup → run → review in demo mode, not by a
+  repeatable suite.*
 
 ## 8. Key design decisions & rationale
 

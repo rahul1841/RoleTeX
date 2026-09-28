@@ -7,11 +7,10 @@ import { toast } from "sonner";
 import { setSessionLostHandler } from "@/lib/api/client";
 import { queryKeys } from "@/lib/api/query-keys";
 import type { UserResponse } from "@/lib/api/types";
-import { legacyHashRoute, tokenLinkHref } from "./token-link";
 
 /**
- * The two pieces of auth behaviour that belong to the application as a whole
- * rather than to any auth screen. Renders nothing.
+ * The auth behaviour that belongs to the application as a whole rather than
+ * to any auth screen. Renders nothing.
  *
  * Mounted exactly once, in app/(app)/layout.tsx. That placement is the whole
  * design, so it is worth being explicit about why it is not anywhere else:
@@ -30,49 +29,11 @@ import { legacyHashRoute, tokenLinkHref } from "./token-link";
  *    tree on every navigation.
  *
  * The (app) layout is the narrowest scope that covers every session-bearing
- * screen and the "/" landing that legacy email links resolve to, and its
- * lifetime is exactly the window in which either behaviour is wanted.
+ * screen, and its lifetime is exactly the window in which this is wanted.
  */
 export function AuthRuntime() {
-  useLegacyTokenLinkRedirect();
   useSessionLostHandler();
   return null;
-}
-
-/**
- * Rewrite a LEGACY hash link onto its real route, keeping the token in the
- * fragment.
- *
- *   /#/reset-password?token=ABC   ->   /reset-password/#token=ABC
- *
- * The server no longer emits that first shape — `_token_link()` in
- * backend/app/routes_account.py builds the real route directly — but links sent before
- * 2026-09-10 may still be in inboxes, and to a server, a router, and
- * `usePathname()` they are all simply "/". Without this they land on the tailor
- * page, and a signed-out visitor is then bounced to the landing page with the
- * token dropped on the floor. Deletable once those links have expired; see
- * token-link.ts for the exact window.
- *
- * `location.replace`, not `router.replace`, on purpose:
- *
- *  - It is a real navigation, so it cannot be undone by the shell's own
- *    redirect effect resolving a moment later in the same commit. A soft
- *    navigation would be racing a network response to decide where the user
- *    ends up, and losing that race means losing the token.
- *  - `replace` leaves no history entry, so Back does not return to a URL that
- *    would just redirect again.
- *
- * The cost is one full page load, once, on a link a person clicks from an
- * email. That is the right trade for never dropping a single-use credential.
- */
-function useLegacyTokenLinkRedirect() {
-  React.useEffect(() => {
-    const legacy = legacyHashRoute(window.location.hash);
-    if (!legacy) return;
-    // The destination's fragment is `#token=…`, which does not start with "/",
-    // so this cannot match its own output and loop.
-    window.location.replace(tokenLinkHref(legacy.route, legacy.token));
-  }, []);
 }
 
 /**

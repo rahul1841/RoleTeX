@@ -3,9 +3,9 @@
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "cn";
-import { ArrowLeftIcon, BriefcaseIcon } from "lucide-react";
+import { ArrowLeftIcon, MousePointerClickIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/common";
+import { Canvas } from "@/components/common";
 import { useJds } from "@/hooks/use-jds";
 import { JdDetailPanel } from "./jd-detail";
 import { JdFormDialog } from "./jd-form-dialog";
@@ -63,17 +63,17 @@ export function JdWorkspace({ createOpen, onCreateOpenChange }: JdWorkspaceProps
     <>
       <div
         className={cn(
-          "mt-6 grid gap-6",
+          "mt-10 grid gap-6",
           twoPane &&
-            "lg:grid-cols-[minmax(0,21rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,23rem)_minmax(0,1fr)]",
+            "lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] xl:gap-8",
         )}
       >
         <div className={cn("min-w-0", selectedId && "hidden lg:block")}>
-          {/* Sticky under the 3.5rem app header so the library stays reachable
+          {/* Sticky under the 4.5rem app header so the library stays reachable
               while a long posting scrolls beside it. The negative margin plus
               padding keeps focus rings from being clipped by the scroll
               container `overflow-y-auto` creates on both axes. */}
-          <div className="lg:sticky lg:top-18 lg:-mx-1 lg:max-h-[calc(100svh-6rem)] lg:overflow-y-auto lg:px-1 lg:pb-2">
+          <div className="lg:sticky lg:top-22 lg:-mx-1 lg:max-h-[calc(100svh-7rem)] lg:overflow-y-auto lg:px-1 lg:pb-2">
             <JdList
               selectedId={selectedId}
               onCreate={() => onCreateOpenChange(true)}
@@ -104,12 +104,21 @@ export function JdWorkspace({ createOpen, onCreateOpenChange }: JdWorkspaceProps
                 />
               </div>
             ) : hasAny ? (
-              <EmptyState
-                icon={BriefcaseIcon}
-                title="Select a job description"
-                description="Pick one from the library to read it, edit it into a new version, or check what it looked like before."
-                className="h-full"
-              />
+              <Canvas className="flex h-full min-h-[28rem] flex-col items-center justify-center gap-4 px-6 text-center">
+                <span
+                  aria-hidden="true"
+                  className="bg-card text-muted-foreground flex size-11 items-center justify-center rounded-xl shadow-[0_6px_20px_rgb(21_24_31/0.08)] ring-1 ring-foreground/10"
+                >
+                  <MousePointerClickIcon className="size-5" />
+                </span>
+                <p className="font-heading text-lg font-semibold tracking-tight">
+                  Pick a posting to read
+                </p>
+                <p className="text-muted-foreground max-w-sm text-sm leading-6 text-pretty">
+                  Open one from the library to read it, tailor a resume against
+                  it, edit it into a new version, or see what it said before.
+                </p>
+              </Canvas>
             ) : null}
           </div>
         ) : null}

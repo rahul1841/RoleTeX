@@ -58,8 +58,8 @@ function VersionSource({
   const isRendered = source.data?.source_type === "manual";
 
   return (
-    <div className="border-code-border bg-code overflow-hidden rounded-lg border">
-      <div className="border-code-border flex flex-wrap items-center justify-between gap-2 border-b px-2 py-1.5">
+    <div className="border-code-border bg-code overflow-hidden rounded-[1.25rem] border">
+      <div className="border-code-border flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
         <span className="text-muted-foreground text-xs">
           {isRendered
             ? "The LaTeX the server rendered from this version."
@@ -67,7 +67,7 @@ function VersionSource({
         </span>
         <CopyButton value={text} label="Copy" subject="LaTeX source" variant="ghost" />
       </div>
-      <pre className="text-code-foreground max-h-[28rem] overflow-auto p-3 text-[0.7rem] leading-relaxed">
+      <pre className="text-code-foreground max-h-[36rem] overflow-auto px-4 py-3 text-xs leading-relaxed">
         {text || "This version stored no source text."}
       </pre>
     </div>
@@ -90,14 +90,17 @@ export function VersionsPanel({ resume }: VersionsPanelProps) {
   const active = selected ?? current;
 
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
-      <div className="space-y-3">
+    <div className="grid items-start gap-6 lg:grid-cols-[20rem_minmax(0,1fr)]">
+      <div className="space-y-4">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="font-heading text-sm font-semibold">Versions</h2>
+          <h2 className="font-heading text-[1.0625rem] font-semibold tracking-tight">
+            Versions
+          </h2>
           <Button
             type="button"
             variant="outline"
-            size="xs"
+            size="sm"
+            className="rounded-lg"
             onClick={() => setImportOpen(true)}
           >
             <FilePlusIcon data-icon="inline-start" />
@@ -115,7 +118,7 @@ export function VersionsPanel({ resume }: VersionsPanelProps) {
             onRetry={() => void versions.refetch()}
           />
         ) : (
-          <ul className="divide-border overflow-hidden rounded-xl border divide-y">
+          <ul className="bg-card divide-border overflow-hidden rounded-[1.25rem] ring-1 ring-foreground/10 divide-y">
             {[...list]
               .sort((a, b) => b.version - a.version)
               .map((entry) => {
@@ -127,12 +130,18 @@ export function VersionsPanel({ resume }: VersionsPanelProps) {
                       aria-current={isActive ? "true" : undefined}
                       onClick={() => setSelected(entry.version)}
                       className={cn(
-                        "focus-visible:ring-ring/50 flex w-full flex-col gap-1 px-3 py-2.5 text-left transition-colors focus-visible:ring-3 focus-visible:outline-none",
+                        "focus-visible:ring-ring/50 relative flex w-full flex-col gap-1 px-4 py-3.5 text-left transition-colors focus-visible:ring-3 focus-visible:outline-none focus-visible:ring-inset",
                         isActive ? "bg-muted" : "hover:bg-muted/50",
                       )}
                     >
+                      {isActive ? (
+                        <span
+                          aria-hidden="true"
+                          className="bg-primary absolute inset-y-2 left-0 w-0.5 rounded-r-full"
+                        />
+                      ) : null}
                       <span className="flex items-center gap-2">
-                        <span className="text-sm font-medium tabular-nums">
+                        <span className="font-mono text-sm font-medium tabular-nums">
                           v{entry.version}
                         </span>
                         {entry.version === current ? (

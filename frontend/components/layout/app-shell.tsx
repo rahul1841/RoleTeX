@@ -2,17 +2,15 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LoadingState, PageContainer, Spinner } from "@/components/common";
 import { useSession } from "@/hooks/use-session";
 import { queryKeys } from "@/lib/api/query-keys";
 import { AppHeader } from "./app-header";
-import { AppSidebar } from "./app-sidebar";
 import { BootError } from "./boot-error";
 import { GlobalBanners } from "./global-banners";
-import { normalizePath } from "./nav";
 import { RouteFocusProvider } from "./route-focus";
 
 /**
@@ -26,8 +24,7 @@ import { RouteFocusProvider } from "./route-focus";
  *
  *   booting          skeleton nav + skeleton content
  *   boot failed      no nav, a recoverable error with a refetching retry
- *   signed out       no nav, redirect to /welcome from the root and to
- *                    /sign-in from anywhere else (multi-user servers only)
+ *   signed out       no nav, redirect to /sign-in (multi-user servers only)
  *   ready            the real nav and the page
  *
  * NOTE FOR THE AUTH WORK: this shell deliberately does not call
@@ -38,7 +35,6 @@ import { RouteFocusProvider } from "./route-focus";
 export function AppShell({ children }: { children: React.ReactNode }) {
   const session = useSession();
   const router = useRouter();
-  const pathname = usePathname();
   const queryClient = useQueryClient();
 
   // Storage exists only where a database does. This is the single fact the nav
@@ -51,18 +47,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     !session.bootError &&
     !session.isAuthenticated;
 
-  // The bare root is where someone arrives who has not been here before, so it
-  // leads to the landing page. Any deeper path was a link to something
-  // specific, and signing in is the way to it.
-  const signedOutDestination =
-    normalizePath(pathname) === "/" ? "/welcome" : "/sign-in";
-
   React.useEffect(() => {
     if (!mustSignIn) return;
     // `replace`, not `push`: a signed-out user should not be able to press Back
     // into a shell that will immediately bounce them out again.
-    router.replace(signedOutDestination);
-  }, [mustSignIn, router, signedOutDestination]);
+    router.replace("/sign-in");
+  }, [mustSignIn, router]);
 
   const retryBoot = React.useCallback(
     () =>
@@ -83,7 +73,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   } else if (session.bootError) {
     body = <BootError error={session.bootError} onRetry={retryBoot} />;
   } else if (mustSignIn) {
-    body = <RedirectingSignedOut href={signedOutDestination} />;
+    body = <RedirectingSignedOut />;
   } else {
     body = children;
   }
@@ -100,6 +90,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           user={ready ? session.user : null}
           needsEmailVerification={session.needsEmailVerification}
           showNav={ready}
+          loading={session.isLoading}
         />
 
         {ready ? (
@@ -110,13 +101,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ) : null}
 
         <div className="flex flex-1">
-          {session.isLoading || ready ? (
-            <AppSidebar
-              storageAvailable={storageAvailable}
-              loading={session.isLoading}
-            />
-          ) : null}
-
           {/* The skip link in app/layout.tsx targets this id, and it is
               focusable so the jump actually lands rather than only scrolling. */}
           <main
@@ -157,10 +141,10 @@ function ShellContentSkeleton() {
 
 /**
  * Shown for the frame or two between deciding the user is signed out and the
- * router arriving at the landing page or /sign-in. The link is the fallback for
- * the case where the programmatic navigation cannot happen at all.
+ * router arriving at /sign-in. The link is the fallback for the case where the
+ * programmatic navigation cannot happen at all.
  */
-function RedirectingSignedOut({ href }: { href: "/welcome" | "/sign-in" }) {
+function RedirectingSignedOut() {
   return (
     <div
       role="status"
@@ -169,8 +153,8 @@ function RedirectingSignedOut({ href }: { href: "/welcome" | "/sign-in" }) {
       <Spinner className="size-5" />
       <p>
         Taking you to{" "}
-        <Link href={href} className="text-foreground underline underline-offset-3">
-          {href === "/welcome" ? "the RoleTeX home page" : "sign in"}
+        <Link href="/sign-in" className="text-foreground underline underline-offset-3">
+          sign in
         </Link>
         …
       </p>

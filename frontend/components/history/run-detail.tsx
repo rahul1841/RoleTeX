@@ -3,12 +3,27 @@
 import * as React from "react";
 import Link from "next/link";
 import { cn } from "cn";
-import { ArrowLeftIcon, ArrowUpRightIcon, TrashIcon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  ArrowUpRightIcon,
+  FileTextIcon,
+  MoreHorizontalIcon,
+  SparklesIcon,
+  TrashIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button, ButtonLink } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ConfirmDialog, CopyButton } from "@/components/common";
+import { Canvas, ConfirmDialog, CopyButton } from "@/components/common";
 // The change list, the diff renderer and the code block are the tailor
 // screen's, imported rather than reimplemented: a stored run and a fresh one
 // are the same artifacts, and two implementations of the diff tokens would
@@ -76,7 +91,7 @@ export function RunDetail({ run, onDeleted, className }: RunDetailProps) {
   }
 
   return (
-    <div className={cn("min-w-0 space-y-5", className)}>
+    <div className={cn("min-w-0 space-y-6", className)}>
       <ButtonLink
         variant="ghost"
         size="sm"
@@ -87,26 +102,43 @@ export function RunDetail({ run, onDeleted, className }: RunDetailProps) {
         All runs
       </ButtonLink>
 
-      <header className="space-y-3">
-        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-          <div className="min-w-0 space-y-1">
-            <h2 className="font-heading truncate text-lg font-semibold tracking-tight">
-              {run.resume_name || "Untitled resume"}
-              <span className="text-muted-foreground ml-2 font-mono text-sm font-normal">
+      <header className="bg-card rounded-[1.25rem] ring-1 ring-foreground/10">
+        <div className="flex flex-col gap-5 p-6 sm:p-7 xl:flex-row xl:items-start xl:justify-between">
+          <div className="min-w-0 space-y-3">
+            <p className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs">
+              <time dateTime={time.iso} title={time.absolute}>
+                {time.relative}
+              </time>
+              <span aria-hidden="true" className="opacity-40">·</span>
+              <span>{formatEngine(run.provider, run.model)}</span>
+              {run.repaired ? (
+                <Badge
+                  variant="outline"
+                  className="border-warning-border bg-warning text-warning-foreground font-sans"
+                >
+                  Repaired
+                </Badge>
+              ) : null}
+            </p>
+            <h2 className="font-heading flex flex-wrap items-baseline gap-x-3 gap-y-1 text-2xl leading-tight font-semibold tracking-[-0.02em] sm:text-3xl">
+              <span className="min-w-0">{run.resume_name || "Untitled resume"}</span>
+              <span className="text-muted-foreground font-mono text-sm font-normal tracking-normal">
                 v{run.resume_version}
               </span>
             </h2>
-            <p className="text-muted-foreground text-sm text-pretty">
-              Tailored against{" "}
+            <p className="text-muted-foreground flex items-start gap-2 text-[0.9375rem] text-pretty">
+              <ArrowRightIcon aria-hidden="true" className="mt-1 size-4 shrink-0" />
+              <span className="min-w-0">
+              <span className="sr-only">Tailored against </span>
               {run.jd_id ? (
                 <Link
                   href={`/jds?id=${encodeURIComponent(run.jd_id)}`}
-                  className="text-foreground underline underline-offset-3"
+                  className="text-foreground underline-offset-3 hover:underline"
                 >
                   {run.jd_title?.trim() || "a saved job description"}
                   <ArrowUpRightIcon
                     aria-hidden="true"
-                    className="ml-0.5 inline size-3 align-[-0.1em]"
+                    className="ml-0.5 inline size-3.5 align-[-0.1em]"
                   />
                 </Link>
               ) : (
@@ -114,51 +146,77 @@ export function RunDetail({ run, onDeleted, className }: RunDetailProps) {
                   a job description pasted into the tailor screen
                 </span>
               )}
+              </span>
             </p>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             {run.resume_id ? (
-              <Button
+              <ButtonLink
                 variant="outline"
-                size="sm"
-                render={
-                  <Link href={`/resumes?id=${encodeURIComponent(run.resume_id)}`} />
-                }
+                href={`/resumes?id=${encodeURIComponent(run.resume_id)}`}
+                className="h-10 rounded-xl px-4"
               >
+                <FileTextIcon data-icon="inline-start" />
                 Open resume
-              </Button>
+              </ButtonLink>
             ) : null}
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setConfirmOpen(true)}
-            >
-              <TrashIcon data-icon="inline-start" />
-              Delete
-            </Button>
+            {run.resume_id ? (
+              <ButtonLink
+                href={{
+                  pathname: "/tailor",
+                  query: run.jd_id
+                    ? { resume: run.resume_id, jd: run.jd_id }
+                    : { resume: run.resume_id },
+                }}
+                className="h-10 rounded-xl px-4"
+              >
+                <SparklesIcon data-icon="inline-start" />
+                Tailor again
+              </ButtonLink>
+            ) : null}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="size-10 rounded-xl"
+                    aria-label="More actions for this run"
+                  >
+                    <MoreHorizontalIcon />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(run.id).then(
+                      () => toast.success("Run id copied"),
+                      () => toast.error("Could not copy the run id"),
+                    );
+                  }}
+                >
+                  Copy run id
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={() => setConfirmOpen(true)}
+                >
+                  <TrashIcon data-icon="inline-start" />
+                  Delete run
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
-        <dl className="border-border/80 grid grid-cols-2 gap-x-6 gap-y-3 rounded-xl border border-dashed px-4 py-3 sm:grid-cols-4">
+        <dl className="grid grid-cols-2 border-t sm:grid-cols-4">
           <Stat label="Run">
             <time dateTime={time.iso} className="block truncate">
               {time.absolute}
             </time>
-            <span className="text-muted-foreground text-xs">{time.relative}</span>
-          </Stat>
-          <Stat label="Engine">
-            <span className="block truncate font-mono text-xs">
-              {formatEngine(run.provider, run.model)}
-            </span>
-            {run.repaired ? (
-              <Badge
-                variant="outline"
-                className="border-warning-border bg-warning text-warning-foreground mt-1"
-              >
-                Repaired
-              </Badge>
-            ) : null}
           </Stat>
           <Stat label="Output">
             {pages ? (
@@ -166,6 +224,11 @@ export function RunDetail({ run, onDeleted, className }: RunDetailProps) {
             ) : (
               <span className="text-muted-foreground">Not compiled</span>
             )}
+          </Stat>
+          <Stat label="Changes">
+            <span className="tabular-nums">
+              {changes.length} {changes.length === 1 ? "edit" : "edits"}
+            </span>
           </Stat>
           <Stat label="Run id">
             <span className="flex items-center gap-1">
@@ -186,46 +249,48 @@ export function RunDetail({ run, onDeleted, className }: RunDetailProps) {
 
       <RecompilePanel runId={run.id} hasLatex={hasLatex} />
 
-      <Tabs defaultValue="changes">
+      <Tabs defaultValue="changes" className="gap-5">
         {/* The list is `w-fit`, so on a narrow viewport four labels would push
             the card sideways. Scrolling the strip keeps the page itself from
             gaining a horizontal scrollbar. */}
         <div className="-mx-1 overflow-x-auto px-1 py-1">
-          <TabsList>
-            <TabsTrigger value="changes" className="px-3">
+          <TabsList className="bg-card h-10 rounded-xl p-1 ring-1 ring-foreground/10 group-data-horizontal/tabs:h-10">
+            <TabsTrigger value="changes" className="rounded-lg px-4">
               Changes
               <span className="text-muted-foreground font-mono text-xs tabular-nums">
                 {changes.length}
               </span>
             </TabsTrigger>
-            <TabsTrigger value="diff" className="px-3">
+            <TabsTrigger value="diff" className="rounded-lg px-4">
               Diff
             </TabsTrigger>
-            <TabsTrigger value="latex" className="px-3">
+            <TabsTrigger value="latex" className="rounded-lg px-4">
               LaTeX
             </TabsTrigger>
-            <TabsTrigger value="jd" className="px-3">
+            <TabsTrigger value="jd" className="rounded-lg px-4">
               Job description
             </TabsTrigger>
           </TabsList>
         </div>
 
-        <TabsContent value="changes" className="pt-4">
-          <ChangeList changes={changes} compiled={compiled} />
+        <TabsContent value="changes">
+          <Canvas className="p-4 sm:p-7">
+            <ChangeList changes={changes} compiled={compiled} />
+          </Canvas>
         </TabsContent>
 
-        <TabsContent value="diff" className="pt-4">
-          <UnifiedDiff diff={run.unified_diff ?? ""} />
+        <TabsContent value="diff">
+          <UnifiedDiff diff={run.unified_diff ?? ""} className="bg-card" />
         </TabsContent>
 
-        <TabsContent value="latex" className="pt-4">
+        <TabsContent value="latex">
           {hasLatex ? (
             <CodeBlock
               label="Rendered LaTeX source"
               subject="LaTeX source"
               value={latex}
               meta={`${countLines(latex)} lines · ${formatByteSize(latex)}`}
-              maxHeightClassName="max-h-[34rem]"
+              maxHeightClassName="max-h-[40rem]"
             />
           ) : (
             <p className="text-muted-foreground border-code-border bg-code rounded-xl border px-3 py-6 text-center text-sm">
@@ -234,7 +299,7 @@ export function RunDetail({ run, onDeleted, className }: RunDetailProps) {
           )}
         </TabsContent>
 
-        <TabsContent value="jd" className="space-y-3 pt-4">
+        <TabsContent value="jd" className="space-y-3">
           <JdExcerpt
             text={run.jd_excerpt || "(no job description text was stored)"}
             title={run.jd_title}
@@ -279,9 +344,11 @@ function Stat({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-w-0">
-      <dt className="text-muted-foreground text-xs">{label}</dt>
-      <dd className="mt-0.5 min-w-0 text-sm">{children}</dd>
+    <div className="min-w-0 border-r px-6 py-4 last:border-r-0 sm:px-7 [&:nth-child(2)]:border-r-0 sm:[&:nth-child(2)]:border-r">
+      <dt className="text-muted-foreground font-mono text-[0.6875rem] tracking-wide uppercase">
+        {label}
+      </dt>
+      <dd className="mt-1 min-w-0 text-sm">{children}</dd>
     </div>
   );
 }

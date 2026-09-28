@@ -59,11 +59,11 @@ export function RunList({ runs, selectedId, className }: RunListProps) {
   return (
     <div
       className={cn(
-        "bg-card flex flex-col overflow-hidden rounded-xl border",
+        "bg-card flex flex-col overflow-hidden rounded-[1.25rem] ring-1 ring-foreground/10",
         className,
       )}
     >
-      <div className="space-y-2.5 border-b px-3 py-3">
+      <div className="space-y-3 border-b px-4 py-4">
         <div className="flex items-baseline justify-between gap-2">
           <h2 className="font-heading text-sm font-medium">Runs</h2>
           <span className="text-muted-foreground font-mono text-xs tabular-nums">
@@ -73,7 +73,7 @@ export function RunList({ runs, selectedId, className }: RunListProps) {
         <div className="relative">
           <SearchIcon
             aria-hidden="true"
-            className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2"
+            className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
           />
           <label htmlFor={filterId} className="sr-only">
             Filter runs by resume, job description or model
@@ -84,7 +84,7 @@ export function RunList({ runs, selectedId, className }: RunListProps) {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Filter runs…"
-            className="pl-8"
+            className="h-10 rounded-xl pl-9"
           />
         </div>
       </div>
@@ -116,35 +116,35 @@ function RunRow({ run, selected }: { run: RunSummary; selected: boolean }) {
         // the destination is a pane within this page, not a different one.
         aria-current={selected ? "true" : undefined}
         className={cn(
-          "focus-visible:ring-ring/50 relative block px-3 py-2.5 outline-none transition-colors focus-visible:ring-3 focus-visible:-outline-offset-2",
+          "focus-visible:ring-ring/50 relative block px-4 py-3.5 outline-none transition-colors focus-visible:ring-3 focus-visible:-outline-offset-2",
           selected ? "bg-muted" : "hover:bg-muted/50",
         )}
       >
         {selected ? (
           <span
             aria-hidden="true"
-            className="bg-primary absolute inset-y-1.5 left-0 w-0.5 rounded-r-full"
+            className="bg-primary absolute inset-y-2 left-0 w-[3px] rounded-r-full"
           />
         ) : null}
 
         <div className="flex items-baseline gap-2">
-          <span className="min-w-0 flex-1 truncate text-sm font-medium">
+          <span className="min-w-0 flex-1 truncate text-[0.9375rem] font-medium">
             {run.resume_name || "Untitled resume"}
           </span>
           <time
             dateTime={time.iso}
             title={time.absolute}
-            className="text-muted-foreground shrink-0 text-xs"
+            className="text-muted-foreground shrink-0 font-mono text-[0.6875rem]"
           >
             {time.relative}
           </time>
         </div>
 
-        <p className="text-muted-foreground mt-0.5 truncate text-sm">
+        <p className="text-muted-foreground mt-1 truncate text-[0.8125rem]">
           {describeTarget(run.jd_title, run.jd_excerpt)}
         </p>
 
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="text-muted-foreground truncate font-mono text-[0.6875rem]">
             v{run.resume_version} · {formatEngine(run.provider, run.model)}
             {pages ? ` · ${pages}` : ""}

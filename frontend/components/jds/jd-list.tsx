@@ -3,7 +3,15 @@
 import * as React from "react";
 import Link from "next/link";
 import { cn } from "cn";
-import { BriefcaseIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
+import {
+  ClipboardPasteIcon,
+  HistoryIcon,
+  PlusIcon,
+  SearchIcon,
+  SparklesIcon,
+  XIcon,
+  type LucideIcon,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,19 +121,7 @@ export function JdList({ selectedId, onCreate }: JdListProps) {
   }
 
   if (all.length === 0) {
-    return (
-      <EmptyState
-        icon={BriefcaseIcon}
-        title="No job descriptions yet"
-        description="Paste a posting once and tailor as many resumes against it as you like. Editing one later keeps every earlier version."
-        action={
-          <Button onClick={onCreate}>
-            <PlusIcon data-icon="inline-start" />
-            New job description
-          </Button>
-        }
-      />
-    );
+    return <EmptyLibrary onCreate={onCreate} />;
   }
 
   return (
@@ -134,6 +130,13 @@ export function JdList({ selectedId, onCreate }: JdListProps) {
         Job description library
       </h2>
 
+      <div className="flex items-baseline justify-between gap-2 px-1">
+        <p className="text-sm font-medium">Saved postings</p>
+        <span className="text-muted-foreground font-mono text-xs tabular-nums">
+          {all.length}
+        </span>
+      </div>
+
       <div className="flex items-center gap-2">
         <div className="relative min-w-0 flex-1">
           <Label htmlFor={searchId} className="sr-only">
@@ -141,7 +144,7 @@ export function JdList({ selectedId, onCreate }: JdListProps) {
           </Label>
           <SearchIcon
             aria-hidden="true"
-            className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2"
+            className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
           />
           <Input
             id={searchId}
@@ -155,7 +158,7 @@ export function JdList({ selectedId, onCreate }: JdListProps) {
             // `type=search` input; two of them side by side is a bug report
             // waiting to happen, and only the styled one is keyboard
             // labelled.
-            className="pr-7 pl-8 [&::-webkit-search-cancel-button]:hidden"
+            className="bg-card h-10 rounded-xl pr-8 pl-9 [&::-webkit-search-cancel-button]:hidden"
           />
           {query ? (
             <Button
@@ -164,7 +167,7 @@ export function JdList({ selectedId, onCreate }: JdListProps) {
               size="icon-xs"
               aria-label="Clear search"
               onClick={() => setQuery("")}
-              className="text-muted-foreground hover:text-foreground absolute top-1/2 right-1 -translate-y-1/2"
+              className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2"
             >
               <XIcon aria-hidden="true" />
             </Button>
@@ -178,7 +181,10 @@ export function JdList({ selectedId, onCreate }: JdListProps) {
             if (typeof next === "string" && isJdSort(next)) setSort(next);
           }}
         >
-          <SelectTrigger size="sm" aria-label="Sort job descriptions" className="shrink-0">
+          <SelectTrigger
+            aria-label="Sort job descriptions"
+            className="bg-card shrink-0 rounded-xl data-[size=default]:h-10"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -198,9 +204,11 @@ export function JdList({ selectedId, onCreate }: JdListProps) {
           over the top of their own typing. The visible copy updates instantly
           and is hidden from assistive tech; the announcement lands once the
           user stops typing. */}
-      <p aria-hidden="true" className="text-muted-foreground text-xs text-pretty">
-        {summary}
-      </p>
+      {query.trim() ? (
+        <p aria-hidden="true" className="text-muted-foreground px-1 text-xs text-pretty">
+          {summary}
+        </p>
+      ) : null}
       <span role="status" aria-live="polite" className="sr-only">
         {announcedSummary}
       </span>
@@ -217,7 +225,7 @@ export function JdList({ selectedId, onCreate }: JdListProps) {
           className="py-8"
         />
       ) : (
-        <ul className="bg-card divide-border divide-y overflow-hidden rounded-xl border">
+        <ul className="bg-card divide-border divide-y overflow-hidden rounded-[1.25rem] ring-1 ring-foreground/10">
           {visible.map((jd) => (
             <li key={jd.id}>
               <JdListRow jd={jd} selected={jd.id === selectedId} />
@@ -242,35 +250,101 @@ function JdListRow({ jd, selected }: { jd: JdSummary; selected: boolean }) {
       href={`/jds?id=${encodeURIComponent(jd.id)}`}
       aria-current={selected ? "true" : undefined}
       className={cn(
-        "block px-3 py-2.5 outline-none transition-colors",
+        "block px-4 py-3.5 outline-none transition-colors",
         // Raised above its siblings so the ring is not clipped by the
         // neighbouring row's background or the list's rounded overflow.
         "focus-visible:ring-ring/50 focus-visible:relative focus-visible:z-10 focus-visible:ring-3",
         selected
-          ? "bg-accent shadow-[inset_2px_0_0_0_var(--primary)]"
-          : "hover:bg-muted/60",
+          ? "bg-muted shadow-[inset_3px_0_0_0_var(--primary)]"
+          : "hover:bg-muted/50",
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="line-clamp-2 text-sm leading-snug font-medium">
+        <span className="line-clamp-2 text-[0.9375rem] leading-snug font-medium">
           {jd.title}
         </span>
-        <Badge variant="outline" className="shrink-0 font-mono">
+        <Badge variant="outline" className="bg-card shrink-0 font-mono">
           v{jd.version}
         </Badge>
       </div>
       {jd.excerpt ? (
-        <p className="text-muted-foreground mt-1 line-clamp-2 text-xs leading-relaxed">
+        <p className="text-muted-foreground mt-1.5 line-clamp-2 text-[0.8125rem] leading-5">
           {jd.excerpt}
         </p>
       ) : null}
       <p
-        className="text-muted-foreground mt-1.5 text-[0.6875rem]"
+        className="text-muted-foreground mt-2 font-mono text-[0.6875rem]"
         title={formatAbsolute(jd.updated_at)}
       >
         Updated {formatRelative(jd.updated_at)}
       </p>
     </Link>
+  );
+}
+
+const STEPS: { icon: LucideIcon; title: string; body: string }[] = [
+  {
+    icon: ClipboardPasteIcon,
+    title: "Paste the posting once",
+    body: "As published — responsibilities, requirements, the lot. It is stored verbatim and read as reference data, never as instructions.",
+  },
+  {
+    icon: SparklesIcon,
+    title: "Tailor any resume against it",
+    body: "Pick it on the tailor screen instead of pasting it again, as many times and with as many resumes as you like.",
+  },
+  {
+    icon: HistoryIcon,
+    title: "Edits keep the old wording",
+    body: "Changing the text records a new version; the earlier one is archived rather than overwritten.",
+  },
+];
+
+/**
+ * The empty library, laid out like the landing page's "How it works": what
+ * saving a posting gets you, in three numbered steps, then the way in.
+ */
+function EmptyLibrary({ onCreate }: { onCreate: () => void }) {
+  return (
+    <section aria-labelledby="jds-empty-heading" className="space-y-8">
+      <div className="bg-card flex flex-col items-start gap-5 rounded-[1.25rem] p-7 ring-1 ring-foreground/10 sm:flex-row sm:items-center sm:justify-between sm:p-9">
+        <div className="space-y-2">
+          <h2
+            id="jds-empty-heading"
+            className="font-heading text-2xl font-semibold tracking-tight"
+          >
+            No job descriptions yet
+          </h2>
+          <p className="text-muted-foreground max-w-xl text-[0.9375rem] leading-6 text-pretty">
+            Save the postings you are applying to, and every tailoring run is one
+            click away from the right one.
+          </p>
+        </div>
+        <Button onClick={onCreate} className="h-11 shrink-0 rounded-xl px-5 text-[0.9375rem]">
+          <PlusIcon data-icon="inline-start" />
+          Add your first posting
+        </Button>
+      </div>
+
+      <ol className="grid gap-5 md:grid-cols-3">
+        {STEPS.map(({ icon: Icon, title, body }, index) => (
+          <li
+            key={title}
+            className="bg-card flex flex-col gap-2 rounded-[1.25rem] p-6 ring-1 ring-foreground/10"
+          >
+            {/* The <ol> already numbers the steps for assistive tech. */}
+            <span aria-hidden="true" className="text-muted-foreground flex items-center gap-2 font-mono text-xs">
+              {String(index + 1).padStart(2, "0")}
+              <Icon className="size-3.5" />
+            </span>
+            <h3 className="font-heading text-lg font-semibold tracking-tight">{title}</h3>
+            <p className="text-muted-foreground text-[0.9375rem] leading-6 text-pretty">
+              {body}
+            </p>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 

@@ -2,11 +2,12 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeftIcon } from "lucide-react";
+import { ArrowLeftIcon, UploadIcon } from "lucide-react";
 import { toast } from "sonner";
-import { ButtonLink } from "@/components/ui/button";
-import { PageContainer, PageHeader } from "@/components/common";
+import { Button, ButtonLink } from "@/components/ui/button";
+import { PageContainer, PageHero } from "@/components/common";
 import { useCreateResume } from "@/hooks/use-resumes";
+import { ImportResumeDialog } from "./import-dialog";
 import { ResumeBuilder } from "./resume-builder";
 import { emptyResumeForm } from "./resume-form";
 
@@ -25,21 +26,33 @@ export function NewResumeView() {
   // Computed once: `useForm` reads defaults at mount, and a fresh object on
   // every render would do nothing except allocate.
   const defaultValues = React.useMemo(() => emptyResumeForm(), []);
+  const [importing, setImporting] = React.useState(false);
 
   return (
-    <PageContainer width="wide">
-      <PageHeader
-        title="New resume"
+    <PageContainer width="wide" className="sm:pt-12 sm:pb-16">
+      <PageHero
+        eyebrow="New resume · no AI key needed"
+        title="Write your resume"
         description="Fill in what you can and watch the PDF compile beside you. Nothing is saved until you create it."
         actions={
-          <ButtonLink variant="ghost" size="sm" href="/resumes">
-            <ArrowLeftIcon data-icon="inline-start" />
-            All resumes
-          </ButtonLink>
+          <>
+            <ButtonLink variant="ghost" href="/resumes" className="h-10 rounded-xl px-3">
+              <ArrowLeftIcon data-icon="inline-start" />
+              All resumes
+            </ButtonLink>
+            <Button
+              variant="outline"
+              className="h-10 rounded-xl px-4"
+              onClick={() => setImporting(true)}
+            >
+              <UploadIcon data-icon="inline-start" />
+              Import instead
+            </Button>
+          </>
         }
       />
 
-      <div className="mt-6">
+      <div className="mt-10">
         <ResumeBuilder
           mode="create"
           defaultValues={defaultValues}
@@ -58,6 +71,12 @@ export function NewResumeView() {
           }}
         />
       </div>
+
+      <ImportResumeDialog
+        open={importing}
+        onOpenChange={setImporting}
+        target={{ kind: "new" }}
+      />
     </PageContainer>
   );
 }

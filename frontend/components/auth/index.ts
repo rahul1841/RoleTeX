@@ -13,10 +13,4 @@
 export { AuthRuntime } from "./auth-runtime";
 export { AuthShell } from "./auth-shell";
 export { ResendVerification } from "./resend-verification";
-export {
-  TOKEN_ROUTES,
-  legacyHashRoute,
-  tokenFromFragment,
-  tokenLinkHref,
-  type TokenRoute,
-} from "./token-link";
+export { tokenFromFragment } from "./token-link";

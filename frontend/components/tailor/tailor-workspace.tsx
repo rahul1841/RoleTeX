@@ -3,14 +3,14 @@
 import * as React from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { ArrowLeftIcon, HistoryIcon, RotateCcwIcon } from "lucide-react";
+import { Button, ButtonLink } from "@/components/ui/button";
 import {
-  FileTextIcon,
-  GitCompareIcon,
-  ListChecksIcon,
-  RotateCcwIcon,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { CardSkeleton, LoadingState } from "@/components/common";
+  CardSkeleton,
+  ConfirmDialog,
+  LoadingState,
+  PageHero,
+} from "@/components/common";
 import { useSession } from "@/hooks/use-session";
 import { useTailorRun } from "@/hooks/use-tailor";
 import type { TailorRequest } from "@/lib/api/types";
@@ -20,13 +20,18 @@ import { SetupPanel, type RunLabels } from "./setup-panel";
 import { TailorError } from "./tailor-error";
 
 /**
- * The tailoring workspace: inputs, the long wait, and the review.
+ * The tailoring workspace: three screens in the landing page's style — the
+ * setup, the long wait, and the review.
  *
  * Two deployment shapes, one screen. In `multi_user` the run names a saved
  * resume and either a saved or a pasted job description; in `demo` there is no
  * database, so the server tailors its built-in sample resume against pasted
  * text. That is why this page is NOT wrapped in <RequiresStorage>: unlike the
  * list screens, it genuinely works without storage.
+ *
+ * The setup form stays mounted while a run or a review is on screen — only
+ * hidden — so "Edit inputs" brings back exactly what was entered rather than a
+ * fresh form re-running its preselection.
  *
  * The last request is kept so "Run again" and "Run again without compiling"
  * can reissue exactly what was sent, without depending on the form still
@@ -45,7 +50,8 @@ export function TailorWorkspace() {
 
   const storage = session.mode === "multi_user";
 
-  const [setupOpen, setSetupOpen] = React.useState(true);
+  const [editing, setEditing] = React.useState(true);
+  const [confirmRerun, setConfirmRerun] = React.useState(false);
   const [lastRequest, setLastRequest] = React.useState<TailorRequest | null>(
     null,
   );
@@ -64,11 +70,11 @@ export function TailorWorkspace() {
             : "No PDF was compiled for this run.",
         },
       );
-      setSetupOpen(false);
+      setEditing(false);
     },
     onError: () => {
       // The failure needs the inputs back on screen to be fixable.
-      setSetupOpen(true);
+      setEditing(true);
     },
   });
 
@@ -76,6 +82,7 @@ export function TailorWorkspace() {
     (request: TailorRequest, runLabels: RunLabels) => {
       setLastRequest(request);
       setLabels(runLabels);
+      setEditing(false);
       run.start(request);
     },
     [run],
@@ -98,6 +105,7 @@ export function TailorWorkspace() {
 
   const cancel = React.useCallback(() => {
     run.cancel();
+    setEditing(true);
     toast("Run cancelled", {
       description:
         "The app stopped waiting. If the provider had already started, it may still bill for the call.",
@@ -112,41 +120,89 @@ export function TailorWorkspace() {
     );
   }
 
+  const reviewing = !run.isRunning && Boolean(run.result) && !editing;
+  const showSetup = !run.isRunning && !reviewing;
+  const current = labels ?? UNKNOWN_LABELS;
+
   return (
-    <div className="space-y-6">
-      <SetupPanel
-        storage={storage}
-        user={session.user}
-        initialResumeId={searchParams.get("resume") ?? undefined}
-        initialJdId={searchParams.get("jd") ?? undefined}
-        isRunning={run.isRunning}
-        hasResult={Boolean(run.result)}
-        onRun={start}
-        open={setupOpen}
-        onOpenChange={setSetupOpen}
-      />
+    <>
+      <div hidden={!showSetup} className="space-y-10">
+        <PageHero
+          eyebrow={run.result ? "Editing inputs" : "New run"}
+          title="Tailor a resume"
+          description="Pick a resume, point it at a job, and review every change the model proposes before you download."
+          actions={
+            run.result ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 rounded-xl px-4"
+                onClick={() => setEditing(false)}
+              >
+                <ArrowLeftIcon data-icon="inline-start" />
+                Back to review
+              </Button>
+            ) : storage ? (
+              <ButtonLink href="/history" variant="outline" className="h-10 rounded-xl px-4">
+                <HistoryIcon data-icon="inline-start" />
+                Past runs
+              </ButtonLink>
+            ) : null
+          }
+        />
+
+        {run.error ? (
+          <TailorError
+            error={run.error}
+            onRetry={retry}
+            onRetryWithoutCompiling={retryWithoutCompiling}
+          />
+        ) : run.cancelled ? (
+          <CancelledNotice onRunAgain={retry} canRunAgain={Boolean(lastRequest)} />
+        ) : null}
+
+        <SetupPanel
+          storage={storage}
+          user={session.user}
+          initialResumeId={searchParams.get("resume") ?? undefined}
+          initialJdId={searchParams.get("jd") ?? undefined}
+          isRunning={run.isRunning}
+          hasResult={Boolean(run.result)}
+          onRun={start}
+        />
+      </div>
 
       {run.isRunning ? (
         <RunProgress
           compile={lastRequest?.compile ?? true}
-          provider={labels?.provider ?? UNKNOWN_LABELS.provider}
-          model={labels?.model ?? ""}
+          provider={current.provider}
+          model={current.model}
+          resume={current.resume}
+          jd={current.jd}
           onCancel={cancel}
         />
-      ) : run.error ? (
-        <TailorError
-          error={run.error}
-          onRetry={retry}
-          onRetryWithoutCompiling={retryWithoutCompiling}
+      ) : null}
+
+      {reviewing && run.result ? (
+        <ResultReview
+          result={run.result}
+          resume={current.resume}
+          jd={current.jd}
+          onEditInputs={() => setEditing(true)}
+          onRunAgain={() => setConfirmRerun(true)}
         />
-      ) : run.cancelled ? (
-        <CancelledNotice onRunAgain={retry} canRunAgain={Boolean(lastRequest)} />
-      ) : run.result ? (
-        <ResultReview result={run.result} />
-      ) : (
-        <IdleExplainer storage={storage} />
-      )}
-    </div>
+      ) : null}
+
+      <ConfirmDialog
+        open={confirmRerun}
+        onOpenChange={setConfirmRerun}
+        destructive={false}
+        title="Run tailoring again?"
+        confirmLabel="Run again"
+        description={`This replaces the result you are reviewing and spends another ${current.provider} completion${lastRequest?.compile === false ? "" : " and another Tectonic compile"}.`}
+        onConfirm={retry}
+      />
+    </>
   );
 }
 
@@ -174,66 +230,6 @@ function CancelledNotice({
           Run again
         </Button>
       ) : null}
-    </div>
-  );
-}
-
-const PRODUCES = [
-  {
-    icon: ListChecksIcon,
-    title: "A change list",
-    body: "Every edit the model proposed, before and after, one card each.",
-  },
-  {
-    icon: GitCompareIcon,
-    title: "A unified diff",
-    body: "The same edits as a patch, for reading the whole set at once.",
-  },
-  {
-    icon: FileTextIcon,
-    title: "A compiled PDF",
-    body: "Rendered by Tectonic from the locked template, one page by default.",
-  },
-] as const;
-
-/**
- * What a run will produce, before there is anything to show.
- *
- * Not decoration: the three outputs are the product's contract, and the last
- * line is the promise rules.md R-14 makes — the model's output is never
- * written back to a saved resume, so reviewing it is the point rather than a
- * formality.
- */
-function IdleExplainer({ storage }: { storage: boolean }) {
-  return (
-    <div className="bg-card rounded-xl p-5 ring-1 ring-foreground/10">
-      <h2 className="font-heading text-sm font-medium">What a run gives you</h2>
-      <div className="mt-4 grid gap-5 sm:grid-cols-3">
-        {PRODUCES.map(({ icon: Icon, title, body }) => (
-          <div key={title} className="flex gap-3">
-            <span
-              aria-hidden="true"
-              className="bg-muted text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-lg"
-            >
-              <Icon className="size-4" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm font-medium">{title}</p>
-              <p className="text-muted-foreground mt-0.5 text-xs text-pretty">
-                {body}
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-      <p className="text-muted-foreground mt-5 border-t pt-4 text-xs text-pretty">
-        {storage
-          ? "Nothing is written back to your saved resume — a run produces a document to review and download, and the record of it in History. "
-          : "Nothing is stored on this server — a run produces a document to review and download, and that is all. "}
-        A run costs one provider call and, unless you turn it off, one LaTeX
-        compile, so it never starts on its own and is never retried
-        automatically.
-      </p>
     </div>
   );
 }

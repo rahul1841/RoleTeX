@@ -5,10 +5,12 @@ import {
   ListSkeleton,
   LoadingState,
   PageContainer,
-  PageHeader,
+  PageHero,
   RequiresStorage,
 } from "@/components/common";
+import { ButtonLink } from "@/components/ui/button";
 import { HistoryWorkspace } from "@/components/history";
+import { SparklesIcon } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "History",
@@ -32,10 +34,17 @@ export const metadata: Metadata = {
  */
 export default function HistoryPage() {
   return (
-    <PageContainer width="wide">
-      <PageHeader
+    <PageContainer width="wide" className="sm:pt-12 sm:pb-16">
+      <PageHero
+        eyebrow="Tailoring runs"
         title="History"
         description="Every tailoring run, with the changes it proposed, the diff, and the LaTeX it produced. Recompiling a run costs no AI tokens."
+        actions={
+          <ButtonLink href="/tailor" className="h-10 rounded-xl px-4">
+            <SparklesIcon data-icon="inline-start" />
+            New run
+          </ButtonLink>
+        }
       />
       <RequiresStorage feature="Run history">
         <Suspense fallback={<HistorySkeleton />}>
@@ -49,8 +58,8 @@ export default function HistoryPage() {
 /** Shaped like the two-pane workspace, so nothing jumps when it resolves. */
 function HistorySkeleton() {
   return (
-    <LoadingState label="Loading your tailoring history…" className="mt-6">
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,21rem)_minmax(0,1fr)]">
+    <LoadingState label="Loading your tailoring history…" className="mt-10">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] xl:gap-8">
         <ListSkeleton rows={5} />
         <CardSkeleton className="hidden lg:block" />
       </div>
