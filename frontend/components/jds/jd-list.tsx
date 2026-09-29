@@ -300,10 +300,7 @@ const STEPS: { icon: LucideIcon; title: string; body: string }[] = [
   },
 ];
 
-/**
- * The empty library, laid out like the landing page's "How it works": what
- * saving a posting gets you, in three numbered steps, then the way in.
- */
+/** Empty library: what saving a posting gets you, and the way in. */
 function EmptyLibrary({ onCreate }: { onCreate: () => void }) {
   return (
     <section aria-labelledby="jds-empty-heading" className="space-y-8">

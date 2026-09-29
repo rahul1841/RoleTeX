@@ -15,10 +15,7 @@ import { NAV_ITEMS, isNavItemActive, type NavItem } from "./nav";
 const ITEM_BASE =
   "group relative flex items-center rounded-lg text-sm transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
 
-/**
- * The drawer lists the items as rows with icons; the header runs them as a
- * single line of text tabs, the way the landing page's header does.
- */
+/** Drawer: rows with icons. Header: a line of text tabs. */
 const ORIENTATION = {
   vertical: {
     list: "flex flex-col gap-0.5",

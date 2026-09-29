@@ -33,8 +33,7 @@ import type { ResumeSummary } from "@/lib/api/types";
  * Two ways in, and they are genuinely different: the builder writes a resume
  * with no model involved and no provider key needed, while importing sends a
  * document to an LLM. Both are offered here, with the no-key path as the
- * primary button, because it is the one that always works. An empty library
- * turns the two into the whole page, numbered like the landing page's steps.
+ * primary button, because it is the one that always works.
  */
 const NEW_RESUME = { pathname: "/resumes", query: { new: "1" } } as const;
 
@@ -153,7 +152,6 @@ export function ResumeLibrary() {
   );
 }
 
-/** The last tile in the grid: the same two ways in, at card size. */
 function AddTile({ onImport }: { onImport: () => void }) {
   return (
     <div className="text-muted-foreground flex min-h-80 w-full flex-col items-center justify-center gap-4 rounded-[1.25rem] border border-dashed p-6 text-center">
@@ -178,10 +176,7 @@ function AddTile({ onImport }: { onImport: () => void }) {
   );
 }
 
-/**
- * The empty library: the two ways in, laid out like the landing page's "How it
- * works" — a picture on the code surface, a mono number, a heading, one line.
- */
+/** Empty library: the two ways in. */
 function WaysIn({ onImport }: { onImport: () => void }) {
   return (
     <ol className="grid gap-6 lg:grid-cols-2">
@@ -257,7 +252,7 @@ function WayIn({
   );
 }
 
-/** A few builder fields, drawn with spans: decoration, never focusable. */
+/** Decorative illustration (spans, not real inputs). */
 function WriteVisual() {
   return (
     <div className="flex w-full max-w-72 flex-col gap-2">
@@ -280,7 +275,6 @@ function WriteVisual() {
   );
 }
 
-/** A PDF dropped onto a drop zone, drawn with spans. */
 function ImportVisual() {
   return (
     <div className="flex w-full max-w-72 flex-col items-center gap-3 rounded-xl border-2 border-dashed px-6 py-6">

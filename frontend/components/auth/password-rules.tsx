@@ -5,18 +5,10 @@ import { CheckIcon } from "lucide-react";
 import { z } from "zod";
 
 /**
- * The password rules, shown as a live checklist wherever a password is set:
- * registration, reset, and the change-password form in Settings.
- *
- * MIRRORS `password_policy_error` in backend/app/security.py — keep the two
- * identical, the same way `EMAIL_PATTERN` mirrors `_EMAIL_RE`. The server stays
- * the authority: it re-checks everything here, and it alone enforces the two
- * rules a checklist cannot show before you type them (not one of the commonest
- * passwords, and not containing your email name). Its `weak_password` message
- * lands on the field when either trips.
+ * Password rules for new passwords. Mirrors `password_policy_error` in
+ * backend/app/security.py — keep them identical; the server stays the authority.
  */
 
-/** `PASSWORD_MIN_LENGTH` / `PASSWORD_MAX_LENGTH` in backend/app/security.py. */
 export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_MAX_LENGTH = 128;
 
@@ -42,7 +34,6 @@ export const PASSWORD_RULES: readonly PasswordRule[] = [
   },
 ];
 
-/** The first unmet rule's message, for form validation; null when all pass. */
 export function passwordRuleError(password: string): string | null {
   if (password.length > PASSWORD_MAX_LENGTH) {
     return `Use at most ${PASSWORD_MAX_LENGTH} characters`;
@@ -54,7 +45,7 @@ export function passwordRuleError(password: string): string | null {
   return unmet ? `Your password needs ${unmet.label.toLowerCase()}` : null;
 }
 
-/** A zod field for a NEW password: required, and every rule above met. */
+/** Zod field for a new password: required and every rule met. */
 export function newPasswordField(requiredMessage: string) {
   return z
     .string()
@@ -66,20 +57,13 @@ export function newPasswordField(requiredMessage: string) {
     });
 }
 
-/**
- * The checklist itself. Each rule ticks as it is met, so the user sees what is
- * still missing while typing rather than after a submit.
- *
- * `aria-live="polite"` on the count only: announcing every rule flip would talk
- * over the typing, while "3 of 5 met" is the useful summary.
- */
+/** Live checklist; only the "N of 5 met" summary is announced to screen readers. */
 export function PasswordChecklist({
   password,
   id,
   className,
 }: {
   password: string;
-  /** Referenced from the input's `aria-describedby`. */
   id?: string;
   className?: string;
 }) {

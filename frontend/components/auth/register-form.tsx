@@ -23,7 +23,7 @@ const registerSchema = z.object({
   name: nameField,
   email: emailField,
   password: newPasswordField("Choose a password"),
-  // Checked by hand on the code step: it is empty and irrelevant on the first.
+  // Validated on the code step only.
   code: z.string(),
 });
 
@@ -50,23 +50,8 @@ const CODE_PATTERN = /^[0-9]{6}$/;
 type Step = "details" | "code";
 
 /**
- * Creating an account: `POST /api/auth/register/code`, then
- * `POST /api/auth/register` with the code it mailed. Always both — the server
- * refuses an account without a valid code.
- *
- * Two steps on one form. The details step collects name, email and password
- * and checks the password against the live checklist; submitting it mails a
- * six-digit code. The code step takes that code and sends everything together.
- * Nothing is created until the code is right, so an abandoned sign-up leaves no
- * account behind, and the account that is created starts verified.
- *
- * Going back from the code step keeps every value, and a server rejection is
- * routed to the step that can fix it: a wrong code stays on the code step, a
- * weak password sends the user back to the password.
- *
- * It does not ask for the password twice. The reveal toggle on <PasswordInput>
- * catches the typo a confirmation field is there to catch, and does it while
- * the user can still see what they typed.
+ * Sign-up in two steps: details, then the 6-digit code mailed by
+ * `POST /api/auth/register/code`. Nothing is created until the code is right.
  */
 export function RegisterForm() {
   const createAccount = useRegister();
@@ -104,8 +89,6 @@ export function RegisterForm() {
 
   function handleFailure(error: unknown) {
     if (apiErrorCode(error) === "registration_disabled") {
-      // Remembered by the (auth) layout, so /sign-in stops advertising an
-      // account this server will never create.
       registration.markDisabled();
       return;
     }

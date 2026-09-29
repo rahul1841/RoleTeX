@@ -51,13 +51,6 @@ import { PickerSelect, type PickerOption } from "./picker-select";
  * account: the server tailors its own built-in sample resume against pasted
  * text, which is a real product mode rather than a degraded one, so the resume
  * picker and the saved-JD tab simply do not appear there.
- *
- * Laid out like the landing page's "How it works": three numbered steps in one
- * card, a run bar along its foot that says what the run will spend, and — on
- * wide screens — the resume about to be tailored, drawn on the same dotted
- * canvas the landing page uses. The workspace hides the whole panel while a
- * run is in flight or a result is under review, and shows it again for
- * "Edit inputs" or after a failure, since neither is fixable from a hidden form.
  */
 
 // Stable identities, so the preselection effects do not re-run every render.
@@ -626,13 +619,9 @@ export function SetupPanel({
   );
 }
 
-/** Taller select triggers, matching the landing page's larger controls. */
 const TALL_FIELD = "data-[size=default]:h-11 rounded-xl pl-3.5 pr-3";
 
-/**
- * One numbered section of the form, the way the landing page numbers its
- * steps: a mono `01` in its own column, the content beside it.
- */
+/** One numbered section of the form. */
 function Step({
   number,
   className,
@@ -660,11 +649,7 @@ function StepTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
-/**
- * A run option as a toggle pill. A real checkbox underneath — visually hidden,
- * still focusable and announced with its hint — so it keeps native keyboard
- * and form behaviour.
- */
+/** A run option as a toggle pill over a visually hidden, real checkbox. */
 function OptionPill({
   id,
   label,
@@ -718,7 +703,7 @@ function OptionPill({
   );
 }
 
-/** The picture beside the form of what is about to be tailored. */
+/** Preview of the resume about to be tailored. */
 function ResumePreviewPanel({
   storage,
   resumeId,
@@ -781,7 +766,7 @@ function ResumePreviewPanel({
   );
 }
 
-/** Restated from the landing page's safeguards; the server enforces each. */
+/** Same rules as the landing page's safeguards; enforced server-side. */
 const SAFEGUARD_RULES = [
   "identity → never sent",
   "bullet_rewrites ≤ 6",

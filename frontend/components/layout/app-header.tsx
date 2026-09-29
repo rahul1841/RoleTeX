@@ -17,14 +17,12 @@ export interface AppHeaderProps {
   needsEmailVerification: boolean;
   /** False while the session is still resolving, or when it failed to. */
   showNav: boolean;
-  /** The session is still resolving: hold the nav's place with skeletons. */
+  /** Show nav skeletons while the session resolves. */
   loading?: boolean;
 }
 
 /**
- * The one persistent bar across the top of the app, and — from `lg` up — the
- * navigation too, as a line of text tabs in the landing page's style. Below
- * `lg` the same items live in the <MobileNav> drawer.
+ * The top bar; from `lg` up it also holds the navigation (a drawer below).
  *
  * It renders in every shell state — booting, failed, signed out, ready — so the
  * product identity and the theme control never disappear. Only the parts that

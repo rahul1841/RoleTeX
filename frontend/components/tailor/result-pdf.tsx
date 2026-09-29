@@ -24,12 +24,8 @@ export interface ResultPdfProps {
   filename: string;
   pageCount: number | null;
   compiler: CompilerReport;
-  /**
-   * False where the surrounding screen already names the panel — the tailor
-   * review's PDF / diff / LaTeX tabs — so the heading is not said twice.
-   */
+  /** False when the surrounding tabs already label the panel. */
   showHeader?: boolean;
-  /** Height of the viewer itself. */
   viewerClassName?: string;
   className?: string;
 }

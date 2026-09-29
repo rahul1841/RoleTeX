@@ -8,7 +8,7 @@ export interface SettingsSectionProps {
   description?: React.ReactNode;
   /** Section-level action, right-aligned against the heading. */
   actions?: React.ReactNode;
-  /** The section's place on the page — "01" — shown as the landing page numbers steps. */
+  /** Display number, e.g. "01". */
   number?: string;
   tone?: "default" | "danger";
   children: React.ReactNode;
@@ -16,17 +16,8 @@ export interface SettingsSectionProps {
 }
 
 /**
- * One section of the settings screen, as a numbered card — the same shape the
- * landing page, the tailor screen and the resume builder use for a step.
- *
- * Every section is a real landmark with a real <h2>, so heading navigation and
- * the in-page nav describe the same structure. `scroll-mt` is what stops the
- * sticky application header from covering a heading when an anchor link jumps
- * to it.
- *
- * The page stays one scrolling document (see settings-screen.tsx); the cards
- * only separate unrelated decisions visually. `tone="danger"` is for the one
- * section whose actions cannot be undone.
+ * One settings section as a numbered card with a real <h2>. `scroll-mt` keeps
+ * the heading clear of the sticky header on anchor jumps.
  */
 export function SettingsSection({
   id,
@@ -88,12 +79,8 @@ export function SettingsSection({
 }
 
 /**
- * A flush-bordered surface for a section's body, nested inside the section's
- * card — so a quieter tint and a hairline rather than a second card.
- *
- * `divide` splits it into rows that share one outline instead of stacking
- * separate boxes — the right shape for a provider list or a session list, where
- * the rows are variants of one thing.
+ * A bordered surface inside a section card. `divide` splits it into rows that
+ * share one outline (provider list, session list).
  */
 export function SettingsPanel({
   className,

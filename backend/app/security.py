@@ -108,9 +108,7 @@ def dummy_password_hash() -> str:
     return cached
 
 
-#: The most-used passwords that still satisfy the character-class rules below,
-#: lowercased. Composition rules alone admit "Password1!"; this list is what
-#: stops the handful of choices every credential-stuffing list tries first.
+#: Common passwords that still pass the character-class rules (lowercased).
 _COMMON_PASSWORDS = frozenset(
     {
         "password1!",
@@ -148,16 +146,8 @@ def password_policy_error(
 ) -> Optional[str]:
     """Return a human-readable policy violation, or None when acceptable.
 
-    The rules are the ones sign-up forms conventionally show: a length range,
-    and at least one lowercase letter, uppercase letter, digit and symbol. On
-    top of those, two checks composition cannot express: the password is not on
-    a short list of the commonest compliant passwords, and it does not contain
-    the account's own email name. frontend/components/auth/password-rules.ts
-    mirrors the first five as a live checklist; this function stays the
-    authority, and it is the only place the last two are enforced.
-
-    Applied when a password is *set* (register, change, reset), never on sign-in,
-    so accounts created under an older, looser policy can still sign in.
+    Mirrored by frontend/components/auth/password-rules.tsx; keep them in sync.
+    Checked only when a password is set, never at sign-in.
     """
 
     if not isinstance(password, str) or len(password) < PASSWORD_MIN_LENGTH:
@@ -233,24 +223,15 @@ SIGNUP_CODE_TTL_MINUTES = 10
 
 
 def new_signup_code() -> str:
-    """A uniformly random numeric code, e.g. ``"048213"``.
-
-    Short enough to type from a phone, which is its only job. It is not a
-    long-lived secret: it expires in minutes and allows a handful of attempts
-    (see :class:`app.db.SignupCodeStore`), which is what makes six digits safe.
-    """
+    """Random 6-digit code; safe because it expires fast and allows few guesses."""
 
     return "".join(str(secrets.randbelow(10)) for _ in range(SIGNUP_CODE_LENGTH))
 
 
 def hash_signup_code(secret_key: str, email: str, code: str) -> str:
-    """HMAC-SHA256 of a sign-up code, keyed by ``APP_SECRET_KEY``.
+    """HMAC-SHA256 of email + code, keyed by ``APP_SECRET_KEY``.
 
-    Keyed rather than a bare SHA-256 because the code space is only 10^6: an
-    unkeyed hash of a six-digit code falls to exhaustive search in well under a
-    second, so a database leak would hand over every live code. With the key,
-    the stored value is useless without the application's secret. The address
-    is folded in so one code never verifies another address.
+    Keyed because a plain hash of a 6-digit code is trivially brute-forced.
     """
 
     message = "{0}\n{1}".format(email, code).encode("utf-8")

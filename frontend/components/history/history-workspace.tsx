@@ -168,10 +168,7 @@ const KEPT: { icon: LucideIcon; title: string; body: string }[] = [
   },
 ];
 
-/**
- * No runs yet: what a run leaves behind, in the landing page's numbered
- * style, and the way to make the first one.
- */
+/** No runs yet: what a run keeps, and the way to make one. */
 function EmptyHistory() {
   return (
     <section aria-labelledby="history-empty-heading" className="mt-10 space-y-8">

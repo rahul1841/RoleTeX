@@ -279,22 +279,11 @@ class AuthTokenStore:
 
 
 class SignupCodeStore:
-    """One pending sign-up code per email address, before any account exists.
+    """Pending sign-up codes, one per email, stored only as an HMAC.
 
-    A code is stored only as an HMAC (see ``security.hash_signup_code``), with
-    an expiry and a failed-attempt counter:
-
-    - ``put`` replaces whatever code the address had, so requesting a new code
-      always invalidates the old one and resets the attempt count.
-    - ``redeem`` is a single conditional ``find_one_and_delete`` on the hash, an
-      unexpired ``expires_at`` and ``attempts < max_attempts``, so a code works
-      exactly once even under concurrent submits.
-    - ``record_failure`` is an atomic ``$inc``; once the cap is reached the code
-      is deleted outright and a new one has to be requested. With a six-digit
-      code that caps guessing at ``max_attempts`` in 10^6 per code sent, and
-      sending is itself rate-limited per address and per IP.
-
-    The TTL index on ``expires_at`` sweeps abandoned codes.
+    ``redeem`` is an atomic find-and-delete, so a code works once even under
+    concurrent submits; ``max_attempts`` wrong guesses delete it. A TTL index
+    on ``expires_at`` sweeps expired codes.
     """
 
     def __init__(self, collection: Any) -> None:
@@ -328,11 +317,7 @@ class SignupCodeStore:
         return doc is not None
 
     async def record_failure(self, email: str, max_attempts: int) -> Optional[int]:
-        """Count a wrong guess; returns attempts left, or None when no live code.
-
-        None covers "never sent", "expired" and "just locked out" alike — the
-        caller tells the user to request a new code in all three cases.
-        """
+        """Count a wrong guess; return attempts left, or None if no live code."""
 
         doc = await self._collection.find_one_and_update(
             {"email": email, "expires_at": {"$gt": _utc_now()}},

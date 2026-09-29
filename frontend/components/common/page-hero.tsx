@@ -5,15 +5,8 @@ import { cn } from "cn";
 import { useRouteHeadingFocus } from "@/components/layout/route-focus";
 
 /**
- * A screen heading in the landing page's voice: a small mono status chip, a
- * large tight headline, one line of plain explanation, and the screen's
- * actions on the right.
- *
- * The redesigned screens (tailor, resumes) use this in place of <PageHeader>.
- * The tailor screen renders one per state, because its heading follows the
- * run — "Tailor a resume", then "Tailoring your resume", then "4 changes to
- * review". Like <PageHeader> it owns the page's single <h1> and takes focus
- * after a client-side navigation.
+ * Landing-page-style screen heading: status chip, large title, one-line
+ * description, actions. Owns the page's <h1> and takes focus on navigation.
  */
 
 const CHIP_TONES = {
@@ -23,10 +16,8 @@ const CHIP_TONES = {
 } as const;
 
 export interface PageHeroProps {
-  /** The status chip above the title: "New run", "3 resumes". */
   eyebrow: React.ReactNode;
   eyebrowTone?: keyof typeof CHIP_TONES;
-  /** Leading icon for the chip; a small square in the accent by default. */
   eyebrowIcon?: React.ReactNode;
   title: React.ReactNode;
   description?: React.ReactNode;
@@ -84,11 +75,7 @@ export function PageHero({
   );
 }
 
-/**
- * The dotted "desk" the landing page draws its product pictures on. In the app
- * it holds real things — a resume, a run's placeholder page, a review, a live
- * preview — so the app reads as the same product as its front door.
- */
+/** The landing page's dotted background panel. */
 export function Canvas({
   className,
   ...props

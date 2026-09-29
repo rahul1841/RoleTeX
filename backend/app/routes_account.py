@@ -202,11 +202,7 @@ def _signup_code_email(code: str, ttl_minutes: int) -> Tuple[str, str]:
 
 
 def _already_registered_email() -> Tuple[str, str]:
-    """Sent instead of a code when the address already has an account.
-
-    The HTTP response is identical either way (see ``request_signup_code``); the
-    owner of the address is the only one who learns it is registered.
-    """
+    """Sent instead of a code when the address is already registered."""
 
     body = (
         "Someone tried to create a RoleTeX account with this address, but you "
@@ -240,14 +236,10 @@ def register_account_routes(app: FastAPI, services: Any) -> None:
     async def request_signup_code(
         payload: SignupCodeRequest, request: Request
     ) -> MailDispatchResponse:
-        """Mail a six-digit code that ``POST /api/auth/register`` will require.
+        """Mail the 6-digit code that ``POST /api/auth/register`` requires.
 
-        The response is the same whether or not the address already has an
-        account, so this cannot be used to check who is registered: an existing
-        account gets a "you already have an account" email instead of a code.
-        Sending shares the tight per-IP and per-address mail budget with the
-        password-reset route, which also bounds how many codes can be guessed
-        against.
+        Same response for registered addresses (they get a "you already have an
+        account" email instead), so it can't be used to check who is registered.
         """
 
         database = _database_or_503()

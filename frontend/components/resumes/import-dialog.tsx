@@ -181,7 +181,6 @@ function ProviderPicker({
   );
 }
 
-/** One of the two sources, drawn as a choice card inside the tab list. */
 function SourceTab({
   value,
   icon: Icon,
@@ -409,8 +408,7 @@ function ImportDialogBody({
           }}
           className="gap-4"
         >
-          {/* The two sources as choice cards; still a real tab list, so the
-              arrow keys and the selected state work as they should. */}
+          {/* Choice cards, but still a real tab list for keyboard support. */}
           <TabsList className="grid h-auto w-full grid-cols-2 gap-2 bg-transparent p-0 group-data-horizontal/tabs:h-auto">
             <SourceTab
               value="pdf"

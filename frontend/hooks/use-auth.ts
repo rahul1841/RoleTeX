@@ -110,11 +110,7 @@ export function useLogin() {
   });
 }
 
-/**
- * `POST /api/auth/register/code` — mail the six-digit code that registering
- * requires. Touches no cache: nothing about the session changes until the code
- * comes back with the rest of the form.
- */
+/** `POST /api/auth/register/code` — mails the sign-up code. No cache changes. */
 export function useRequestSignupCode() {
   return useMutation({
     mutationFn: (body: SignupCodeRequest) => requestSignupCode(body),

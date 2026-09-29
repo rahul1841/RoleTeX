@@ -232,8 +232,6 @@ export function ResumeBuilder({
           )}
         >
           <form onSubmit={handleSubmit} noValidate className="min-w-0">
-            {/* Floats under the app header: the section jumps on the left, the
-                save on the right, both reachable from anywhere in a long form. */}
             <div className="bg-card/90 supports-backdrop-filter:bg-card/75 sticky top-[4.75rem] z-20 mb-6 flex flex-wrap items-center gap-2 rounded-2xl py-1.5 pr-1.5 pl-1.5 shadow-[0_8px_24px_rgb(21_24_31/0.06)] ring-1 ring-foreground/10 backdrop-blur lg:top-[5.25rem]">
               <SectionRail />
               <div className="flex shrink-0 items-center gap-2.5">

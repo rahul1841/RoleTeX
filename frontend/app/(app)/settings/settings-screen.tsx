@@ -78,8 +78,7 @@ export function SettingsScreen() {
     [storageAvailable],
   );
 
-  // Numbered in the order the index lists them, so "03" means the same
-  // section in the nav and on the card.
+  // Same numbering as the index.
   const number = (id: string) => {
     const index = navItems.findIndex((item) => item.id === id);
     return index >= 0 ? String(index + 1).padStart(2, "0") : undefined;

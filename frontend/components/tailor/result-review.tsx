@@ -25,17 +25,8 @@ import { Canvas, PageHero } from "@/components/common";
  *
  * rules.md R-14: "The API always returns the change list + unified diff
  * alongside the PDF; the UI must keep showing changes with the preview. Never
- * silently auto-apply." So the change list is never behind a tab: it renders
- * in full, unconditionally, in the left column, and the document sits beside
- * it. The right column's tabs only choose how to read the *output* — the PDF,
- * the same edits as a unified diff, or the LaTeX the server rendered. There is
- * no state of this component in which the document is visible and the changes
- * are not.
- *
- * Drawn on the landing page's dotted canvas, because this is the screen the
- * landing page's hero is a picture of. On narrow viewports the columns stack
- * in DOM order, which puts the review above the document — the right way
- * round for the same reason.
+ * silently auto-apply." So the change list is never behind a tab; the tabs only
+ * switch how the output is shown (PDF, diff, LaTeX).
  */
 export interface ResultReviewProps {
   result: TailorResponse;

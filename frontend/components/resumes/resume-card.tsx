@@ -36,15 +36,8 @@ export interface ResumeCardProps {
 }
 
 /**
- * One resume in the library: the top of its page on the landing page's dotted
- * canvas, then its name, where it came from, and the two things you do with a
- * resume — open it, or tailor it.
- *
- * The card is a link through a stretched pseudo-element on the title rather
- * than an `<a>` around everything: the actions menu and the Tailor link are
- * interactive too, and nesting them inside a link is invalid HTML that
- * browsers resolve inconsistently — usually by making them unreachable by
- * keyboard. Both sit above the stretched link with `relative z-10`.
+ * One resume in the library. The whole card links via a stretched pseudo-element
+ * on the title, because the menu and Tailor link can't be nested inside an <a>.
  *
  * The link is `/resumes?id=…`, not `/resumes/…`. The production build is a
  * static export, so there is no dynamic segment to prerender; selection is
@@ -147,13 +140,7 @@ export function ResumeCard({ resume, onRename, onDelete }: ResumeCardProps) {
   );
 }
 
-/**
- * The top of the resume's page, typeset from its stored facts.
- *
- * One `GET /api/resumes/{id}` per card: a cheap read, cached, and the same
- * query the detail screen opens with, so clicking through is instant. Nothing
- * is compiled — a library of ten resumes must not cost ten Tectonic runs.
- */
+/** Thumbnail from the stored facts (one cached GET per card, never a compile). */
 function ResumeThumbnail({ id }: { id: string }) {
   const detail = useResume(id);
   const data = detail.data?.resume.data;

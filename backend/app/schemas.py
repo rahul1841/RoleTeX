@@ -223,9 +223,7 @@ class RegisterRequest(StrictModel):
     email: str = Field(..., min_length=3, max_length=254)
     password: str = Field(..., min_length=1, max_length=1_000)
     name: str = Field(default="", max_length=160)
-    #: The six-digit code mailed by ``POST /api/auth/register/code``. Always
-    #: required; optional here only so a missing one gets the readable
-    #: ``code_required`` error rather than a generic validation failure.
+    #: Always required; Optional only so a missing one gets ``code_required``.
     code: Optional[str] = Field(default=None, pattern=r"^[0-9]{6}$")
 
 
@@ -274,9 +272,8 @@ class VerifyEmailRequest(StrictModel):
 class MailDispatchResponse(StrictModel):
     """Enumeration-safe result for the mail-sending routes.
 
-    ``ok`` is always True for ``forgot`` and for the sign-up code: revealing
-    whether the address had an account would turn either endpoint into an
-    account oracle. ``delivered``
+    ``ok`` is always True for ``forgot`` and the sign-up code: revealing whether
+    the address had an account would make them an account oracle. ``delivered``
     reports only whether the configured transport actually delivers mail, which
     is a property of the server, not of the requested address.
     """

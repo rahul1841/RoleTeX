@@ -10,11 +10,8 @@ import { z } from "zod";
  * second copy that silently drifts the day `PASSWORD_MIN_LENGTH` changes and,
  * worse, would reject passwords the server would have accepted.
  *
- * So an EXISTING password (sign-in, account deletion) is only ever checked for
- * "you left this blank" — an account made under an older policy must still be
- * able to sign in. A NEW password is the exception: forms that set one use
- * `newPasswordField` and the live checklist from password-rules.tsx, a
- * deliberate, marked mirror of the server's rules. The address is
+ * So an existing password is only checked for "not blank"; new passwords use
+ * `newPasswordField` from password-rules.tsx. The address is
  * checked against the SAME expression the server uses, which is not a second
  * policy — it is the first one, applied a round trip earlier. That matters on
  * sign-in specifically: a typo'd address would otherwise cost a real attempt

@@ -16,10 +16,7 @@ import {
 import { SecretInput, SettingsField, describedBy } from "./field";
 
 /**
- * The current password is only checked for "not blank" — the server compares
- * it. The new one is held to the same rules as sign-up, shown live by
- * <PasswordChecklist>, which mirrors backend/app/security.py; the server still
- * re-checks it and reports anything else as `weak_password`.
+ * Current password: "not blank" only. New password: same rules as sign-up.
  */
 const passwordSchema = z.object({
   currentPassword: z.string().min(1, "Enter your current password"),

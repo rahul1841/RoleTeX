@@ -11,8 +11,7 @@ import { Button } from "@/components/ui/button";
  * A real `<section aria-labelledby>` with an `<h2>`, so the resume's structure
  * is navigable by heading — which is how anyone using a screen reader moves
  * through a form this long. The page's single `<h1>` belongs to the screen's
- * <PageHero>, so these start at level 2. Drawn as a numbered card, the way
- * the landing page and the tailor screen number their steps.
+ * <PageHero>, so these start at level 2.
  *
  * The id is also the scroll anchor the section rail links to, which is why it
  * is required rather than generated.
@@ -31,11 +30,7 @@ export interface FormSectionProps {
   className?: string;
 }
 
-/**
- * Each section's place in the builder, shown as the landing page numbers its
- * steps. Keyed by the section's id so the numbers cannot drift from the
- * order <ResumeBuilder> renders them in without this map changing too.
- */
+/** Display numbers by section id; keep in the order <ResumeBuilder> renders. */
 const SECTION_NUMBERS: Record<string, string> = {
   identity: "01",
   experience: "02",
@@ -64,8 +59,7 @@ export function FormSection({
     <section
       id={id}
       aria-labelledby={headingId}
-      // The header and the floating section bar both overlap the top of the
-      // viewport; without this an anchor jump lands with the heading under them.
+      // Clears the sticky header and section bar on anchor jumps.
       className={cn(
         "bg-card scroll-mt-40 rounded-[1.25rem] ring-1 ring-foreground/10",
         className,

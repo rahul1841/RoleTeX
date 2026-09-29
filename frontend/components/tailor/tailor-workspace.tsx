@@ -20,8 +20,7 @@ import { SetupPanel, type RunLabels } from "./setup-panel";
 import { TailorError } from "./tailor-error";
 
 /**
- * The tailoring workspace: three screens in the landing page's style — the
- * setup, the long wait, and the review.
+ * The tailoring workspace: setup, running, review.
  *
  * Two deployment shapes, one screen. In `multi_user` the run names a saved
  * resume and either a saved or a pasted job description; in `demo` there is no
@@ -29,9 +28,7 @@ import { TailorError } from "./tailor-error";
  * text. That is why this page is NOT wrapped in <RequiresStorage>: unlike the
  * list screens, it genuinely works without storage.
  *
- * The setup form stays mounted while a run or a review is on screen — only
- * hidden — so "Edit inputs" brings back exactly what was entered rather than a
- * fresh form re-running its preselection.
+ * The setup form stays mounted (just hidden) so "Edit inputs" keeps its values.
  *
  * The last request is kept so "Run again" and "Run again without compiling"
  * can reissue exactly what was sent, without depending on the form still

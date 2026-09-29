@@ -39,11 +39,7 @@ export const getMe = () => api.get<UserResponse>("/api/me");
 export const login = (body: LoginRequest) =>
   api.post<UserResponse>("/api/auth/login", body);
 
-/**
- * Mails a six-digit sign-up code to `email`. The response is identical whether
- * or not the address already has an account (an existing one gets a "you
- * already have an account" email instead), so it cannot be used to probe.
- */
+/** Mails a 6-digit sign-up code. Same response for registered addresses. */
 export const requestSignupCode = (body: SignupCodeRequest) =>
   api.post<MailDispatchResponse>("/api/auth/register/code", body);
 

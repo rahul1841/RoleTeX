@@ -319,7 +319,7 @@ async def resolve_llm_selection(
 # ---------------------------------------------------------------------------
 
 
-#: Wrong guesses allowed against one sign-up code before it is thrown away.
+#: Wrong guesses allowed per sign-up code before it is deleted.
 SIGNUP_CODE_MAX_ATTEMPTS = 5
 
 
@@ -329,12 +329,9 @@ def register_auth_routes(app: FastAPI, services: Any) -> None:
     async def _redeem_signup_code(
         database: Any, email: str, code: Optional[str]
     ) -> None:
-        """Consume the address's sign-up code, or raise a 400 saying why not.
+        """Consume the address's sign-up code, or raise a 400.
 
-        Every failure is ``invalid_code`` with a message the form can show on
-        the code field. "Never requested", "expired" and "locked out after too
-        many guesses" are deliberately one answer — request a new code — so the
-        response says nothing more than the user needs.
+        Never sent, expired and locked out share one message: request a new code.
         """
 
         expired = _api_error(
@@ -404,13 +401,11 @@ def register_auth_routes(app: FastAPI, services: Any) -> None:
         email = security.normalize_email(payload.email)
         if email is None:
             raise _api_error(422, "invalid_email", "Enter a valid email address.")
-        # Checked before the code is touched, so a weak password never burns a
-        # code the user then has to request again.
+        # Before the code check, so a weak password doesn't use up the code.
         policy_error = security.password_policy_error(payload.password, email)
         if policy_error is not None:
             raise _api_error(400, "weak_password", policy_error)
 
-        # Every account proves its address first: no valid code, no account.
         await _redeem_signup_code(database, email, payload.code)
 
         # PBKDF2 is CPU-bound (~0.3s at 600k iterations) and releases the GIL,
@@ -427,8 +422,7 @@ def register_auth_routes(app: FastAPI, services: Any) -> None:
             raise _api_error(
                 409, "email_taken", "An account with this email already exists."
             ) from exc
-        # The code was mailed to this address, so owning it is proven: the
-        # account starts verified and never sees the verify-email banner.
+        # The code proved the address, so the account starts verified.
         verified_at = datetime.now(timezone.utc)
         await database.users.update(
             user["_id"], {"email_verified": True, "email_verified_at": verified_at}

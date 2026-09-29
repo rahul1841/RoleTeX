@@ -250,18 +250,8 @@ function JdDetailCard({
 const COLLAPSE_ABOVE_CHARACTERS = 1_800;
 
 /**
- * The posting itself, verbatim — as a page on the landing page's dotted
- * canvas, because it is a document the user reads, not machine output.
- *
- * Still exact: `whitespace-pre-wrap` keeps every line break and indent the
- * user pasted, and nothing is parsed or linkified. It is untrusted text the
- * app stores and replays, and it is shown as such.
- *
- * The height cap is not cosmetic. A 20,000-character posting rendered in full
- * makes the page tens of screens tall and buries every other control below
- * it, so a long one scrolls inside its own page until the user asks for the
- * whole thing. The page is `tabIndex={0}` and labelled, because a scrollable
- * region that cannot be reached or scrolled from the keyboard is a trap.
+ * The posting, verbatim (untrusted text: nothing is parsed or linkified). Long
+ * ones scroll inside a focusable region until expanded.
  */
 function JdText({ content }: { content: string }) {
   const [expanded, setExpanded] = React.useState(false);

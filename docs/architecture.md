@@ -1,213 +1,135 @@
 # Architecture — RoleTeX
 
-> Companion docs: [prd.md](prd.md) · [design.md](design.md) · [rules.md](rules.md) · [memory.md](memory.md)
+> How the system is put together. Product: [prd.md](prd.md) · Contracts and details: [design.md](design.md) · Invariants: [rules.md](rules.md)
 
-Two applications: a Next.js frontend (browser only) and a FastAPI backend that
-owns all business logic. One private container serves both — the frontend is a
-static export, so no Node process runs in production. No queue.
+A Next.js frontend and a FastAPI backend that owns all business logic. The frontend is a static export served by FastAPI, so production runs one Python process in one container. MongoDB is the only store; there is no queue.
 
----
-
-## 1. System overview
+## 1. Overview
 
 ```text
-Browser
-  └── Next.js frontend (frontend/ — App Router, React, TypeScript)
-        │  built to a static export; no server-side rendering at request time
-        │  JSON over HTTP, same origin (dev: next rewrites /api → uvicorn)
-        ▼
-FastAPI app  (backend/app/main.py — create_app() factory, DI-friendly)
-        │
-        ├── ResumeRepository (backend/app/resume.py) ── backend/resume/data.json + backend/resume/template.tex (locked seed, demo mode)
-        ├── Database         (backend/app/db.py)     ── MongoDB (Motor): users, sessions, api_keys, resumes(+versions), jds(+versions), runs
-        ├── Security         (backend/app/security.py)── PBKDF2 passwords, session tokens, Fernet key encryption, rate/login limiting, origin checks
-        ├── LLM adapter      (backend/app/llm.py)     ── OpenAI-compatible chat completions (9 providers, per-user key overrides)
-        ├── Importer         (backend/app/importer.py)── extraction normalization + template assembly
-        ├── PDF text         (backend/app/pdftext.py) ── bounded poppler extraction (pdftotext/pdfinfo/pdftoppm) for PDF imports
-        └── CompileService   (backend/app/compiler.py)── Tectonic in a per-request sandbox + poppler checks
+Browser ── Next.js static export (frontend/)
+             │  JSON over HTTP, same origin (dev: next dev proxies /api → uvicorn)
+             ▼
+FastAPI app (backend/app/main.py, create_app() factory)
+  ├── ResumeRepository  resume.py      seed resume + locked template (demo mode)
+  ├── Database          db.py          MongoDB (Motor), every query scoped by user_id
+  ├── Security          security.py    PBKDF2, session tokens, Fernet, rate limits, CSRF, password policy
+  ├── LLM client        llm.py         one OpenAI-compatible client for all providers (llm_stub.py offline)
+  ├── Importer/Builder  importer.py, builder.py   normalize extracted or hand-written resumes
+  ├── PDF tools         pdftext.py     bounded poppler: text, page images, link targets
+  ├── Compiler          compiler.py    Tectonic in a per-job sandbox
+  └── Mailer            mailer.py      SMTP, or the server log when SMTP_HOST is unset
 ```
 
-## 2. Module map
+## 2. Modules
 
 | Module | Responsibility |
 |---|---|
-| `backend/app/main.py` | App factory (`create_app`), routes, tailor orchestration, single shared repair budget, body-size middleware, structured error responses, serving the built frontend |
-| `backend/app/llm.py` | Provider-neutral chat client (`OpenAICompatibleLLM`): `generate`/`repair` for tailoring, `extract_resume` for import; env config resolution (`resolve_config`), retry/backoff, JSON-mode fallback |
-| `backend/app/resume.py` | Load/validate locked resume data; `build_llm_resume_payload` (identity excluded); `validate_proposal` (safety contract); `escape_latex`; `redact_identity`; deterministic token rendering incl. `sectioned=True` mode; change list + unified diff |
-| `backend/app/compiler.py` | `CompileService`: unique temp dir per compile, `tectonic -X compile --untrusted [--only-cached]`, timeout + POSIX rlimits, per-event-loop `asyncio.Semaphore`, `pdfinfo` page count, `pdftotext` extraction, log sanitization |
-| `backend/app/importer.py` | Normalize LLM extraction into `ResumeData` (backend-assigned positional stable IDs), clamp style hints to whitelists, assemble a fully server-controlled `template.tex` |
-| `backend/app/builder.py` | The same boundary for the *other* untrusted author — a person using the editor. Validates a draft into field-addressed errors, prunes blank rows, reuses the importer's normalization and template assembly, renders the untailored baseline. No LLM involved |
-| `backend/app/config.py` | `AppConfig` dataclass; `load_config()` reads env with clamped, documented bounds |
-| `backend/app/security.py` | Password hashing (PBKDF2-HMAC-SHA256), session token issue/hash, Fernet secret encryption + key hints, `RateLimiter`/`LoginThrottle`, CSRF origin check |
-| `backend/app/db.py` | `Database` wrapper over Motor with per-collection stores; every query is `user_id`-scoped (ownership enforced at the query level) |
-| `backend/app/auth.py` | Session dependency (`require_user`), auth routes, provider/key resolution for user LLM requests |
-| `backend/app/pdftext.py` | Bounded poppler subprocess work (`%PDF-` magic check, size/page/timeout caps, no shell): `pdftotext` extraction, `pdfinfo` page gate, `pdftoppm` rasterization, `pdftohtml` link-annotation recovery |
-| `backend/app/routes_keys.py` / `routes_resumes.py` / `routes_jds.py` / `routes_runs.py` | Route groups for per-user API keys, resume library, JD library, and tailor-run history |
-| `backend/app/schemas.py` | All Pydantic models (`StrictModel` base, `extra="forbid"`) plus the `validate_model` / `dump_model` helpers every module validates through |
-| `frontend/` | Next.js App Router frontend. `lib/api/` is the only code that talks to FastAPI (`schema.d.ts` is generated from the OpenAPI document); `hooks/` holds TanStack Query hooks, one module per domain; `components/common/` the shared primitives |
-| `backend/resume/` | Seed: `data.json` (facts + stable IDs), `template.tex` (locked, 7 tokens), `assets/` (approved files; currently empty) |
-| `docs/` | This file plus `prd.md`, `design.md`, `rules.md`, `plan.md`, `memory.md` |
+| `main.py` | App factory, middleware, `/api/health`, `/api/tailor` orchestration and the single repair budget, static frontend serving |
+| `auth.py` | Sessions, register (with sign-up code), login/logout, `/api/me`, per-user provider/key resolution |
+| `routes_account.py` | Sign-up code, password change/reset, email verification, session list/revoke |
+| `routes_resumes.py` · `routes_jds.py` · `routes_runs.py` · `routes_keys.py` | Resume library, JD library, tailor history, provider keys |
+| `resume.py` | Seed loading, `build_llm_resume_payload` (identity stripped), `validate_proposal`, `escape_latex`, `redact_identity`, token rendering, change list + diff |
+| `importer.py` | Normalize an LLM extraction (server-assigned IDs), `sanitize_style`, assemble the server-controlled template |
+| `builder.py` | Validate and normalize a hand-written draft through the importer's path; no LLM |
+| `llm.py` | Provider registry, env resolution, retries, JSON mode, `generate` / `repair` / `extract_resume` |
+| `compiler.py` | Temp dir per compile, `tectonic -X compile --untrusted [--only-cached]`, timeout, rlimits, semaphore, page count, text check |
+| `pdftext.py` | `%PDF-` check and size/page/timeout caps; `pdftotext`, `pdfinfo`, `pdftoppm`, `pdftohtml`; no shell |
+| `db.py` | Stores: `users`, `sessions`, `auth_tokens`, `signup_codes`, `api_keys`, `resumes` + `resume_versions`, `jds` + `jd_versions`, `runs` |
+| `security.py` · `config.py` · `schemas.py` | Crypto and limits · env config with clamped bounds · all Pydantic models (`StrictModel`, `extra="forbid"`) |
+| `frontend/` | App Router UI; `lib/api/` is the only code that calls the API (`schema.d.ts` is generated); `hooks/` holds TanStack Query hooks |
+| `backend/resume/` | Seed `data.json` (facts + stable IDs), locked `template.tex`, `assets/` |
 
 ## 3. HTTP surface
 
-| Route | Purpose |
+| Area | Routes |
 |---|---|
-| `GET /api/health` | Mode (`demo`/`multi_user`), compiler/database/secret-key/pdftotext checks, seed render check when seed files exist → `ok` / `degraded` |
-| `POST /api/tailor` | Core pipeline (below). Multi-user: auth + owned `resume_id` (+ optional `jd_id`), run persisted to history. Demo: seed resume, env LLM config |
-| `POST /api/auth/register` / `login` / `logout`, `GET/PATCH/DELETE /api/me` | Accounts and sessions (HttpOnly `rt_session` cookie or `Authorization: Bearer`) |
-| `GET /api/providers`, `GET /api/keys`, `PUT/DELETE /api/keys/{provider}` | Per-user provider keys, Fernet-encrypted at rest, masked hint only in responses |
-| `GET/POST /api/resumes`, `POST /api/resumes/pdf`, `GET/PATCH/DELETE /api/resumes/{id}`, `.../versions[/pdf]`, `.../versions/{n}/source` | Resume library: LaTeX paste or PDF upload → LLM extraction → versioned storage |
-| `POST /api/resumes/manual`, `PUT /api/resumes/{id}/content` | Write a resume in the app and edit it afterwards: structured draft → `backend/app/builder.py` → versioned storage. No provider key needed |
-| `POST /api/resumes/preview` | Compile a draft as typed, or a stored resume, with no job description and no model call. Returns `pdf_base64` + the rendered LaTeX |
-| `GET/POST /api/jds`, `GET/PUT/DELETE /api/jds/{id}`, `.../versions` | JD library with version history |
-| `GET /api/runs`, `GET/DELETE /api/runs/{id}`, `POST /api/runs/{id}/compile` | Tailor history; on-demand recompile of stored LaTeX (no LLM) |
-| `GET /` + `/*` | Serve the frontend's static export from `frontend/out` (override with `FRONTEND_DIR`). Mounted last, so `/api/*` always wins; an inline HTML notice is served when no build is present |
+| Health | `GET /api/health` — mode, subsystem checks (resume render, compiler, database, LLM, secret key, poppler tools) → `ok` / `degraded` |
+| Tailor | `POST /api/tailor` |
+| Auth | `POST /api/auth/register/code`, `/register`, `/login`, `/logout` · `GET/PATCH/DELETE /api/me` |
+| Account | `POST /api/auth/password`, `/password/forgot`, `/password/reset`, `/verify/request`, `/verify/confirm` · `GET/DELETE /api/sessions`, `DELETE /api/sessions/{id}` |
+| Keys | `GET /api/providers`, `GET /api/keys`, `PUT/DELETE /api/keys/{provider}` |
+| Resumes | `GET/POST /api/resumes`, `POST /api/resumes/pdf`, `/manual`, `/preview` · `GET/PATCH/DELETE /api/resumes/{id}`, `PUT …/content` · `GET/POST …/versions`, `POST …/versions/pdf`, `GET …/versions/{n}/source` |
+| JDs | `GET/POST /api/jds` · `GET/PUT/DELETE /api/jds/{id}`, `GET …/versions` |
+| Runs | `GET /api/runs` · `GET/DELETE /api/runs/{id}`, `POST …/compile` |
+| Frontend | `GET /` and `/*` — the static export from `frontend/out` (`FRONTEND_DIR` overrides), mounted last so `/api/*` always wins |
 
-Middleware (one combined handler): declared-`Content-Length` body-size guard (PDF uploads `MAX_PDF_UPLOAD_BYTES`+64KB, LaTeX import *and* structured-resume routes 260KB — a whole resume authored in the editor arrives as one JSON document — other `/api/*` 64KB) → CSRF origin check for cookie-authenticated state-changing requests → sliding-window rate limiting (LLM bucket for tailor/imports/recompile *and* `/api/resumes/preview`, which spends a Tectonic compile rather than a model call; general bucket for other authed calls, so writing and saving a resume is never charged against the LLM budget; keyed by user id, `Retry-After` on 429). *Known gap: a request omitting `Content-Length` (chunked) bypasses the size guard.*
+Sessions use an HttpOnly `rt_session` cookie (or `Authorization: Bearer`). Demo mode answers every database-backed route with `503 database_not_configured`.
 
-## 4. Tailor request flow
+**Request pipeline:** a byte-counting body cap (64 KB; 260 KB for LaTeX import and structured-resume routes; `MAX_PDF_UPLOAD_BYTES` + 64 KB for PDF uploads) → CSRF origin check on cookie-authenticated writes → rate limits. The LLM bucket covers tailor, imports and new versions, preview and recompile, keyed per user with a per-IP ceiling; everything else uses the general bucket. Mail routes (sign-up code, password reset, verification) also charge a per-IP and per-address mail bucket. Mongo errors become `503 database_unavailable`.
 
-```text
-TailorRequest ──► resume source
-                    │  multi-user → require_user + owned resume from Mongo
-                    │               (current version, sectioned=True);
-                    │               jd_id → owned JD content; provider/key per user
-                    │  demo mode  → ResumeRepository seed (sectioned=False), env config
-                    ▼
-             build_llm_resume_payload      ← identity stripped here
-                    ▼
-             llm.generate(JD, payload) ──► validate_proposal
-                    │ invalid/parse error → llm.repair(...) once → re-validate
-                    │ still invalid       → 422 invalid_llm_proposal
-                    ▼
-             render_template_text (exactly-once token substitution,
-                                   leftover-token rejection, LaTeX escaping)
-                    ▼
-             build_change_list + build_unified_diff
-                    ▼
-             CompileService.compile (if compile=true)
-                    │ latex_compile_failed  → one repair with identity-REDACTED log excerpt *
-                    │ page_count > 1 &&
-                    │   require_one_page    → one shortening repair *
-                    │   (MAX_PDF_PAGES only drives a compiler warning)
-                    │            (* only if the semantic repair was not already used)
-                    ▼
-             TailorResponse: proposal, changes, unified_diff, latex_source,
-                             pdf_base64, page_count, compiler report, run_id
-                    ▼
-             multi-user + save_run → RunStore.create (capped latex/diff,
-                             JD excerpt, no PDF bytes; oldest runs pruned)
-```
-
-The **single repair budget** is the key orchestration invariant: at most one LLM repair per request, whether spent on semantic validation, compile failure, or page overflow.
-
-## 5. Import request flow
+## 4. Tailor flow
 
 ```text
-POST /api/resumes (latex)          POST /api/resumes/pdf (multipart)
-        │                                  │ magic/size checks →
-        │                                  │ pdfinfo page gate (> MAX_IMPORT_PDF_PAGES → 422,
-        │                                  │   fails open when pdfinfo is absent) →
-        │                                  │ pdftext.extract_pdf_text (bounded subprocess)
-        │                                  │ pdftext.render_pdf_pages (pdftoppm → PNG)
-        │                                  │ pdftext.extract_pdf_links (pdftohtml → label/URL)
-        │                                  │   text + pages, provider sees images → "text_and_image"
-        │                                  │   text only, provider is text-only  → "text" (+ warning)
-        │                                  │   no text layer at all (a scan)     → "image"
-        ▼                                  ▼
-   llm.extract_resume(source_kind="latex"|"text"|"image"|"text_and_image")
-        (FULL document incl. identity — deliberate, import-only
-         exception; see rules.md R-2)
-        ▼
-   importer normalization: model IDs discarded → backend positional IDs
-   style clamped: paper/font size whitelists, margin 1.0–3.0cm
-                  (schema outer bound 0.5–4.0), accent 6-hex
-        ▼
-   server-assembled template.tex (only clamped style values vary;
-   raw user LaTeX / PDF text is NEVER compiled)
-        ▼
-   render-check (sectioned) → ResumeStore.create / add_version (quota-checked)
-        ▼
-   Mongo: resumes + resume_versions {data, template_tex, source_text, style, ...}
+TailorRequest ─► resume source
+                   multi-user → owned resume (current version, sectioned), optional saved JD, user's provider/key
+                   demo       → seed resume, operator env config
+               ─► build_llm_resume_payload            (identity stripped)
+               ─► llm.generate(JD, payload) ─► validate_proposal
+                     invalid → llm.repair once → re-validate → still invalid: 422 invalid_llm_proposal
+               ─► render template (each token once, leftovers rejected, all text escaped)
+               ─► change list + unified diff
+               ─► compile (unless compile=false)
+                     latex_compile_failed → one repair with an identity-redacted log   ┐ only if the repair
+                     >1 page and require_one_page → one shortening repair              ┘ budget is unused
+               ─► TailorResponse (changes, diff, LaTeX, PDF, page count, compiler report, run_id)
+               ─► multi-user + save_run → store the run (LaTeX, diff, JD excerpt; no PDF bytes)
 ```
 
-### 5.1 Manual authoring flow
+At most one LLM repair per request, whichever need comes first (R-11).
+
+## 5. Import and authoring flows
 
 ```text
-POST /api/resumes/manual            PUT /api/resumes/{id}/content
-POST /api/resumes/preview {resume}  (same draft shape, different destination)
-        │
+POST /api/resumes (LaTeX)            POST /api/resumes/pdf
+        │                              size/magic check → pdfinfo page cap (fails open)
+        │                              → pdftotext + pdftoppm page images + pdftohtml link targets
+        │                              source_kind: text_and_image (vision provider) | text (text-only) | image (scan)
+        ▼                              ▼
+   llm.extract_resume — whole document incl. contact details (import-only exception, R-2)
         ▼
-   ResumeDraft (Pydantic, extra="forbid"): lenient on emptiness, strict on
-   shape — a client-supplied `id` is rejected outright
+   normalize: model IDs discarded → server positional IDs; sanitize_style (A4, font whitelist, margin clamp, accent)
         ▼
-   builder.validate_draft → field-addressed errors, or nothing
-        (blank rows are dropped, partially filled rows are reported by the
-         position the author sees)
-        ▼
-   builder.prune_draft → importer.normalize_extracted_resume
-        (identical normalization to import: backend positional stable IDs)
-        ▼
-   sanitize_style → assemble_template → render (sectioned, escape_latex)
-        ▼
-   manual: ResumeStore.create / add_version, source_type="manual",
-           source_text = the rendered .tex (there is no original document)
-   preview: CompileService → PDF bytes, nothing stored
+   assemble server-controlled template → render check → store resume + version (quota-checked)
 ```
 
-No LLM participates in any of these three routes, so a user with no provider key
-can own and compile a resume; the model is only involved once they tailor it.
+`POST /api/resumes/manual`, `PUT /api/resumes/{id}/content` and `POST /api/resumes/preview` take a structured draft instead: `builder.validate_draft` (field-addressed errors) → the same normalization and template assembly → store a version (manual) or compile and return the PDF without storing (preview). No LLM is involved, so no provider key is needed.
 
-## 6. Trust boundaries & threat model
+## 6. Trust boundaries
 
-Private, single-owner deployment. Five enforced safety goals:
+Private deployment; multi-user data isolated by `user_id` in every query.
 
-1. **PII containment** — identity (name, email, phone, location, links) is never in a tailoring LLM payload; it is restored only during local rendering. Compiler diagnostics are identity-redacted before any repair prompt. *Exception:* import deliberately sends the user's own full paste.
-2. **No LaTeX injection** — the model returns plain text in a strict schema; the server escapes all specials and owns the template. Unknown/leftover tokens abort the render.
-3. **Sandboxed compilation** — unique temp dir per request, `--untrusted`, `--only-cached` (default), argument-list invocation (never `shell=True`), timeout, POSIX rlimits (`RLIMIT_CPU/FSIZE/NOFILE`; `RLIMIT_AS` Linux-only), bounded concurrency.
-4. **No fabrication** — stable-ID existence/uniqueness, exact skills multiset permutation, numeric-claim guard, length/growth caps. (*Known limit: guard is numeric-only.*)
-5. **JD is data, not instructions** — prompt framing + strict schema + server-side rendering mean a hostile JD cannot alter the output contract.
+1. **PII containment** — identity never enters a tailoring prompt; compiler logs are redacted before a repair prompt. Import is the one scoped exception.
+2. **No LaTeX injection** — plain-text model output, server-side escaping, server-owned template.
+3. **Sandboxed compilation** — see R-6.
+4. **No fabrication** — ID existence and uniqueness, exact skill permutation, numeric-claim guard, length caps (the guard is numbers-only; see memory G-5).
+5. **JD is data** — prompt framing plus the strict schema; a hostile JD can't change the output contract.
 
 ## 7. Data model
 
-- **Seed resume:** `backend/resume/data.json` → `ResumeData` (identity, summary, experience[], projects[], education[], skills[], achievements[]) with stable string IDs on every editable node. `backend/resume/template.tex` contains each token exactly once: `@@CONTACT@@ @@SUMMARY@@ @@EXPERIENCE@@ @@PROJECTS@@ @@EDUCATION@@ @@SKILLS@@ @@ACHIEVEMENTS@@, plus the optional @@CUSTOM@@`.
-- **Per-user profile:** `data/<uuid32>/` — `data.json` (extracted `ResumeData`), `template.tex` (server-assembled, style-personalized), `source.tex` (verbatim paste, never compiled), `meta.json` (provider/model/timestamps). Directory is git-ignored (only `.gitkeep` tracked) and docker-ignored.
+- **Seed:** `backend/resume/data.json` → `ResumeData` (identity, summary, experience, projects, education, skills, achievements, custom sections) with stable IDs on every editable node.
+- **MongoDB:** `resumes` hold the current version pointer; `resume_versions` hold `{data, template_tex, source_text, source_type, style, provider, model}` with `source_type` one of `latex`, `pdf`, `pdf_scanned`, `manual`. `jds` / `jd_versions` keep archived revisions (oldest pruned). `runs` keep LaTeX, diff and a JD excerpt (oldest pruned). `auth_tokens` and `signup_codes` store only hashes, with TTL indexes. `api_keys` are Fernet-encrypted.
 
-## 8. Error model
+## 8. Errors
 
-Structured JSON errors via `_api_error`: `{code, message, ...details}`.
+Every failure is JSON: `{"detail": {"code", "message", …}}` (C-4). Common codes:
 
-| Condition | HTTP | code |
-|---|---|---|
-| LLM unconfigured | 503 | `llm_not_configured` |
-| Provider HTTP failure | 429/502 | provider error passthrough |
-| Proposal invalid after repair | 422 | `invalid_llm_proposal` |
-| Import extraction invalid | 422 | extraction error |
-| Compiler missing / start failed | 503 | `compiler_not_found` / start error |
-| Compile timeout | 504 | timeout |
-| Unknown `resume_id` | 404 | not found |
-| Oversized body | 413 | too large |
-| Stored/locked resume corrupt | 500 | `resume_configuration_error` |
-| Import profile persistence failed | 500 | `store_failed` |
+| HTTP | Codes |
+|---|---|
+| 400 | `code_required`, `invalid_code`, `weak_password`, `invalid_token`, `provider_required`, `llm_key_required`, `resume_required` |
+| 401 / 403 | `not_authenticated`, `invalid_credentials`, `account_disabled`, `email_verification_required`, `registration_disabled` |
+| 404 | `resume_not_found`, `jd_not_found`, `run_not_found`, `session_not_found`, `key_not_found` |
+| 409 | `email_taken`, `already_verified`, `resume_quota_exceeded`, `version_quota_exceeded`, `jd_quota_exceeded` |
+| 413 | body over the cap, `pdf_too_large` |
+| 422 | `invalid_llm_proposal`, `invalid_extraction`, `incomplete_resume`, `invalid_pdf`, `jd_required`, `preview_target_required`, `latex_compile_failed`, `unknown_provider` |
+| 429 / 502 | rate limits (`too_many_requests`, `too_many_attempts`), `llm_provider_error` |
+| 500 | `render_failed`, `resume_configuration_error`, `key_decrypt_failed` |
+| 503 / 504 | `database_not_configured`, `database_unavailable`, `llm_not_configured`, `mail_not_configured`, `compiler_not_found` / `compile_timeout` |
 
-## 9. Concurrency & resources
+## 9. Resources
 
-- Compiles bounded by an `asyncio.Semaphore` (`COMPILE_CONCURRENCY`, 1–4, default 1), rebuilt per event loop (test-friendly), executed via `run_in_executor`.
-- Every compile in its own `tempfile.TemporaryDirectory(prefix="resume-job-")`, always cleaned up.
-- LLM HTTP: bounded timeout (5–180s), capped max tokens, retry/backoff on 429/5xx.
+Compiles run in `run_in_executor` behind a per-event-loop semaphore (`COMPILE_CONCURRENCY`, 1–4), each in its own `TemporaryDirectory`, always removed. LLM calls have a bounded timeout (5–180 s), capped tokens, and retries on 429/5xx.
 
-## 10. Configuration
+## 10. Deployment
 
-All via environment variables — see the README table for the full list. Key ones: `LLM_PROVIDER` (no default), `LLM_MODEL`, `${PROVIDER}_API_KEY` / `LLM_API_KEY`, `TECTONIC_BIN`, `TECTONIC_ONLY_CACHED` (default `true`), `COMPILE_TIMEOUT_SECONDS`, `COMPILE_CONCURRENCY`, `MAX_PDF_PAGES`, `USER_DATA_DIR` (default `data`), `RESUME_DATA_PATH`, `RESUME_TEMPLATE_PATH`. HTTPS is enforced for provider base URLs by default (`ALLOW_INSECURE_LLM_BASE_URL=true` opts out).
-
-## 11. Deployment
-
-Single Docker image (see `Dockerfile`): checksum-pinned Tectonic 0.16.9 (x86-64 only, guarded), non-root UID 1000 (matches HF Spaces), `TECTONIC_UNTRUSTED_MODE=1`, two-pass cache pre-warm proving the `--only-cached` path, port 7860. Target: **private** Hugging Face Docker Space. *Known gaps: the image has no Node stage, so it ships no frontend and answers `/` with a "no UI installed" notice (see README, "The frontend is not in the image yet"); deps range-pinned without a lockfile; deployment never verified end-to-end.*
-
-## 12. Verification
-
-**There is no automated test suite.** `tests/` was deleted on 2026-09-10 during an architecture rework; it is recoverable from git at `0565cf6` or earlier.
-
-`create_app(repository, llm_client, compiler, static_dir, database, config, pdf_extractor, pdf_renderer, pdf_link_extractor, mailer)` still accepts injected doubles at every boundary — filesystem, LLM, compiler, database, PDF tooling, mailer — so the app can be driven offline in-process. In practice: `LLM_PROVIDER=stub` plus an `httpx.ASGITransport` client against `create_app()` exercises the real routes through the real middleware stack with no provider key and no network.
-
-The Docker build is the only thing that still verifies the LaTeX pipeline for real: its prewarm renders the seed resume and four style variants and compiles each with Tectonic twice, so a broken template or an uncached package fails the build.
+One Docker image: pinned, checksum-verified Tectonic 0.16.9 (x86-64 only), non-root UID 1000, `TECTONIC_UNTRUSTED_MODE=1`, a build-time cache prewarm that proves the `--only-cached` path, port `$PORT` (7860). The image has no Node stage yet, so it serves the API only (see README). Target: a private Hugging Face Docker Space.

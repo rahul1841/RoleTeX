@@ -4,19 +4,11 @@ import { cn } from "cn";
 import type { ResumeData } from "@/lib/api/types";
 
 /**
- * A saved resume drawn as a typeset page, from its stored facts.
- *
- * This is a picture of the resume, not the PDF: compiling one costs a Tectonic
- * run, and `usePreviewResume` is deliberately never fired on mount. It lays the
- * facts out the way the server-assembled template sets them — small-caps name,
- * then ruled small-caps sections — in the face the landing page uses for the
- * same job. The library's thumbnails and the tailor screen's "Current version"
- * both use it to show *which* resume this is without spending anything; the
- * real document comes from a compile.
+ * A saved resume drawn as an HTML page from its stored facts — a preview that
+ * costs no Tectonic compile. Not the real PDF.
  */
 
-// LaTeX's Computer Modern is not on Google Fonts; Old Standard TT is from the
-// same family of "Modern" types. Same choice as the landing page's preview.
+// Closest Google Font to LaTeX's Computer Modern; same as the landing page.
 const typeset = Old_Standard_TT({ subsets: ["latin"], weight: ["400", "700"] });
 
 export function ResumeSheet({
@@ -128,7 +120,6 @@ function span(start: string, end: string): string {
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
-  // Plain elements: the sheet is a picture, described by its container.
   return (
     <div className="mt-2.5">
       <p className="-ml-2.5 text-[10px] tracking-[0.03em] [font-variant-caps:small-caps]">
