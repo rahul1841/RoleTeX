@@ -18,6 +18,7 @@ import type {
   ResetPasswordRequest,
   RevokedResponse,
   SessionListResponse,
+  SignupCodeRequest,
   UpdateMeRequest,
   UserResponse,
   VerifyEmailRequest,
@@ -37,6 +38,14 @@ export const getMe = () => api.get<UserResponse>("/api/me");
 
 export const login = (body: LoginRequest) =>
   api.post<UserResponse>("/api/auth/login", body);
+
+/**
+ * Mails a six-digit sign-up code to `email`. The response is identical whether
+ * or not the address already has an account (an existing one gets a "you
+ * already have an account" email instead), so it cannot be used to probe.
+ */
+export const requestSignupCode = (body: SignupCodeRequest) =>
+  api.post<MailDispatchResponse>("/api/auth/register/code", body);
 
 export const register = (body: RegisterRequest) =>
   api.post<UserResponse>("/api/auth/register", body);

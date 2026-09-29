@@ -133,6 +133,8 @@ image). The legacy `data/` directory stays git-ignored and docker-ignored.
 
 | Flow | Route | Notes |
 |---|---|---|
+| Get a sign-up code | `POST /api/auth/register/code` | Mails a 6-digit code (10 minutes, single use, 5 wrong guesses). Same response whether or not the address is registered — an existing account gets a "you already have an account" email instead of a code |
+| Create an account | `POST /api/auth/register` | Always requires the code; nothing is created until it checks out, and the account starts verified. With `SMTP_HOST` unset the code is written to the application log |
 | Change password | `POST /api/auth/password` | Requires the current password. Signs out **every other** session and voids outstanding reset links |
 | Request a reset | `POST /api/auth/password/forgot` | Always returns the same body — it never reveals whether an address has an account, or whether that account is disabled |
 | Complete a reset | `POST /api/auth/password/reset` | Single-use, expiring token. Signs out **all** sessions, including the requester's, because nobody proved possession of the old password |
@@ -143,7 +145,18 @@ image). The legacy `data/` directory stays git-ignored and docker-ignored.
 
 Reset and verification tokens are 256-bit values stored only as SHA-256 hashes,
 redeemed through a conditional update so a token can never be spent twice, and
-destroyed en masse whenever the account's password changes.
+destroyed en masse whenever the account's password changes. Sign-up codes are
+only six digits, so they are stored as an HMAC keyed by `APP_SECRET_KEY` (a
+plain hash of a six-digit value is reversible by brute force), expire in
+minutes, and are thrown away after five wrong guesses.
+
+**Password policy.** A new password (register, change, reset) needs 8–128
+characters with a lowercase letter, an uppercase letter, a number and a symbol,
+no leading or trailing space, must not be one of the commonest compliant
+passwords, and must not contain the email name. Sign-in never checks the
+policy, so accounts made under the older, looser rule keep working. The rules
+live in `backend/app/security.py`; the forms show them as a live checklist from
+`frontend/components/auth/password-rules.tsx`, a marked mirror of the first five.
 
 **Mail transport.** With `SMTP_HOST` unset the app uses a console driver that
 logs each message instead of sending it, so both flows are exercisable locally

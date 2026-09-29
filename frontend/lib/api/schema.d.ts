@@ -108,6 +108,33 @@ export interface paths {
         patch: operations["update_me_api_me_patch"];
         trace?: never;
     };
+    "/api/auth/register/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request Signup Code
+         * @description Mail a six-digit code that ``POST /api/auth/register`` will require.
+         *
+         *     The response is the same whether or not the address already has an
+         *     account, so this cannot be used to check who is registered: an existing
+         *     account gets a "you already have an account" email instead of a code.
+         *     Sending shares the tight per-IP and per-address mail budget with the
+         *     password-reset route, which also bounds how many codes can be guessed
+         *     against.
+         */
+        post: operations["request_signup_code_api_auth_register_code_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/password": {
         parameters: {
             query?: never;
@@ -566,10 +593,7 @@ export interface components {
     schemas: {
         /** Body_add_version_from_pdf_api_resumes__resume_id__versions_pdf_post */
         Body_add_version_from_pdf_api_resumes__resume_id__versions_pdf_post: {
-            /**
-             * File
-             * Format: binary
-             */
+            /** File */
             file: string;
             /** Provider */
             provider?: string | null;
@@ -578,10 +602,7 @@ export interface components {
         };
         /** Body_create_resume_from_pdf_api_resumes_pdf_post */
         Body_create_resume_from_pdf_api_resumes_pdf_post: {
-            /**
-             * File
-             * Format: binary
-             */
+            /** File */
             file: string;
             /** Name */
             name?: string | null;
@@ -765,10 +786,11 @@ export interface components {
         };
         /**
          * MailDispatchResponse
-         * @description Enumeration-safe result for the two mail-sending routes.
+         * @description Enumeration-safe result for the mail-sending routes.
          *
-         *     ``ok`` is always True for ``forgot``: revealing whether the address had an
-         *     account would turn the endpoint into an account oracle. ``delivered``
+         *     ``ok`` is always True for ``forgot`` and for the sign-up code: revealing
+         *     whether the address had an account would turn either endpoint into an
+         *     account oracle. ``delivered``
          *     reports only whether the configured transport actually delivers mail, which
          *     is a property of the server, not of the requested address.
          */
@@ -837,6 +859,8 @@ export interface components {
              * @default
              */
             name: string;
+            /** Code */
+            code?: string | null;
         };
         /** ResetPasswordRequest */
         ResetPasswordRequest: {
@@ -1545,6 +1569,14 @@ export interface components {
             sessions?: components["schemas"]["SessionInfo"][];
         };
         /**
+         * SignupCodeRequest
+         * @description Ask for a sign-up code to be mailed to ``email``.
+         */
+        SignupCodeRequest: {
+            /** Email */
+            email: string;
+        };
+        /**
          * TailorProposal
          * @description Only plain text is accepted from the model; never LaTeX.
          */
@@ -1905,6 +1937,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_signup_code_api_auth_register_code_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignupCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailDispatchResponse"];
                 };
             };
             /** @description Validation Error */

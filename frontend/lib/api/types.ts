@@ -22,6 +22,7 @@ export type SessionListResponse = S["SessionListResponse"];
 
 export type LoginRequest = S["LoginRequest"];
 export type RegisterRequest = S["RegisterRequest"];
+export type SignupCodeRequest = S["SignupCodeRequest"];
 export type ChangePasswordRequest = S["ChangePasswordRequest"];
 export type ForgotPasswordRequest = S["ForgotPasswordRequest"];
 export type ResetPasswordRequest = S["ResetPasswordRequest"];

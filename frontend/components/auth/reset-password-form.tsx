@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { LinkIcon, TriangleAlertIcon } from "lucide-react";
@@ -13,11 +13,11 @@ import { AuthGate } from "./auth-gate";
 import { AuthPage, AuthStatus, InlineCode } from "./auth-page";
 import { Field, PasswordInput, describedBy } from "./field";
 import { apiErrorCode, applyApiFieldError } from "./form-errors";
+import { PasswordChecklist, newPasswordField } from "./password-rules";
 import { useFragmentToken } from "./use-fragment-token";
-import { passwordField } from "./validation";
 
 const resetSchema = z.object({
-  password: passwordField("Choose a new password"),
+  password: newPasswordField("Choose a new password"),
 });
 
 type ResetValues = z.infer<typeof resetSchema>;
@@ -44,6 +44,7 @@ export function ResetPasswordForm() {
 
   const {
     register,
+    control,
     handleSubmit,
     setError,
     formState: { errors, isSubmitting },
@@ -51,6 +52,7 @@ export function ResetPasswordForm() {
     resolver: zodResolver(resetSchema),
     defaultValues: { password: "" },
   });
+  const password = useWatch({ control, name: "password" });
 
   const pending = isSubmitting || reset.isSuccess;
   const linkIsDead = apiErrorCode(failure) === "invalid_token";
@@ -155,20 +157,24 @@ export function ResetPasswordForm() {
             id="reset-password"
             label="New password"
             error={errors.password?.message}
-            hint="Long and unique beats clever. The server will say if it is not strong enough."
           >
             <PasswordInput
               id="reset-password"
               autoComplete="new-password"
               autoFocus
               aria-invalid={Boolean(errors.password)}
-              aria-describedby={describedBy("reset-password", {
-                error: errors.password,
-                hint: true,
-              })}
+              aria-describedby={
+                [
+                  describedBy("reset-password", { error: errors.password }),
+                  "reset-password-rules",
+                ]
+                  .filter(Boolean)
+                  .join(" ") || undefined
+              }
               {...register("password")}
             />
           </Field>
+          <PasswordChecklist id="reset-password-rules" password={password ?? ""} />
 
           <Button type="submit" size="lg" className="w-full" disabled={pending}>
             {pending ? <Spinner data-icon="inline-start" /> : null}

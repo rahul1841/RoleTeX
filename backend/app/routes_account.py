@@ -59,6 +59,7 @@ from .schemas import (
     RevokedResponse,
     SessionInfo,
     SessionListResponse,
+    SignupCodeRequest,
     UserResponse,
     VerifyEmailRequest,
 )
@@ -188,6 +189,35 @@ def _verify_email(base_url: str, token: str, ttl_hours: int) -> Tuple[str, str]:
     return "Confirm your RoleTeX email address", body
 
 
+def _signup_code_email(code: str, ttl_minutes: int) -> Tuple[str, str]:
+    body = (
+        "Your RoleTeX sign-up code is:\n\n"
+        "    {0}\n\n"
+        "Enter it on the sign-up page to create your account. It expires in "
+        "{1} minutes and works once.\n\n"
+        "If you did not try to create a RoleTeX account, you can ignore this "
+        "message — no account has been created.\n".format(code, ttl_minutes)
+    )
+    return "Your RoleTeX sign-up code: {0}".format(code), body
+
+
+def _already_registered_email() -> Tuple[str, str]:
+    """Sent instead of a code when the address already has an account.
+
+    The HTTP response is identical either way (see ``request_signup_code``); the
+    owner of the address is the only one who learns it is registered.
+    """
+
+    body = (
+        "Someone tried to create a RoleTeX account with this address, but you "
+        "already have one.\n\n"
+        "If that was you, sign in instead — or use \"Forgot password\" on the "
+        "sign-in page if you cannot remember it. If it was not you, you can "
+        "ignore this message; nothing has changed.\n"
+    )
+    return "You already have a RoleTeX account", body
+
+
 def register_account_routes(app: FastAPI, services: Any) -> None:
     """Attach password, verification, and session-management routes."""
 
@@ -204,6 +234,48 @@ def register_account_routes(app: FastAPI, services: Any) -> None:
         context = await resolve_session(request, services)
         return context[2] if context is not None else None
 
+    # -- Sign-up code -----------------------------------------------------
+
+    @app.post("/api/auth/register/code", response_model=MailDispatchResponse)
+    async def request_signup_code(
+        payload: SignupCodeRequest, request: Request
+    ) -> MailDispatchResponse:
+        """Mail a six-digit code that ``POST /api/auth/register`` will require.
+
+        The response is the same whether or not the address already has an
+        account, so this cannot be used to check who is registered: an existing
+        account gets a "you already have an account" email instead of a code.
+        Sending shares the tight per-IP and per-address mail budget with the
+        password-reset route, which also bounds how many codes can be guessed
+        against.
+        """
+
+        database = _database_or_503()
+        if not services.config.allow_registration:
+            raise _api_error(
+                403, "registration_disabled", "Registration is disabled on this server."
+            )
+        email = security.normalize_email(payload.email)
+        if email is None:
+            raise _api_error(422, "invalid_email", "Enter a valid email address.")
+        _check_email_budget(services, _client_ip(request, services.config), email)
+
+        existing = await database.users.get_by_email(email)
+        if existing is not None:
+            subject, body = _already_registered_email()
+        else:
+            code = security.new_signup_code()
+            ttl = security.SIGNUP_CODE_TTL_MINUTES
+            await database.signup_codes.put(
+                email,
+                security.hash_signup_code(services.config.secret_key, email, code),
+                _utc_now() + timedelta(minutes=ttl),
+            )
+            subject, body = _signup_code_email(code, ttl)
+        await _send(services, email, subject, body)
+
+        return MailDispatchResponse(delivered=services.mailer.delivers)
+
     # -- Password ---------------------------------------------------------
 
     @app.post("/api/auth/password", response_model=UserResponse)
@@ -219,7 +291,9 @@ def register_account_routes(app: FastAPI, services: Any) -> None:
             raise _api_error(
                 403, "invalid_credentials", "The current password is incorrect."
             )
-        policy_error = security.password_policy_error(payload.new_password)
+        policy_error = security.password_policy_error(
+            payload.new_password, user.get("email")
+        )
         if policy_error is not None:
             raise _api_error(400, "weak_password", policy_error)
         if payload.new_password == payload.current_password:

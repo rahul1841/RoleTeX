@@ -13,6 +13,7 @@ import {
   login,
   logout,
   register,
+  requestSignupCode,
   requestVerification,
   resetPassword,
 } from "@/lib/api/endpoints/session";
@@ -22,6 +23,7 @@ import type {
   LoginRequest,
   RegisterRequest,
   ResetPasswordRequest,
+  SignupCodeRequest,
   UserResponse,
   VerifyEmailRequest,
 } from "@/lib/api/types";
@@ -105,6 +107,17 @@ export function useLogin() {
       // immediately bounce the now-authenticated user back out.
       router.replace("/tailor");
     },
+  });
+}
+
+/**
+ * `POST /api/auth/register/code` — mail the six-digit code that registering
+ * requires. Touches no cache: nothing about the session changes until the code
+ * comes back with the rest of the form.
+ */
+export function useRequestSignupCode() {
+  return useMutation({
+    mutationFn: (body: SignupCodeRequest) => requestSignupCode(body),
   });
 }
 

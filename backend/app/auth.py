@@ -319,8 +319,54 @@ async def resolve_llm_selection(
 # ---------------------------------------------------------------------------
 
 
+#: Wrong guesses allowed against one sign-up code before it is thrown away.
+SIGNUP_CODE_MAX_ATTEMPTS = 5
+
+
 def register_auth_routes(app: FastAPI, services: Any) -> None:
     """Attach register/login/logout/me routes to the application."""
+
+    async def _redeem_signup_code(
+        database: Any, email: str, code: Optional[str]
+    ) -> None:
+        """Consume the address's sign-up code, or raise a 400 saying why not.
+
+        Every failure is ``invalid_code`` with a message the form can show on
+        the code field. "Never requested", "expired" and "locked out after too
+        many guesses" are deliberately one answer — request a new code — so the
+        response says nothing more than the user needs.
+        """
+
+        expired = _api_error(
+            400,
+            "invalid_code",
+            "That code has expired or was never sent. Request a new one.",
+        )
+        if not code:
+            raise _api_error(
+                400,
+                "code_required",
+                "Enter the 6-digit code we emailed you.",
+            )
+        code_hash = security.hash_signup_code(
+            services.config.secret_key, email, code
+        )
+        if await database.signup_codes.redeem(
+            email, code_hash, SIGNUP_CODE_MAX_ATTEMPTS
+        ):
+            return
+        remaining = await database.signup_codes.record_failure(
+            email, SIGNUP_CODE_MAX_ATTEMPTS
+        )
+        if remaining is None:
+            raise expired
+        raise _api_error(
+            400,
+            "invalid_code",
+            "That code is not right. {0} {1} left.".format(
+                remaining, "try" if remaining == 1 else "tries"
+            ),
+        )
 
     def _database_or_503() -> Any:
         if services.database is None:
@@ -358,9 +404,15 @@ def register_auth_routes(app: FastAPI, services: Any) -> None:
         email = security.normalize_email(payload.email)
         if email is None:
             raise _api_error(422, "invalid_email", "Enter a valid email address.")
-        policy_error = security.password_policy_error(payload.password)
+        # Checked before the code is touched, so a weak password never burns a
+        # code the user then has to request again.
+        policy_error = security.password_policy_error(payload.password, email)
         if policy_error is not None:
             raise _api_error(400, "weak_password", policy_error)
+
+        # Every account proves its address first: no valid code, no account.
+        await _redeem_signup_code(database, email, payload.code)
+
         # PBKDF2 is CPU-bound (~0.3s at 600k iterations) and releases the GIL,
         # so hash in a worker thread to keep the event loop responsive.
         loop = asyncio.get_running_loop()
@@ -375,6 +427,13 @@ def register_auth_routes(app: FastAPI, services: Any) -> None:
             raise _api_error(
                 409, "email_taken", "An account with this email already exists."
             ) from exc
+        # The code was mailed to this address, so owning it is proven: the
+        # account starts verified and never sees the verify-email banner.
+        verified_at = datetime.now(timezone.utc)
+        await database.users.update(
+            user["_id"], {"email_verified": True, "email_verified_at": verified_at}
+        )
+        user = {**user, "email_verified": True, "email_verified_at": verified_at}
         await _open_session(request, response, user["_id"])
         return UserResponse(user=await build_user_out(services, user))
 

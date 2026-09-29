@@ -108,13 +108,77 @@ def dummy_password_hash() -> str:
     return cached
 
 
-def password_policy_error(password: str) -> Optional[str]:
-    """Return a human-readable policy violation, or None when acceptable."""
+#: The most-used passwords that still satisfy the character-class rules below,
+#: lowercased. Composition rules alone admit "Password1!"; this list is what
+#: stops the handful of choices every credential-stuffing list tries first.
+_COMMON_PASSWORDS = frozenset(
+    {
+        "password1!",
+        "password1@",
+        "password123!",
+        "password@123",
+        "p@ssw0rd",
+        "p@ssw0rd1",
+        "p@ssword1",
+        "passw0rd!",
+        "welcome1!",
+        "welcome@123",
+        "welcome123!",
+        "qwerty123!",
+        "qwerty@123",
+        "admin@123",
+        "admin123!",
+        "abc@1234",
+        "abcd@1234",
+        "letmein1!",
+        "iloveyou1!",
+        "changeme1!",
+        "test@1234",
+        "india@123",
+        "summer2024!",
+        "winter2024!",
+        "roletex1!",
+        "roletex@123",
+    }
+)
+
+
+def password_policy_error(
+    password: str, email: Optional[str] = None
+) -> Optional[str]:
+    """Return a human-readable policy violation, or None when acceptable.
+
+    The rules are the ones sign-up forms conventionally show: a length range,
+    and at least one lowercase letter, uppercase letter, digit and symbol. On
+    top of those, two checks composition cannot express: the password is not on
+    a short list of the commonest compliant passwords, and it does not contain
+    the account's own email name. frontend/components/auth/password-rules.ts
+    mirrors the first five as a live checklist; this function stays the
+    authority, and it is the only place the last two are enforced.
+
+    Applied when a password is *set* (register, change, reset), never on sign-in,
+    so accounts created under an older, looser policy can still sign in.
+    """
 
     if not isinstance(password, str) or len(password) < PASSWORD_MIN_LENGTH:
         return "Password must be at least {0} characters".format(PASSWORD_MIN_LENGTH)
     if len(password) > PASSWORD_MAX_LENGTH:
         return "Password must be at most {0} characters".format(PASSWORD_MAX_LENGTH)
+    if not re.search(r"[a-z]", password):
+        return "Password must include a lowercase letter"
+    if not re.search(r"[A-Z]", password):
+        return "Password must include an uppercase letter"
+    if not re.search(r"[0-9]", password):
+        return "Password must include a number"
+    if not re.search(r"[^A-Za-z0-9\s]", password):
+        return "Password must include a symbol, such as ! @ # or $"
+    if password != password.strip():
+        return "Password cannot start or end with a space"
+    if password.lower() in _COMMON_PASSWORDS:
+        return "That password is too common. Choose something less predictable"
+    local_part = (email or "").split("@", 1)[0].strip().lower()
+    if len(local_part) >= 3 and local_part in password.lower():
+        return "Password cannot contain your email name"
     return None
 
 
@@ -161,6 +225,36 @@ def hash_token(token: str) -> str:
     """SHA-256 hex digest — the only representation ever stored server-side."""
 
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+#: Digits in a sign-up verification code, and how long one stays valid.
+SIGNUP_CODE_LENGTH = 6
+SIGNUP_CODE_TTL_MINUTES = 10
+
+
+def new_signup_code() -> str:
+    """A uniformly random numeric code, e.g. ``"048213"``.
+
+    Short enough to type from a phone, which is its only job. It is not a
+    long-lived secret: it expires in minutes and allows a handful of attempts
+    (see :class:`app.db.SignupCodeStore`), which is what makes six digits safe.
+    """
+
+    return "".join(str(secrets.randbelow(10)) for _ in range(SIGNUP_CODE_LENGTH))
+
+
+def hash_signup_code(secret_key: str, email: str, code: str) -> str:
+    """HMAC-SHA256 of a sign-up code, keyed by ``APP_SECRET_KEY``.
+
+    Keyed rather than a bare SHA-256 because the code space is only 10^6: an
+    unkeyed hash of a six-digit code falls to exhaustive search in well under a
+    second, so a database leak would hand over every live code. With the key,
+    the stored value is useless without the application's secret. The address
+    is folded in so one code never verifies another address.
+    """
+
+    message = "{0}\n{1}".format(email, code).encode("utf-8")
+    return hmac.new(secret_key.encode("utf-8"), message, hashlib.sha256).hexdigest()
 
 
 def session_needs_renewal(

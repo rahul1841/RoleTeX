@@ -278,6 +278,79 @@ class AuthTokenStore:
         await self._collection.delete_many(query)
 
 
+class SignupCodeStore:
+    """One pending sign-up code per email address, before any account exists.
+
+    A code is stored only as an HMAC (see ``security.hash_signup_code``), with
+    an expiry and a failed-attempt counter:
+
+    - ``put`` replaces whatever code the address had, so requesting a new code
+      always invalidates the old one and resets the attempt count.
+    - ``redeem`` is a single conditional ``find_one_and_delete`` on the hash, an
+      unexpired ``expires_at`` and ``attempts < max_attempts``, so a code works
+      exactly once even under concurrent submits.
+    - ``record_failure`` is an atomic ``$inc``; once the cap is reached the code
+      is deleted outright and a new one has to be requested. With a six-digit
+      code that caps guessing at ``max_attempts`` in 10^6 per code sent, and
+      sending is itself rate-limited per address and per IP.
+
+    The TTL index on ``expires_at`` sweeps abandoned codes.
+    """
+
+    def __init__(self, collection: Any) -> None:
+        self._collection = collection
+
+    async def put(self, email: str, code_hash: str, expires_at: datetime) -> None:
+        now = _utc_now()
+        await self._collection.replace_one(
+            {"email": email},
+            {
+                "email": email,
+                "code_hash": code_hash,
+                "attempts": 0,
+                "created_at": now,
+                "expires_at": expires_at,
+            },
+            upsert=True,
+        )
+
+    async def redeem(self, email: str, code_hash: str, max_attempts: int) -> bool:
+        """Consume the code if it matches, is unexpired and not locked out."""
+
+        doc = await self._collection.find_one_and_delete(
+            {
+                "email": email,
+                "code_hash": code_hash,
+                "expires_at": {"$gt": _utc_now()},
+                "attempts": {"$lt": max_attempts},
+            }
+        )
+        return doc is not None
+
+    async def record_failure(self, email: str, max_attempts: int) -> Optional[int]:
+        """Count a wrong guess; returns attempts left, or None when no live code.
+
+        None covers "never sent", "expired" and "just locked out" alike — the
+        caller tells the user to request a new code in all three cases.
+        """
+
+        doc = await self._collection.find_one_and_update(
+            {"email": email, "expires_at": {"$gt": _utc_now()}},
+            {"$inc": {"attempts": 1}},
+            return_document=ReturnDocument.AFTER,
+        )
+        if doc is None:
+            return None
+        remaining = max_attempts - int(doc.get("attempts", max_attempts))
+        if remaining <= 0:
+            await self._collection.delete_one({"_id": doc["_id"]})
+            return None
+        return remaining
+
+    async def delete(self, email: str) -> None:
+        await self._collection.delete_one({"email": email})
+
+
 class ApiKeyStore:
     """Encrypted provider keys, one document per (user, provider)."""
 
@@ -676,6 +749,7 @@ class Database:
         self.users = UserStore(motor_db["users"])
         self.sessions = SessionStore(motor_db["sessions"])
         self.auth_tokens = AuthTokenStore(motor_db["auth_tokens"])
+        self.signup_codes = SignupCodeStore(motor_db["signup_codes"])
         self.api_keys = ApiKeyStore(motor_db["api_keys"])
         self.resumes = ResumeStore(motor_db["resumes"], motor_db["resume_versions"])
         self.jds = JdStore(motor_db["jds"], motor_db["jd_versions"])
@@ -721,6 +795,8 @@ class Database:
             (self._db["auth_tokens"], "token_hash", {"unique": True}),
             (self._db["auth_tokens"], "expires_at", {"expireAfterSeconds": 0}),
             (self._db["auth_tokens"], [("user_id", 1), ("purpose", 1)], {}),
+            (self._db["signup_codes"], "email", {"unique": True}),
+            (self._db["signup_codes"], "expires_at", {"expireAfterSeconds": 0}),
             (self._db["api_keys"], [("user_id", 1), ("provider", 1)], {"unique": True}),
             (self._db["resumes"], "user_id", {}),
             (self._db["resume_versions"], [("resume_id", 1), ("version", 1)], {"unique": True}),

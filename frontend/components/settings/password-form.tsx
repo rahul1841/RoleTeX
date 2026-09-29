@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -9,20 +9,21 @@ import { Button } from "@/components/ui/button";
 import { ErrorState, Spinner } from "@/components/common";
 import { isApiError } from "@/lib/api/errors";
 import { useChangePassword } from "@/hooks/use-account";
+import {
+  PasswordChecklist,
+  newPasswordField,
+} from "@/components/auth/password-rules";
 import { SecretInput, SettingsField, describedBy } from "./field";
 
 /**
- * Only "you left this blank" is checked here.
- *
- * backend/app/security.py owns the password policy and reports a violation as
- * `weak_password` with a message written for a human ("Password must be at
- * least 8 characters"). Restating the rules here would create a second copy
- * that drifts the day the server's minimum changes and, worse, could reject a
- * password the server would have accepted.
+ * The current password is only checked for "not blank" — the server compares
+ * it. The new one is held to the same rules as sign-up, shown live by
+ * <PasswordChecklist>, which mirrors backend/app/security.py; the server still
+ * re-checks it and reports anything else as `weak_password`.
  */
 const passwordSchema = z.object({
   currentPassword: z.string().min(1, "Enter your current password"),
-  newPassword: z.string().min(1, "Enter a new password"),
+  newPassword: newPasswordField("Enter a new password"),
 });
 
 type PasswordValues = z.infer<typeof passwordSchema>;
@@ -48,6 +49,7 @@ export function PasswordForm() {
 
   const {
     register,
+    control,
     handleSubmit,
     reset,
     setError,
@@ -56,6 +58,7 @@ export function PasswordForm() {
     resolver: zodResolver(passwordSchema),
     defaultValues: { currentPassword: "", newPassword: "" },
   });
+  const newPassword = useWatch({ control, name: "newPassword" });
 
   const onSubmit = handleSubmit(async (values) => {
     setFailure(null);
@@ -123,12 +126,20 @@ export function PasswordForm() {
           id="new-password"
           autoComplete="new-password"
           aria-invalid={errors.newPassword ? true : undefined}
-          aria-describedby={describedBy("new-password", {
-            error: errors.newPassword,
-            hint: true,
-          })}
+          aria-describedby={
+            [
+              describedBy("new-password", {
+                error: errors.newPassword,
+                hint: true,
+              }),
+              "new-password-rules",
+            ]
+              .filter(Boolean)
+              .join(" ") || undefined
+          }
         />
       </SettingsField>
+      <PasswordChecklist id="new-password-rules" password={newPassword ?? ""} />
 
       {failure ? (
         <ErrorState error={failure} title="Could not change your password" />
