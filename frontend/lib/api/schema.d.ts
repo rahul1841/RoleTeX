@@ -119,14 +119,10 @@ export interface paths {
         put?: never;
         /**
          * Request Signup Code
-         * @description Mail a six-digit code that ``POST /api/auth/register`` will require.
+         * @description Mail the 6-digit code that ``POST /api/auth/register`` requires.
          *
-         *     The response is the same whether or not the address already has an
-         *     account, so this cannot be used to check who is registered: an existing
-         *     account gets a "you already have an account" email instead of a code.
-         *     Sending shares the tight per-IP and per-address mail budget with the
-         *     password-reset route, which also bounds how many codes can be guessed
-         *     against.
+         *     Same response for registered addresses (they get a "you already have an
+         *     account" email instead), so it can't be used to check who is registered.
          */
         post: operations["request_signup_code_api_auth_register_code_post"];
         delete?: never;
@@ -788,9 +784,8 @@ export interface components {
          * MailDispatchResponse
          * @description Enumeration-safe result for the mail-sending routes.
          *
-         *     ``ok`` is always True for ``forgot`` and for the sign-up code: revealing
-         *     whether the address had an account would turn either endpoint into an
-         *     account oracle. ``delivered``
+         *     ``ok`` is always True for ``forgot`` and the sign-up code: revealing whether
+         *     the address had an account would make them an account oracle. ``delivered``
          *     reports only whether the configured transport actually delivers mail, which
          *     is a property of the server, not of the requested address.
          */
@@ -1658,8 +1653,10 @@ export interface components {
             name?: string | null;
             /** Default Provider */
             default_provider?: string | null;
-            /** Default Model */
-            default_model?: string | null;
+            /** Provider Models */
+            provider_models?: {
+                [key: string]: string | null;
+            } | null;
         };
         /**
          * UserOut
@@ -1677,8 +1674,10 @@ export interface components {
             name: string;
             /** Default Provider */
             default_provider?: string | null;
-            /** Default Model */
-            default_model?: string | null;
+            /** Provider Models */
+            provider_models?: {
+                [key: string]: string;
+            };
             /** Created At */
             created_at?: string | null;
             /** Providers With Keys */

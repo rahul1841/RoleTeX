@@ -70,6 +70,7 @@ class UserStore:
         "name",
         "default_provider",
         "default_model",
+        "provider_models",
         "password_hash",
         "password_changed_at",
         "email_verified",
@@ -91,7 +92,7 @@ class UserStore:
             "password_hash": password_hash,
             "name": name,
             "default_provider": None,
-            "default_model": None,
+            "provider_models": {},
             # Accounts created before these fields existed read as unverified
             # and enabled via ``.get(..., default)`` at every call site.
             "email_verified": False,

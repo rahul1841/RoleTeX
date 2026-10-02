@@ -36,6 +36,8 @@ At most 6 rewrites; `skills_order` capped at 300. The parser tolerates wrappers 
 
 **Providers** (`llm.py`): one `OpenAICompatibleLLM` for `anthropic, groq, cerebras, grid, gemini, openrouter, mistral, openai, custom`. Each has a base URL, key env var, default model and a vision flag (Groq, Cerebras and Grid are text-only by default; `${PROVIDER}_VISION` overrides). Env resolution: `${PROVIDER}_API_KEY` then `LLM_API_KEY`; `${PROVIDER}_MODEL` beats `LLM_MODEL`; `${PROVIDER}_BASE_URL` overrides the endpoint (`LLM_BASE_URL` for `custom`). HTTPS is required unless `ALLOW_INSECURE_LLM_BASE_URL=true`. Retries on 429/5xx; JSON mode falls back to plain completion when a provider rejects it.
 
+**Per-user selection** (`auth.resolve_llm_selection`, used by tailoring and import): provider = the request's `provider`, else the user's `default_provider`. Model = the request's `model`, else the user's model for that provider (`provider_models`, set per provider in Settings), else `${PROVIDER}_MODEL`, else the registry default. `PATCH /api/me` takes `provider_models` as a partial map: a name sets that provider's model, `null` or `""` clears it (≤200 chars, no control characters, else `422 invalid_model`). A pre-existing single `default_model` counts as the model for `default_provider`.
+
 **`LLM_PROVIDER=stub`** selects `llm_stub.py`, a deterministic offline client. It is never a default, and its text is prefixed `[stub]`.
 
 **Prompt:** the JD is untrusted reference data; reword, shorten, emphasize and reorder only; never invent employers, dates, skills, metrics or degrees; use only supplied IDs and skills; return only the schema. The server's validation is the enforcement, not the prompt.

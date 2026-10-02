@@ -23,6 +23,7 @@
 | D-25 | Settings is one scrolling page, not tabs | Banners and error messages link straight into specific sections |
 | D-26 | Every sign-up needs a 6-digit code mailed to the address (10 min, 5 guesses, stored as an HMAC keyed by `APP_SECRET_KEY`); the code endpoint answers the same for registered addresses. New passwords need 8–128 chars, lower/upper/digit/symbol, not a common password, not the email name — checked when set, never at sign-in | Every account starts verified; no registration oracle; existing accounts keep working |
 | D-27 | No automated test suite; verification follows rules.md §4 | Deliberate — don't recreate `tests/` |
+| D-28 | Users choose the model per provider (`provider_models`); the registry's model names are only fallbacks. Grid is left as is — no model picker, still configured by `GRID_BASE_URL` / `GRID_MODEL` | Model catalogues change faster than releases. Grid is a temporary exception the owner will remove |
 
 ## 2. Open gaps
 

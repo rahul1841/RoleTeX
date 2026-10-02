@@ -8,9 +8,7 @@ import {
   PageHero,
   RequiresStorage,
 } from "@/components/common";
-import { ButtonLink } from "@/components/ui/button";
-import { HistoryWorkspace } from "@/components/history";
-import { SparklesIcon } from "lucide-react";
+import { HistoryActions, HistoryWorkspace } from "@/components/history";
 
 export const metadata: Metadata = {
   title: "History",
@@ -39,12 +37,7 @@ export default function HistoryPage() {
         eyebrow="Tailoring runs"
         title="History"
         description="Every tailoring run, with the changes it proposed, the diff, and the LaTeX it produced. Recompiling a run costs no AI tokens."
-        actions={
-          <ButtonLink href="/tailor" className="h-10 rounded-xl px-4">
-            <SparklesIcon data-icon="inline-start" />
-            New run
-          </ButtonLink>
-        }
+        actions={<HistoryActions />}
       />
       <RequiresStorage feature="Run history">
         <Suspense fallback={<HistorySkeleton />}>

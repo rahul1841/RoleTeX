@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   ConfirmDialog,
   ErrorState,
@@ -22,6 +23,7 @@ import {
 } from "@/components/common";
 import { isApiError } from "@/lib/api/errors";
 import { useSession } from "@/hooks/use-session";
+import { useUpdateMe } from "@/hooks/use-account";
 import {
   buildProviderRows,
   useDeleteKey,
@@ -35,7 +37,7 @@ import { SecretInput, SettingsField, describedBy } from "./field";
 import { formatRelative } from "./format";
 
 /**
- * Provider catalog with per-provider key management.
+ * Provider catalog with each provider's key and model.
  *
  * The central fact this section has to communicate honestly: a stored key is
  * write-only. `KeyInfo` carries a provider, a masked hint and a timestamp and
@@ -112,6 +114,7 @@ export function ProviderKeys() {
             key={row.provider.id}
             row={row}
             isDefault={user?.default_provider === row.provider.id}
+            chosenModel={user?.provider_models?.[row.provider.id]}
             onRequestRemoval={() => setPendingRemoval(row)}
           />
         ))}
@@ -154,16 +157,24 @@ export function ProviderKeys() {
   );
 }
 
+type RowForm = "key" | "model";
+
 function ProviderRowItem({
   row,
   isDefault,
+  chosenModel,
   onRequestRemoval,
 }: {
   row: ProviderRow;
   isDefault: boolean;
+  /** The user's model for this provider; undefined means the built-in one. */
+  chosenModel: string | undefined;
   onRequestRemoval: () => void;
 }) {
-  const [editing, setEditing] = React.useState(false);
+  // One inline form per row at a time.
+  const [openForm, setOpenForm] = React.useState<RowForm | null>(null);
+  const toggle = (form: RowForm) =>
+    setOpenForm((current) => (current === form ? null : form));
   const { provider, hasKey, hint, updatedAt, selfContained } = row;
 
   return (
@@ -181,18 +192,32 @@ function ProviderRowItem({
               </Badge>
             ) : null}
           </div>
-          <p className="text-muted-foreground mt-1 text-xs">
-            {selfContained ? (
-              <>
-                Default model{" "}
-                <span className="text-code-foreground bg-code border-code-border rounded border px-1 py-px font-mono">
-                  {provider.default_model}
-                </span>
-              </>
-            ) : (
-              "No endpoint or model compiled in"
-            )}
-          </p>
+          {selfContained ? (
+            <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+              Model
+              <span className="text-code-foreground bg-code border-code-border min-w-0 rounded border px-1 py-px font-mono break-words">
+                {chosenModel ?? provider.default_model}
+              </span>
+              {chosenModel ? null : "(default)"}
+              <Button
+                size="xs"
+                variant="link"
+                className="h-auto px-0 text-xs"
+                aria-label={`Change the ${provider.label} model`}
+                aria-expanded={openForm === "model"}
+                aria-controls={
+                  openForm === "model" ? `${provider.id}-model-form` : undefined
+                }
+                onClick={() => toggle("model")}
+              >
+                Change
+              </Button>
+            </div>
+          ) : (
+            <p className="text-muted-foreground mt-1 text-xs">
+              No endpoint or model compiled in
+            </p>
+          )}
         </div>
 
         <div className="flex shrink-0 items-center gap-3">
@@ -201,11 +226,13 @@ function ProviderRowItem({
             <Button
               size="sm"
               variant={hasKey ? "outline" : "default"}
-              aria-expanded={editing}
+              aria-expanded={openForm === "key"}
               // Only while the target exists: a dangling aria-controls is a
               // reference to nothing.
-              aria-controls={editing ? `${provider.id}-key-form` : undefined}
-              onClick={() => setEditing((open) => !open)}
+              aria-controls={
+                openForm === "key" ? `${provider.id}-key-form` : undefined
+              }
+              onClick={() => toggle("key")}
             >
               {hasKey ? null : (
                 <PlusIcon data-icon="inline-start" aria-hidden="true" />
@@ -235,11 +262,20 @@ function ProviderRowItem({
         </p>
       ) : null}
 
-      {editing ? (
+      {openForm === "key" ? (
         <KeyForm
           id={`${provider.id}-key-form`}
           row={row}
-          onDone={() => setEditing(false)}
+          onDone={() => setOpenForm(null)}
+        />
+      ) : null}
+
+      {openForm === "model" ? (
+        <ModelForm
+          id={`${provider.id}-model-form`}
+          row={row}
+          chosenModel={chosenModel}
+          onDone={() => setOpenForm(null)}
         />
       ) : null}
     </div>
@@ -421,6 +457,146 @@ function KeyForm({
           variant="ghost"
           onClick={onDone}
           disabled={isSubmitting}
+        >
+          Cancel
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** Mirrors `PATCH /api/me`: at most 200 characters, no control characters. */
+const modelSchema = z.object({
+  model: z
+    .string()
+    .trim()
+    .max(200, "Model names are at most 200 characters.")
+    .refine((value) => !hasControlCharacters(value), {
+      message: "That name contains characters a model name cannot have.",
+    }),
+});
+
+type ModelValues = z.infer<typeof modelSchema>;
+
+function ModelForm({
+  id,
+  row,
+  chosenModel,
+  onDone,
+}: {
+  id: string;
+  row: ProviderRow;
+  chosenModel: string | undefined;
+  onDone: () => void;
+}) {
+  const { provider } = row;
+  const updateMe = useUpdateMe();
+  const [failure, setFailure] = React.useState<unknown>(null);
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const {
+    register,
+    handleSubmit,
+    setError,
+    formState: { errors, isDirty, isSubmitting },
+  } = useForm<ModelValues>({
+    resolver: zodResolver(modelSchema),
+    defaultValues: { model: chosenModel ?? "" },
+  });
+
+  const { ref: registerRef, ...field } = register("model");
+  const fieldId = `${provider.id}-model`;
+  const busy = isSubmitting || updateMe.isPending;
+
+  React.useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  // A blank model is sent as null, which goes back to the built-in default.
+  async function save(model: string) {
+    setFailure(null);
+    try {
+      await updateMe.mutateAsync({
+        provider_models: { [provider.id]: model || null },
+      });
+      toast.success(
+        model
+          ? `${provider.label} runs now use ${model}`
+          : `${provider.label} is back on its default model`,
+      );
+      onDone();
+    } catch (error) {
+      if (isApiError(error) && error.code === "invalid_model") {
+        setError(
+          "model",
+          { type: "server", message: error.message },
+          { shouldFocus: true },
+        );
+        return;
+      }
+      setFailure(error);
+    }
+  }
+
+  const onSubmit = handleSubmit((values) => save(values.model));
+
+  return (
+    <form
+      id={id}
+      onSubmit={onSubmit}
+      className="border-border/70 mt-3 space-y-3 border-t pt-3"
+    >
+      <SettingsField
+        id={fieldId}
+        label={`${provider.label} model`}
+        error={errors.model?.message}
+        hint={`Any model ID ${provider.label} serves. Leave it blank to use the default, ${provider.default_model}.`}
+      >
+        <Input
+          {...field}
+          ref={(node) => {
+            registerRef(node);
+            inputRef.current = node;
+          }}
+          id={fieldId}
+          autoComplete="off"
+          spellCheck={false}
+          placeholder={provider.default_model}
+          className="font-mono"
+          aria-invalid={errors.model ? true : undefined}
+          aria-describedby={describedBy(fieldId, {
+            error: errors.model,
+            hint: true,
+          })}
+        />
+      </SettingsField>
+
+      {failure ? (
+        <ErrorState error={failure} title="Could not save that model" />
+      ) : null}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="submit" size="sm" disabled={!isDirty || busy}>
+          {isSubmitting ? <Spinner data-icon="inline-start" /> : null}
+          Save model
+        </Button>
+        {chosenModel ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={() => void save("")}
+          >
+            Use default
+          </Button>
+        ) : null}
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={onDone}
+          disabled={busy}
         >
           Cancel
         </Button>

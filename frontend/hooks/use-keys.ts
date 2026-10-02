@@ -62,7 +62,7 @@ export function useKeys(enabled: boolean) {
  * because the key list also carries the hint and the timestamp, and one source
  * of truth for a row beats two that can disagree mid-mutation.
  *
- * `configurable` is the honest reading of an empty `default_model`. Every entry
+ * `selfContained` is the honest reading of an empty `default_model`. Every entry
  * in the catalog is `needs_key: true`, but `grid` ships with no base URL and no
  * model (backend/app/llm.py), so a key alone will not make it work — the operator has
  * to set `GRID_BASE_URL` and `GRID_MODEL` in the server environment. Deriving

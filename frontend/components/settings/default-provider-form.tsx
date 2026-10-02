@@ -2,12 +2,9 @@
 
 import * as React from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { toast } from "sonner";
 import { TriangleAlertIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -32,52 +29,18 @@ import { SettingsField, describedBy } from "./field";
  */
 const NO_DEFAULT = "__none__";
 
-const defaultsSchema = z.object({
-  provider: z.string(),
-  model: z
-    .string()
-    .trim()
-    .max(200, "That model name is too long (200 characters maximum)."),
-});
-
-type DefaultsValues = z.infer<typeof defaultsSchema>;
+type DefaultsValues = { provider: string };
 
 /**
- * ⚠️ THE ONE THING TO GET RIGHT ON THIS SCREEN.
- *
- * `PATCH /api/me` reads `model_fields_set` (backend/app/auth.py), so for
- * `default_provider` and `default_model` it distinguishes three cases, not two:
- *
- *   key absent            leave the stored value exactly as it is
- *   key present, null     CLEAR the stored value
- *   key present, string   set it (empty/whitespace also clears)
- *
- * `JSON.stringify` drops `undefined` properties, so on this side the
- * distinction is precisely `undefined` (omit) versus `null` (clear). This form
- * owns both fields outright, so it always sends both keys explicitly — the
- * reflexive `if (value) body.x = value` would make "clear my default" a
- * silent no-op, which is the exact bug this function exists to prevent.
- *
- * Clearing the provider also clears the model, and that is not tidiness. The
- * server only consults `default_model` when the request's provider matches
- * `default_provider` (backend/app/auth.py `resolve_provider`), so a model kept without
- * a provider is data that can never be read — it would sit in the account
- * looking effective while doing nothing.
+ * `PATCH /api/me` treats an omitted key as "leave it" and `null` as "clear it",
+ * so the provider is always sent explicitly — otherwise "No default" would be
+ * a silent no-op. Each provider's model is chosen in the provider list above.
  */
 export function buildDefaultsPatch(values: DefaultsValues): UpdateMeRequest {
-  const provider = values.provider === NO_DEFAULT ? null : values.provider;
-  const model = values.model.trim();
   return {
-    default_provider: provider,
-    default_model: provider === null ? null : model || null,
+    default_provider: values.provider === NO_DEFAULT ? null : values.provider,
   };
 }
-
-/** The patch that clears both, for the explicit "clear" action. */
-export const CLEAR_DEFAULTS_PATCH: UpdateMeRequest = {
-  default_provider: null,
-  default_model: null,
-};
 
 export function DefaultProviderForm() {
   const { user } = useSession();
@@ -123,33 +86,26 @@ function DefaultProviderFields({
   const [failure, setFailure] = React.useState<unknown>(null);
 
   const serverProvider = user.default_provider ?? "";
-  const serverModel = user.default_model ?? "";
 
   const {
     control,
-    register,
     handleSubmit,
     reset,
-    formState: { errors, isDirty, isSubmitting },
+    formState: { isDirty, isSubmitting },
   } = useForm<DefaultsValues>({
-    resolver: zodResolver(defaultsSchema),
-    defaultValues: {
-      provider: serverProvider || NO_DEFAULT,
-      model: serverModel,
-    },
+    defaultValues: { provider: serverProvider || NO_DEFAULT },
   });
 
-  // Re-sync only when the SERVER's values change — after a save, or if another
-  // tab changed them. Depending on the user object itself would reset the form
+  // Re-sync only when the SERVER's value changes — after a save, or if another
+  // tab changed it. Depending on the user object itself would reset the form
   // under the user's cursor on every unrelated cache write.
   React.useEffect(() => {
-    reset({ provider: serverProvider || NO_DEFAULT, model: serverModel });
-  }, [serverProvider, serverModel, reset]);
+    reset({ provider: serverProvider || NO_DEFAULT });
+  }, [serverProvider, reset]);
 
   // `useWatch` rather than `watch()`: the latter returns a fresh function on
   // every render, which opts the whole component out of the React Compiler.
   const selectedProvider = useWatch({ control, name: "provider" });
-  const hasDefault = serverProvider !== "" || serverModel !== "";
   const chosen = providers.find((entry) => entry.id === selectedProvider);
   const missingKey =
     chosen !== undefined &&
@@ -177,12 +133,12 @@ function DefaultProviderFields({
   }
 
   const onSubmit = handleSubmit((values) =>
-    save(buildDefaultsPatch(values), "Saved your tailoring defaults"),
+    save(buildDefaultsPatch(values), "Saved your default provider"),
   );
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="max-w-sm">
         <SettingsField
           id="default-provider"
           label="Default provider"
@@ -235,34 +191,6 @@ function DefaultProviderFields({
             )}
           />
         </SettingsField>
-
-        <SettingsField
-          id="default-model"
-          label="Default model"
-          error={errors.model?.message}
-          hint={
-            selectedProvider === NO_DEFAULT
-              ? "A model only takes effect alongside a default provider."
-              : chosen?.default_model
-                ? `Leave blank to use ${chosen.default_model}.`
-                : "This provider has no built-in model, so one has to be named here or by the server."
-          }
-        >
-          <Input
-            {...register("model")}
-            id="default-model"
-            className="font-mono"
-            spellCheck={false}
-            autoComplete="off"
-            disabled={selectedProvider === NO_DEFAULT}
-            placeholder={chosen?.default_model || "provider/model-name"}
-            aria-invalid={errors.model ? true : undefined}
-            aria-describedby={describedBy("default-model", {
-              error: errors.model,
-              hint: true,
-            })}
-          />
-        </SettingsField>
       </div>
 
       {missingKey ? (
@@ -283,21 +211,8 @@ function DefaultProviderFields({
       <div className="flex flex-wrap items-center gap-2">
         <Button type="submit" size="sm" disabled={!isDirty || isSubmitting}>
           {isSubmitting ? <Spinner data-icon="inline-start" /> : null}
-          Save defaults
+          Save
         </Button>
-        {hasDefault ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            disabled={updateMe.isPending}
-            onClick={() =>
-              void save(CLEAR_DEFAULTS_PATCH, "Cleared your tailoring defaults")
-            }
-          >
-            Clear defaults
-          </Button>
-        ) : null}
       </div>
     </form>
   );

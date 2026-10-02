@@ -103,7 +103,7 @@ export function SettingsScreen() {
             id="defaults"
             number={number("defaults")}
             title="Tailoring defaults"
-            description="What a tailoring run uses when it does not name a provider or model itself."
+            description="The provider a tailoring run uses when it doesn't name one. Each provider's model is set in the list above."
           >
             <DefaultProviderForm />
           </SettingsSection>

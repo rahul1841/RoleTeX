@@ -10,6 +10,7 @@ import {
   PageHero,
   RequiresStorage,
 } from "@/components/common";
+import { useJds } from "@/hooks/use-jds";
 import { useSession } from "@/hooks/use-session";
 import { JdWorkspace } from "./jd-workspace";
 
@@ -27,13 +28,16 @@ import { JdWorkspace } from "./jd-workspace";
  * demo mode would render a page with no <h1> at all and the shell's
  * route-change focus would have nothing to move to.
  *
- * The "New job description" action is hidden rather than disabled in demo
- * mode, because the gate immediately below it is already saying why, and a
- * disabled control repeating the same message would be noise.
+ * The "New job description" action shows only once there are postings: in
+ * demo mode the gate below explains why there are none, and an empty library
+ * offers its own "Add your first posting" button.
  */
 export function JdScreen() {
   const { mode } = useSession();
   const [createOpen, setCreateOpen] = React.useState(false);
+  // Shares the list's cache entry, so this costs no extra request.
+  const jds = useJds({ enabled: mode === "multi_user" });
+  const hasAny = (jds.data?.length ?? 0) > 0;
 
   return (
     <PageContainer width="wide" className="sm:pt-12 sm:pb-16">
@@ -42,7 +46,7 @@ export function JdScreen() {
         title="Job descriptions"
         description="Postings you have saved, ready to tailor any resume against. Editing one records a new version rather than overwriting it."
         actions={
-          mode === "multi_user" ? (
+          mode === "multi_user" && hasAny ? (
             <Button className="h-10 rounded-xl px-4" onClick={() => setCreateOpen(true)}>
               <PlusIcon data-icon="inline-start" />
               New job description

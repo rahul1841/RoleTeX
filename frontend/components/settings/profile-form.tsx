@@ -124,10 +124,10 @@ function NameForm({ user }: { user: User }) {
   const onSubmit = handleSubmit(async (values) => {
     setFailure(null);
     try {
-      // ONLY `name` travels. `default_provider` and `default_model` are omitted
+      // ONLY `name` travels. `default_provider` and `provider_models` are omitted
       // on purpose: an absent key means "leave it alone" to backend/app/auth.py, which
       // is exactly what a rename should do to settings it has no opinion about.
-      // Sending them as null here would silently wipe the tailoring defaults.
+      // Sending `default_provider: null` here would silently clear the default.
       await updateMe.mutateAsync({ name: values.name.trim() });
       toast.success("Saved your display name");
     } catch (error) {

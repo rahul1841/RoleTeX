@@ -173,9 +173,6 @@ export function SetupPanel({
       "";
     if (!preferred) return;
     setValue("provider", preferred);
-    if (preferred === user?.default_provider && user?.default_model) {
-      setValue("model", user.default_model);
-    }
   }, [storage, providers, user, keyedProviders, setValue]);
 
   // ------------------------------------------------------------------------
@@ -186,8 +183,13 @@ export function SetupPanel({
     (provider) => provider.id === values.provider,
   );
 
-  const effectiveModel =
-    values.model.trim() || selectedProvider?.default_model || "";
+  // What a blank Model field means: the user's choice for this provider in
+  // Settings, else the provider's built-in default.
+  const providerModel =
+    (selectedProvider && user?.provider_models?.[selectedProvider.id]) ||
+    selectedProvider?.default_model ||
+    "";
+  const effectiveModel = values.model.trim() || providerModel;
 
   // The human label ("OpenAI"), not the id: it goes into sentences like
   // "spends one OpenAI completion".
@@ -517,8 +519,8 @@ export function SetupPanel({
               id={MODEL_ID}
               label="Model"
               hint={
-                selectedProvider?.default_model
-                  ? `Blank uses ${selectedProvider.default_model}.`
+                providerModel
+                  ? `Blank uses ${providerModel}.`
                   : "Blank uses the provider's default."
               }
             >
@@ -526,7 +528,7 @@ export function SetupPanel({
                 id={MODEL_ID}
                 spellCheck={false}
                 autoComplete="off"
-                placeholder={selectedProvider?.default_model || "Default"}
+                placeholder={providerModel || "Default"}
                 aria-describedby={fieldHintId(MODEL_ID)}
                 className="h-11 rounded-xl px-3.5 font-mono md:text-[0.8125rem]"
                 {...modelField}

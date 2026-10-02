@@ -223,6 +223,25 @@ def _env_backed_providers(config: Any) -> set:
     }
 
 
+def _provider_models(user: Dict[str, Any]) -> Dict[str, str]:
+    """The user's chosen model per provider.
+
+    An older single ``default_model`` counts as the choice for
+    ``default_provider``, so accounts saved before per-provider models resolve
+    exactly as they did.
+    """
+
+    models: Dict[str, str] = {}
+    legacy_provider = (user.get("default_provider") or "").strip().lower()
+    legacy_model = (user.get("default_model") or "").strip()
+    if legacy_provider and legacy_model:
+        models[legacy_provider] = legacy_model
+    for provider, model in (user.get("provider_models") or {}).items():
+        if isinstance(model, str) and model.strip():
+            models[provider] = model.strip()
+    return models
+
+
 async def build_user_out(services: Any, user: Dict[str, Any]) -> UserOut:
     keys = await services.database.api_keys.list_for_user(user["_id"])
     stored = {doc.get("provider", "") for doc in keys if doc.get("provider")}
@@ -234,7 +253,7 @@ async def build_user_out(services: Any, user: Dict[str, Any]) -> UserOut:
         email=user.get("email", ""),
         name=user.get("name") or "",
         default_provider=user.get("default_provider") or None,
-        default_model=user.get("default_model") or None,
+        provider_models=_provider_models(user),
         created_at=user.get("created_at"),
         providers_with_keys=providers_with_keys,
         email_verified=bool(user.get("email_verified", False)),
@@ -304,8 +323,8 @@ async def resolve_llm_selection(
             )
 
     model = (requested_model or "").strip() or None
-    if model is None and provider == user_default_provider:
-        model = (user.get("default_model") or "").strip() or None
+    if model is None:
+        model = _provider_models(user).get(provider) or None
     if model is None:
         # Complete the spec §6.4 chain with the *selected provider's* default
         # so the operator's env LLM_MODEL (which belongs to the env-configured
@@ -508,6 +527,31 @@ def register_auth_routes(app: FastAPI, services: Any) -> None:
         updates: Dict[str, Any] = {}
         if payload.name is not None:
             updates["name"] = payload.name.strip()
+        if "default_provider" in fields_set or payload.provider_models is not None:
+            # Read before default_provider changes, so an older single
+            # default_model stays bound to the provider it was chosen for.
+            models = _provider_models(user)
+            for provider, model in (payload.provider_models or {}).items():
+                name = provider.strip().lower()
+                if name not in supported_providers():
+                    raise _api_error(
+                        422, "unknown_provider", "Unsupported provider '{0}'.".format(name)
+                    )
+                value = (model or "").strip()
+                if not value:
+                    models.pop(name, None)
+                elif len(value) > 200 or any(
+                    ord(character) < 32 or ord(character) == 127 for character in value
+                ):
+                    raise _api_error(
+                        422,
+                        "invalid_model",
+                        "Model names are at most 200 characters, with no control characters.",
+                    )
+                else:
+                    models[name] = value
+            updates["provider_models"] = models
+            updates["default_model"] = None
         if "default_provider" in fields_set:
             provider = (payload.default_provider or "").strip().lower()
             if provider == "":
@@ -520,8 +564,6 @@ def register_auth_routes(app: FastAPI, services: Any) -> None:
                 )
             else:
                 updates["default_provider"] = provider
-        if "default_model" in fields_set:
-            updates["default_model"] = (payload.default_model or "").strip() or None
         if updates:
             await services.database.users.update(user["_id"], updates)
             user = await services.database.users.get(user["_id"]) or user

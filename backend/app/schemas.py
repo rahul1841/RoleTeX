@@ -210,7 +210,9 @@ class UserOut(StrictModel):
     email: str
     name: str = ""
     default_provider: Optional[str] = None
-    default_model: Optional[str] = None
+    #: The model the user chose per provider; a provider missing here uses its
+    #: built-in default (``ProviderInfo.default_model``).
+    provider_models: Dict[str, str] = Field(default_factory=dict)
     created_at: Optional[datetime] = None
     providers_with_keys: List[str] = Field(default_factory=list)
     email_verified: bool = False
@@ -241,7 +243,8 @@ class LoginRequest(StrictModel):
 class UpdateMeRequest(StrictModel):
     name: Optional[str] = Field(default=None, max_length=160)
     default_provider: Optional[str] = Field(default=None, max_length=40)
-    default_model: Optional[str] = Field(default=None, max_length=200)
+    #: Partial update: a model name sets that provider's choice; null or "" clears it.
+    provider_models: Optional[Dict[str, Optional[str]]] = None
 
 
 class DeleteMeRequest(StrictModel):

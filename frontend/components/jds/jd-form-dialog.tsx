@@ -84,7 +84,7 @@ export function JdFormDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="sm:max-w-2xl sm:p-7">
+      <DialogContent className="sm:max-w-2xl">
         <JdForm
           jd={jd ?? null}
           create={create}

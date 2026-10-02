@@ -135,11 +135,12 @@ function ProviderPicker({
   disabled,
 }: {
   value: string;
-  options: { id: string; label: string }[];
+  options: { id: string; label: string; model: string }[];
   onChange: (value: string) => void;
   disabled?: boolean;
 }) {
   const id = React.useId();
+  const model = options.find((provider) => provider.id === value)?.model;
 
   if (options.length === 0) {
     return (
@@ -164,7 +165,12 @@ function ProviderPicker({
         disabled={disabled}
       >
         <SelectTrigger id={id} className="w-full rounded-lg data-[size=default]:h-10">
-          <SelectValue placeholder="Choose a provider" />
+          <SelectValue placeholder="Choose a provider">
+            {(selected) =>
+              options.find((provider) => provider.id === selected)?.label ??
+              "Choose a provider"
+            }
+          </SelectValue>
         </SelectTrigger>
         <SelectContent>
           {options.map((provider) => (
@@ -175,7 +181,13 @@ function ProviderPicker({
         </SelectContent>
       </Select>
       <p className="text-muted-foreground text-xs text-pretty">
-        Providers with a saved key. The whole document is sent to it.
+        Providers with a saved key. The whole document is sent to it
+        {model ? (
+          <>
+            , using <span className="font-mono">{model}</span>
+          </>
+        ) : null}
+        .
       </p>
     </div>
   );
@@ -264,12 +276,17 @@ function ImportDialogBody({
     () => new Set(user?.providers_with_keys ?? []),
     [user?.providers_with_keys],
   );
+  const models = user?.provider_models;
   const options = React.useMemo(
     () =>
       (providers.data?.providers ?? [])
         .filter((provider) => withKeys.has(provider.id))
-        .map((provider) => ({ id: provider.id, label: provider.label })),
-    [providers.data, withKeys],
+        .map((provider) => ({
+          id: provider.id,
+          label: provider.label,
+          model: models?.[provider.id] || provider.default_model,
+        })),
+    [providers.data, withKeys, models],
   );
 
   // Derived rather than seeded in an effect: the account default when it is
@@ -396,7 +413,7 @@ function ImportDialogBody({
         <DialogDescription>
           {isVersion
             ? `A new version of “${target.resumeName}”, extracted from a document you already have.`
-            : "Paste LaTeX or upload a PDF. An AI model reads it into structured fields you can then edit."}
+            : "Upload a PDF or paste LaTeX. An AI model reads it into fields you can check and edit."}
         </DialogDescription>
       </DialogHeader>
 
@@ -414,13 +431,13 @@ function ImportDialogBody({
               value="pdf"
               icon={FileUpIcon}
               title="Upload a PDF"
-              hint={`Up to ${MAX_PDF_PAGES} pages`}
+              hint={`Up to ${MAX_PDF_BYTES / 1_000_000} MB · ${MAX_PDF_PAGES} pages`}
             />
             <SourceTab
               value="latex"
               icon={ScrollTextIcon}
               title="Paste LaTeX"
-              hint="The .tex source"
+              hint="Your .tex source"
             />
           </TabsList>
 
@@ -439,7 +456,7 @@ function ImportDialogBody({
                   void handleFileChange(event.dataTransfer.files?.[0] ?? null);
                 }}
                 className={cn(
-                  "has-focus-visible:ring-ring/50 flex cursor-pointer flex-col items-center gap-3 rounded-2xl border-2 border-dashed px-6 py-8 text-center transition-colors has-focus-visible:ring-3",
+                  "has-focus-visible:ring-ring/50 flex h-44 cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 text-center transition-colors has-focus-visible:ring-3",
                   dragging
                     ? "border-primary bg-primary/5"
                     : fileError
@@ -488,9 +505,7 @@ function ImportDialogBody({
                 </span>
               </label>
               <p id="import-pdf-hint" className="text-muted-foreground text-xs text-pretty">
-                At most {MAX_PDF_BYTES / 1_000_000} MB and {MAX_PDF_PAGES} pages.
-                A scan with no text layer is read from page images instead, and
-                is marked as such.
+                Scanned PDFs are read from page images.
               </p>
               {checkingFile ? (
                 <p className="text-muted-foreground flex items-center gap-2 text-xs">
@@ -507,14 +522,18 @@ function ImportDialogBody({
           </TabsContent>
 
           <TabsContent value="latex" className="space-y-1.5">
-            <Label htmlFor="import-latex">LaTeX source</Label>
+            {/* The "Paste LaTeX" card already titles this panel. */}
+            <Label htmlFor="import-latex" className="sr-only">
+              LaTeX source
+            </Label>
             <Textarea
               id="import-latex"
               value={latex}
-              rows={9}
               spellCheck={false}
               placeholder={"\\documentclass{article}\n\\begin{document}\n…"}
-              className="bg-code text-code-foreground border-code-border rounded-xl font-mono text-xs"
+              // Same height as the PDF drop zone, so switching tabs doesn't
+              // resize the dialog.
+              className="bg-code text-code-foreground border-code-border h-44 resize-none rounded-2xl font-mono text-xs field-sizing-fixed"
               aria-describedby="import-latex-hint"
               onChange={(event) => setLatex(event.target.value)}
             />
@@ -604,7 +623,7 @@ export function ImportResumeDialog({
 }: ImportResumeDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl sm:p-7">
+      <DialogContent className="sm:max-w-2xl">
         <ImportDialogBody target={target} onClose={() => onOpenChange(false)} />
       </DialogContent>
     </Dialog>

@@ -69,7 +69,8 @@ export function PageHero({
         ) : null}
       </div>
       {actions ? (
-        <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>
+        // `empty:hidden`: an actions component that renders nothing leaves no gap.
+        <div className="flex shrink-0 flex-wrap items-center gap-2 empty:hidden">{actions}</div>
       ) : null}
     </div>
   );

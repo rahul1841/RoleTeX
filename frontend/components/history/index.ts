@@ -11,6 +11,7 @@
  * the stored-run record, and re-compiling a run without an LLM call.
  */
 export { HistoryWorkspace } from "./history-workspace";
+export { HistoryActions } from "./history-actions";
 export { RunList, runHref, type RunListProps } from "./run-list";
 export { RunDetail, type RunDetailProps } from "./run-detail";
 export { RunFlags } from "./run-flags";

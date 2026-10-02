@@ -121,7 +121,7 @@ Every failure is JSON: `{"detail": {"code", "message", …}}` (C-4). Common code
 | 404 | `resume_not_found`, `jd_not_found`, `run_not_found`, `session_not_found`, `key_not_found` |
 | 409 | `email_taken`, `already_verified`, `resume_quota_exceeded`, `version_quota_exceeded`, `jd_quota_exceeded` |
 | 413 | body over the cap, `pdf_too_large` |
-| 422 | `invalid_llm_proposal`, `invalid_extraction`, `incomplete_resume`, `invalid_pdf`, `jd_required`, `preview_target_required`, `latex_compile_failed`, `unknown_provider` |
+| 422 | `invalid_llm_proposal`, `invalid_extraction`, `incomplete_resume`, `invalid_pdf`, `jd_required`, `preview_target_required`, `latex_compile_failed`, `unknown_provider`, `invalid_model` |
 | 429 / 502 | rate limits (`too_many_requests`, `too_many_attempts`), `llm_provider_error` |
 | 500 | `render_failed`, `resume_configuration_error`, `key_decrypt_failed` |
 | 503 / 504 | `database_not_configured`, `database_unavailable`, `llm_not_configured`, `mail_not_configured`, `compiler_not_found` / `compile_timeout` |

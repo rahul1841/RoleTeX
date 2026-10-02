@@ -50,33 +50,34 @@ export function ResumeLibrary() {
     [query.data],
   );
 
-  const count = query.data ? resumes.length : null;
+  const count = resumes.length;
 
   return (
     <PageContainer width="wide" className="sm:pt-12 sm:pb-16">
       <PageHero
         eyebrow={
-          count === null
-            ? "Library"
-            : `${count} ${count === 1 ? "resume" : "resumes"}`
+          count > 0 ? `${count} ${count === 1 ? "resume" : "resumes"}` : "Library"
         }
         title="Your resumes"
         description="Everything you can tailor from. Every save keeps the version before it, so nothing you wrote is ever lost."
         actions={
-          <>
-            <Button
-              variant="outline"
-              className="h-10 rounded-xl px-4"
-              onClick={() => setImporting(true)}
-            >
-              <UploadIcon data-icon="inline-start" />
-              Import
-            </Button>
-            <ButtonLink href={NEW_RESUME} className="h-10 rounded-xl px-4">
-              <PlusIcon data-icon="inline-start" />
-              New resume
-            </ButtonLink>
-          </>
+          // An empty library shows the two ways in as the page itself.
+          count > 0 ? (
+            <>
+              <Button
+                variant="outline"
+                className="h-10 rounded-xl px-4"
+                onClick={() => setImporting(true)}
+              >
+                <UploadIcon data-icon="inline-start" />
+                Import
+              </Button>
+              <ButtonLink href={NEW_RESUME} className="h-10 rounded-xl px-4">
+                <PlusIcon data-icon="inline-start" />
+                New resume
+              </ButtonLink>
+            </>
+          ) : undefined
         }
       />
 
@@ -104,9 +105,6 @@ export function ResumeLibrary() {
                 />
               </li>
             ))}
-            <li className="flex">
-              <AddTile onImport={() => setImporting(true)} />
-            </li>
           </ul>
         )}
       </div>
@@ -149,30 +147,6 @@ export function ResumeLibrary() {
         }}
       />
     </PageContainer>
-  );
-}
-
-function AddTile({ onImport }: { onImport: () => void }) {
-  return (
-    <div className="text-muted-foreground flex min-h-80 w-full flex-col items-center justify-center gap-4 rounded-[1.25rem] border border-dashed p-6 text-center">
-      <span
-        aria-hidden="true"
-        className="bg-muted text-foreground flex size-10 items-center justify-center rounded-xl"
-      >
-        <PlusIcon className="size-5" />
-      </span>
-      <p className="max-w-56 text-sm text-pretty">
-        Another role in mind? Start one from scratch or bring in a document.
-      </p>
-      <div className="flex flex-wrap justify-center gap-2">
-        <ButtonLink href={NEW_RESUME} size="sm" variant="outline" className="rounded-lg">
-          Write one
-        </ButtonLink>
-        <Button size="sm" variant="ghost" className="rounded-lg" onClick={onImport}>
-          Import
-        </Button>
-      </div>
-    </div>
   );
 }
 

@@ -69,10 +69,11 @@ import type {
  * which is the order the UI presents by default; any other sort is applied on
  * the loaded array, since the API takes no sort or filter parameters.
  */
-export function useJds() {
+export function useJds({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: queryKeys.jds.list,
     queryFn: listJds,
+    enabled,
     // `jds` is optional in the schema (`List[...] = Field(default_factory=list)`
     // serializes as a present key, but the generated type marks it optional),
     // so normalize here instead of at every call site.
