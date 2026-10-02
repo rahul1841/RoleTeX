@@ -31,7 +31,7 @@ export function runHref(runId: string): string {
  *
  * Each row answers the three questions someone scanning their history actually
  * has — which resume, against which job, and did it produce a PDF — in that
- * order, with the engine and version on a dimmer meta line underneath. Rows
+ * order, with the engine on a dimmer meta line underneath. Rows
  * are real links so the selection is bookmarkable, survives a reload, and can
  * be opened in a new tab.
  */
@@ -146,7 +146,7 @@ function RunRow({ run, selected }: { run: RunSummary; selected: boolean }) {
 
         <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="text-muted-foreground truncate font-mono text-[0.6875rem]">
-            v{run.resume_version} · {formatEngine(run.provider, run.model)}
+            {formatEngine(run.provider, run.model)}
             {pages ? ` · ${pages}` : ""}
           </span>
           <RunFlags run={run} />

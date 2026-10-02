@@ -59,7 +59,7 @@ export function ResumeLibrary() {
           count > 0 ? `${count} ${count === 1 ? "resume" : "resumes"}` : "Library"
         }
         title="Your resumes"
-        description="Everything you can tailor from. Every save keeps the version before it, so nothing you wrote is ever lost."
+        description="Everything you can tailor from."
         actions={
           // An empty library shows the two ways in as the page itself.
           count > 0 ? (
@@ -109,11 +109,7 @@ export function ResumeLibrary() {
         )}
       </div>
 
-      <ImportResumeDialog
-        open={importing}
-        onOpenChange={setImporting}
-        target={{ kind: "new" }}
-      />
+      <ImportResumeDialog open={importing} onOpenChange={setImporting} />
 
       <RenameResumeDialog
         resume={renaming}
@@ -128,7 +124,7 @@ export function ResumeLibrary() {
           if (!open) setDeleting(null);
         }}
         title={deleting ? `Delete “${deleting.name}”?` : "Delete resume?"}
-        description="Every version of it goes too. This cannot be undone."
+        description="Tailoring runs made from it keep their own copy and are not affected. This cannot be undone."
         confirmLabel="Delete resume"
         pending={remove.isPending}
         onConfirm={async () => {

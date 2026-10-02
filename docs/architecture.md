@@ -35,7 +35,7 @@ FastAPI app (backend/app/main.py, create_app() factory)
 | `llm.py` | Provider registry, env resolution, retries, JSON mode, `generate` / `repair` / `extract_resume` |
 | `compiler.py` | Temp dir per compile, `tectonic -X compile --untrusted [--only-cached]`, timeout, rlimits, semaphore, page count, text check |
 | `pdftext.py` | `%PDF-` check and size/page/timeout caps; `pdftotext`, `pdfinfo`, `pdftoppm`, `pdftohtml`; no shell |
-| `db.py` | Stores: `users`, `sessions`, `auth_tokens`, `signup_codes`, `api_keys`, `resumes` + `resume_versions`, `jds` + `jd_versions`, `runs` |
+| `db.py` | Stores: `users`, `sessions`, `auth_tokens`, `signup_codes`, `api_keys`, `resumes`, `jds`, `runs` |
 | `security.py` · `config.py` · `schemas.py` | Crypto and limits · env config with clamped bounds · all Pydantic models (`StrictModel`, `extra="forbid"`) |
 | `frontend/` | App Router UI; `lib/api/` is the only code that calls the API (`schema.d.ts` is generated); `hooks/` holds TanStack Query hooks |
 | `backend/resume/` | `assets/` (approved compile files); `data.json` + `template.tex`, read only by the Docker cache prewarm |
@@ -49,19 +49,19 @@ FastAPI app (backend/app/main.py, create_app() factory)
 | Auth | `POST /api/auth/register/code`, `/register`, `/login`, `/logout` · `GET/PATCH/DELETE /api/me` |
 | Account | `POST /api/auth/password`, `/password/forgot`, `/password/reset`, `/verify/request`, `/verify/confirm` |
 | Keys | `GET /api/providers`, `GET /api/keys`, `PUT/DELETE /api/keys/{provider}` |
-| Resumes | `GET/POST /api/resumes`, `POST /api/resumes/pdf`, `/manual`, `/preview` · `GET/PATCH/DELETE /api/resumes/{id}`, `PUT …/content` · `GET/POST …/versions`, `POST …/versions/pdf`, `GET …/versions/{n}/source` |
-| JDs | `GET/POST /api/jds` · `GET/PUT/DELETE /api/jds/{id}`, `GET …/versions` |
+| Resumes | `GET/POST /api/resumes`, `POST /api/resumes/pdf`, `/manual`, `/preview` · `GET/PATCH/DELETE /api/resumes/{id}`, `PUT …/content` (overwrite), `POST …/tailored` (save a tailoring result as a new resume or over this one) |
+| JDs | `GET/POST /api/jds` · `GET/PUT/DELETE /api/jds/{id}` (PUT overwrites) |
 | Runs | `GET /api/runs` · `GET/DELETE /api/runs/{id}`, `POST …/compile` |
 | Frontend | `GET /` and `/*` — the static export from `frontend/out` (`FRONTEND_DIR` overrides), mounted last so `/api/*` always wins |
 
 Sessions use an HttpOnly `rt_session` cookie (or `Authorization: Bearer`).
 
-**Request pipeline:** a byte-counting body cap (64 KB; 260 KB for LaTeX import and structured-resume routes; `MAX_PDF_UPLOAD_BYTES` + 64 KB for PDF uploads) → CSRF origin check on cookie-authenticated writes → rate limits. The LLM bucket covers tailor, imports and new versions, preview and recompile, keyed per user with a per-IP ceiling; everything else uses the general bucket. Mail routes (sign-up code, password reset, verification) also charge a per-IP and per-address mail bucket. Mongo errors become `503 database_unavailable`.
+**Request pipeline:** a byte-counting body cap (64 KB; 260 KB for LaTeX import and structured-resume routes; `MAX_PDF_UPLOAD_BYTES` + 64 KB for PDF uploads) → CSRF origin check on cookie-authenticated writes → rate limits. The LLM bucket covers tailor, imports, preview and recompile, keyed per user with a per-IP ceiling; everything else uses the general bucket. Mail routes (sign-up code, password reset, verification) also charge a per-IP and per-address mail bucket. Mongo errors become `503 database_unavailable`.
 
 ## 4. Tailor flow
 
 ```text
-TailorRequest ─► owned resume (current version), optional saved JD, user's provider/key
+TailorRequest ─► owned resume, optional saved JD, user's provider/key
                ─► build_llm_resume_payload            (identity stripped)
                ─► llm.generate(JD, payload) ─► validate_proposal
                      invalid → llm.repair once → re-validate → still invalid: 422 invalid_llm_proposal
@@ -88,10 +88,10 @@ POST /api/resumes (LaTeX)            POST /api/resumes/pdf
         ▼
    normalize: model IDs discarded → server positional IDs; sanitize_style (A4, font whitelist, margin clamp, accent)
         ▼
-   assemble server-controlled template → render check → store resume + version (quota-checked)
+   assemble server-controlled template → render check → store a new resume (quota-checked)
 ```
 
-`POST /api/resumes/manual`, `PUT /api/resumes/{id}/content` and `POST /api/resumes/preview` take a structured draft instead: `builder.validate_draft` (field-addressed errors) → the same normalization and template assembly → store a version (manual) or compile and return the PDF without storing (preview). No LLM is involved, so no provider key is needed.
+`POST /api/resumes/manual`, `PUT /api/resumes/{id}/content` and `POST /api/resumes/preview` take a structured draft instead: `builder.validate_draft` (field-addressed errors) → the same normalization and template assembly → create (manual) or overwrite (content) the resume, or compile and return the PDF without storing (preview). No LLM is involved, so no provider key is needed.
 
 ## 6. Trust boundaries
 
@@ -106,7 +106,7 @@ Private deployment; user data isolated by `user_id` in every query.
 ## 7. Data model
 
 - **Resume:** `ResumeData` (identity, summary, experience, projects, education, skills, achievements, custom sections) with stable IDs on every editable node.
-- **MongoDB:** `resumes` hold the current version pointer; `resume_versions` hold `{data, template_tex, source_text, source_type, style, provider, model}` with `source_type` one of `latex`, `pdf`, `pdf_scanned`, `manual`. `jds` / `jd_versions` keep archived revisions (oldest pruned). `runs` keep LaTeX, diff and a JD excerpt (oldest pruned). `auth_tokens` and `signup_codes` store only hashes, with TTL indexes. `api_keys` are Fernet-encrypted.
+- **MongoDB:** one `resumes` document per resume holds `{name, data, template_tex, source_type, style, provider, model}`; saving overwrites it in place. `source_type` is one of `latex`, `pdf`, `pdf_scanned`, `manual`, `tailored`. `jds` hold title and text; editing overwrites them. `runs` keep LaTeX, diff and a JD excerpt (oldest pruned). `auth_tokens` and `signup_codes` store only hashes, with TTL indexes. `api_keys` are Fernet-encrypted.
 
 ## 8. Errors
 
@@ -117,7 +117,7 @@ Every failure is JSON: `{"detail": {"code", "message", …}}` (C-4). Common code
 | 400 | `code_required`, `invalid_code`, `weak_password`, `invalid_token`, `provider_required`, `llm_key_required` |
 | 401 / 403 | `not_authenticated`, `invalid_credentials`, `account_disabled`, `email_verification_required`, `registration_disabled` |
 | 404 | `resume_not_found`, `jd_not_found`, `run_not_found`, `key_not_found` |
-| 409 | `email_taken`, `already_verified`, `resume_quota_exceeded`, `version_quota_exceeded`, `jd_quota_exceeded` |
+| 409 | `email_taken`, `already_verified`, `resume_quota_exceeded`, `jd_quota_exceeded`, `resume_changed` |
 | 413 | body over the cap, `pdf_too_large` |
 | 422 | `invalid_llm_proposal`, `invalid_extraction`, `incomplete_resume`, `invalid_pdf`, `jd_required`, `preview_target_required`, `latex_compile_failed`, `unknown_provider`, `invalid_model` |
 | 429 / 502 | rate limits (`too_many_requests`, `too_many_attempts`), `llm_provider_error` |

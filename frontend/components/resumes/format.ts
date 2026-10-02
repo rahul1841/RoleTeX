@@ -3,13 +3,15 @@ import type { ResumeSummary } from "@/lib/api/types";
 /**
  * How a resume got here.
  *
- * `source_type` is set by the server: `manual` for the builder, `latex` and
- * `pdf` for imports, and `pdf_scanned` when the upload had no text layer and
- * the facts were read from rendered page images. That last one is worth
- * surfacing — it is the case most likely to have misread something.
+ * `source_type` is set by the server: `manual` for the builder, `tailored`
+ * for a saved tailoring result, `latex` and `pdf` for imports, and
+ * `pdf_scanned` when the upload had no text layer and the facts were read from
+ * rendered page images. That last one is worth surfacing — it is the case most
+ * likely to have misread something.
  */
 const SOURCE_LABELS: Record<string, { label: string; hint: string }> = {
   manual: { label: "Written here", hint: "Authored in the builder." },
+  tailored: { label: "Tailored", hint: "Saved from a tailoring run." },
   latex: { label: "From LaTeX", hint: "Imported from pasted LaTeX source." },
   pdf: { label: "From PDF", hint: "Imported from an uploaded PDF." },
   pdf_scanned: {
@@ -71,11 +73,6 @@ export function absoluteTime(iso: string | null | undefined): string {
   const parsed = Date.parse(iso);
   if (Number.isNaN(parsed)) return "";
   return new Date(parsed).toLocaleString();
-}
-
-/** "v3", or "v1" when the field is missing. */
-export function versionLabel(version: number | null | undefined): string {
-  return `v${version ?? 1}`;
 }
 
 /** Newest first, by `updated_at` and then `created_at`. */

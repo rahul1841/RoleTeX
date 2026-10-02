@@ -30,7 +30,7 @@ export function JdScreen() {
       <PageHero
         eyebrow="Library"
         title="Job descriptions"
-        description="Postings you have saved, ready to tailor any resume against. Editing one records a new version rather than overwriting it."
+        description="Postings you have saved, ready to tailor any resume against."
         actions={
           hasAny ? (
             <Button className="h-10 rounded-xl px-4" onClick={() => setCreateOpen(true)}>

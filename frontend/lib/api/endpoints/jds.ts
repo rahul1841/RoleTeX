@@ -1,9 +1,4 @@
-/**
- * Job description endpoints.
- *
- * JDs are versioned: PUT replaces the current text and records a new version
- * rather than overwriting history, so `listJdVersions` can show the trail.
- */
+/** Job description endpoints. PUT overwrites the stored text. */
 
 import { api } from "../client";
 import type {
@@ -11,7 +6,6 @@ import type {
   JdListResponse,
   JdResponse,
   JdUpdateRequest,
-  JdVersionsResponse,
   OkResponse,
 } from "../types";
 
@@ -25,11 +19,7 @@ export const getJd = (id: string) => api.get<JdResponse>(one(id));
 export const createJd = (body: JdCreateRequest) =>
   api.post<JdResponse>(base, body);
 
-/** Editing an existing JD creates a new version of it. */
 export const updateJd = (id: string, body: JdUpdateRequest) =>
   api.put<JdResponse>(one(id), body);
 
 export const deleteJd = (id: string) => api.delete<OkResponse>(one(id));
-
-export const listJdVersions = (id: string) =>
-  api.get<JdVersionsResponse>(`${one(id)}/versions`);

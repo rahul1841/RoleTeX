@@ -119,7 +119,7 @@ export interface RenameResumeDialogProps {
  * Rename a resume.
  *
  * `PATCH /api/resumes/{id}` renames and nothing else — content changes go
- * through `PUT /content` and add a version, which a rename must not do. The
+ * through `PUT /content`, which a rename must not touch. The
  * mutation is optimistic (see `useRenameResume`), so the list updates the
  * moment the request is away; a failure rolls the name back and says so.
  */

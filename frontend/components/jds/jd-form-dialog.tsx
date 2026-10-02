@@ -4,7 +4,6 @@ import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch, type UseFormSetError } from "react-hook-form";
 import { toast } from "sonner";
-import { HistoryIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -47,15 +46,7 @@ export interface JdFormDialogProps {
 }
 
 /**
- * Create or edit one job description.
- *
- * WHAT MAKES EDIT DIFFERENT FROM A NORMAL FORM: `PUT /api/jds/{id}` does not
- * overwrite. It archives the current revision, increments `version`, and prunes
- * the oldest archived snapshots past the server's per-JD cap (verified: with
- * the default cap of 20, the 23rd edit leaves versions 23…4 and silently drops
- * 1…3). Saving is closer to committing than to editing, so the dialog names the
- * version it is about to create rather than leaving the user to discover a
- * history they did not know they were writing.
+ * Create or edit one job description. Saving an edit overwrites it.
  *
  * The form itself is a separate component mounted inside <DialogContent>. Base
  * UI's portal defaults to `keepMounted: false`, so it unmounts when the dialog
@@ -78,8 +69,8 @@ export function JdFormDialog({
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        // A save is a round trip that may already have created a version;
-        // closing over it would hide the result of a write still happening.
+        // A save is a round trip that may already have written; closing over
+        // it would hide the result of a write still happening.
         if (pending && !next) return;
         onOpenChange(next);
       }}
@@ -163,7 +154,7 @@ function JdForm({
         {
           type: "manual",
           message:
-            "Nothing has changed yet. Edit the title or the text before saving a new version.",
+            "Nothing has changed yet. Edit the title or the text before saving.",
         },
         { shouldFocus: true },
       );
@@ -192,14 +183,7 @@ function JdForm({
         ? await update.mutateAsync({ id: jd.id, body: payload })
         : await create.mutateAsync(payload as JdCreateRequest);
 
-      toast.success(
-        jd ? `Saved as version ${response.jd.version}` : "Job description saved",
-        {
-          description: jd
-            ? `Version ${jd.version} is kept in this job description's history.`
-            : response.jd.title,
-        },
-      );
+      toast.success("Job description saved", { description: response.jd.title });
       onSaved?.(response.jd);
       onClose();
     } catch (error) {
@@ -213,7 +197,6 @@ function JdForm({
   const failureCopy = failure
     ? describeJdFailure(failure, isEdit ? "Could not save" : "Could not create")
     : null;
-  const currentVersion = jd?.version ?? 0;
 
   return (
     <>
@@ -221,20 +204,13 @@ function JdForm({
         <DialogTitle>
           {isEdit ? "Edit job description" : "New job description"}
         </DialogTitle>
-        <DialogDescription>
-          {isEdit ? (
-            <>
-              Saving stores this as version {currentVersion + 1}. Version{" "}
-              {currentVersion} is archived, not overwritten.
-            </>
-          ) : (
-            <>
-              Paste the posting as published. Tailoring reads it verbatim, so the
-              requirements and responsibilities matter and the boilerplate does
-              not.
-            </>
-          )}
-        </DialogDescription>
+        {isEdit ? null : (
+          <DialogDescription>
+            Paste the posting as published. Tailoring reads it verbatim, so the
+            requirements and responsibilities matter and the boilerplate does
+            not.
+          </DialogDescription>
+        )}
       </DialogHeader>
 
       <form onSubmit={onSubmit} noValidate className="grid gap-4">
@@ -310,17 +286,6 @@ function JdForm({
 
         <JdSizeAdvisory report={size} />
 
-        {isEdit && currentVersion >= 20 ? (
-          <p className="border-warning-border bg-warning text-warning-foreground flex gap-2 rounded-md border px-2.5 py-1.5 text-xs text-pretty">
-            <HistoryIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-            <span>
-              This job description already has a long history. The server keeps
-              only its most recent snapshots, so saving again will drop the
-              oldest one permanently.
-            </span>
-          </p>
-        ) : null}
-
         {/* Neither button is disabled by validation state. A disabled submit
             gives a keyboard user nothing to press and no explanation;
             submitting reports the reason and moves focus to the field that has
@@ -331,7 +296,7 @@ function JdForm({
           </Button>
           <Button type="submit" disabled={pending}>
             {pending ? <Spinner data-icon="inline-start" /> : null}
-            {isEdit ? `Save as version ${currentVersion + 1}` : "Save job description"}
+            {isEdit ? "Save" : "Save job description"}
           </Button>
         </DialogFooter>
       </form>

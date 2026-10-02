@@ -7,18 +7,15 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import {
-  addResumeVersionFromLatex,
-  addResumeVersionFromPdf,
   createResumeFromLatex,
   createResumeFromPdf,
   createResumeManual,
   deleteResume,
   getResume,
-  getResumeVersionSource,
-  listResumeVersions,
   listResumes,
   previewResume,
   renameResume,
+  saveTailoredResume,
   updateResumeContent,
   type PdfImportOptions,
 } from "@/lib/api/endpoints/resumes";
@@ -31,22 +28,24 @@ import type {
   ResumeManualCreateRequest,
   ResumePreviewRequest,
   ResumeResponse,
+  TailoredResumeSaveRequest,
 } from "@/lib/api/types";
 
 /**
  * Every resume query and mutation, and the invalidation each write owes.
  *
- * The rule this file exists to enforce: a resume write can change three cached
- * things at once. `PUT /content` adds a version, so it moves the detail *and*
- * the version list *and* the summary row in the list (whose `version` and
- * `updated_at` both change). Scattering those invalidations across components
- * is how a UI ends up showing "v1" next to a resume that is on v3.
+ * The rule this file exists to enforce: a resume write changes two cached
+ * things at once — the detail *and* the summary row in the list (whose
+ * `updated_at` moves). Scattering those invalidations across components is how
+ * a list ends up disagreeing with the resume it links to.
  */
 
-/** Everything derived from a single resume: detail, versions, sources. */
-function invalidateResume(client: QueryClient, id: string): void {
-  void client.invalidateQueries({ queryKey: queryKeys.resumes.detail(id) });
-  void client.invalidateQueries({ queryKey: queryKeys.resumes.versions(id) });
+/** Write a resume the server just returned, and refresh the list around it. */
+function storeResume(client: QueryClient, response: ResumeCreateResponse): void {
+  client.setQueryData<ResumeResponse>(
+    queryKeys.resumes.detail(response.resume.id),
+    { resume: response.resume },
+  );
   void client.invalidateQueries({ queryKey: queryKeys.resumes.list });
 }
 
@@ -66,57 +65,37 @@ export function useResume(id: string | null) {
   });
 }
 
-export function useResumeVersions(id: string | null) {
-  return useQuery({
-    queryKey: queryKeys.resumes.versions(id ?? "none"),
-    queryFn: () => listResumeVersions(id as string),
-    enabled: Boolean(id),
-  });
-}
-
 /**
- * The stored LaTeX for one version.
- *
- * Held far longer than the default: a version's source is immutable once
- * written, so re-fetching it when the user flips back to a version they just
- * looked at is pure waste.
+ * Create from the builder — a new resume, or "Save as new resume" from the
+ * editor. No LLM, no provider key, no long timeout.
  */
-export function useResumeVersionSource(id: string | null, version: number | null) {
-  return useQuery({
-    queryKey: queryKeys.resumes.versionSource(id ?? "none", version ?? 0),
-    queryFn: () => getResumeVersionSource(id as string, version as number),
-    enabled: Boolean(id) && version !== null,
-    staleTime: Infinity,
-  });
-}
-
-/** Create from the builder. No LLM, no provider key, no long timeout. */
 export function useCreateResume() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (body: ResumeManualCreateRequest) => createResumeManual(body),
-    onSuccess: (response) => {
-      client.setQueryData<ResumeResponse>(
-        queryKeys.resumes.detail(response.resume.id),
-        { resume: response.resume },
-      );
-      void client.invalidateQueries({ queryKey: queryKeys.resumes.list });
-    },
+    onSuccess: (response) => storeResume(client, response),
   });
 }
 
-/** Save edited content as the resume's next version. */
+/** Overwrite a resume with edited content. */
 export function useUpdateResumeContent(id: string) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (body: ResumeContentUpdateRequest) =>
       updateResumeContent(id, body),
-    onSuccess: (response) => {
-      client.setQueryData<ResumeResponse>(queryKeys.resumes.detail(id), {
-        resume: response.resume,
-      });
-      invalidateResume(client, id);
-    },
+    onSuccess: (response) => storeResume(client, response),
+  });
+}
+
+/**
+ * Keep a tailoring result, as a new resume or over the original. Saved runs
+ * are untouched either way: each one holds its own copy of the LaTeX.
+ */
+export function useSaveTailoredResume(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: TailoredResumeSaveRequest) => saveTailoredResume(id, body),
+    onSuccess: (response) => storeResume(client, response),
   });
 }
 
@@ -197,7 +176,6 @@ export function useDeleteResume() {
       // Removed rather than invalidated: the record is gone, and refetching it
       // would only produce a 404 the UI has to special-case.
       client.removeQueries({ queryKey: queryKeys.resumes.detail(id) });
-      client.removeQueries({ queryKey: queryKeys.resumes.versions(id) });
       void client.invalidateQueries({ queryKey: queryKeys.resumes.list });
     },
   });
@@ -208,13 +186,7 @@ export function useImportResumeFromLatex() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (body: ResumeCreateRequest) => createResumeFromLatex(body),
-    onSuccess: (response: ResumeCreateResponse) => {
-      client.setQueryData<ResumeResponse>(
-        queryKeys.resumes.detail(response.resume.id),
-        { resume: response.resume },
-      );
-      void client.invalidateQueries({ queryKey: queryKeys.resumes.list });
-    },
+    onSuccess: (response) => storeResume(client, response),
   });
 }
 
@@ -223,41 +195,7 @@ export function useImportResumeFromPdf() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (options: PdfImportOptions) => createResumeFromPdf(options),
-    onSuccess: (response: ResumeCreateResponse) => {
-      client.setQueryData<ResumeResponse>(
-        queryKeys.resumes.detail(response.resume.id),
-        { resume: response.resume },
-      );
-      void client.invalidateQueries({ queryKey: queryKeys.resumes.list });
-    },
-  });
-}
-
-export interface AddVersionFromLatexVariables {
-  id: string;
-  body: ResumeCreateRequest;
-}
-
-export function useAddResumeVersionFromLatex() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, body }: AddVersionFromLatexVariables) =>
-      addResumeVersionFromLatex(id, body),
-    onSuccess: (_response, { id }) => invalidateResume(client, id),
-  });
-}
-
-export interface AddVersionFromPdfVariables {
-  id: string;
-  options: Omit<PdfImportOptions, "name">;
-}
-
-export function useAddResumeVersionFromPdf() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, options }: AddVersionFromPdfVariables) =>
-      addResumeVersionFromPdf(id, options),
-    onSuccess: (_response, { id }) => invalidateResume(client, id),
+    onSuccess: (response) => storeResume(client, response),
   });
 }
 

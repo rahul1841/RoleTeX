@@ -68,10 +68,9 @@ The fabrication guard only catches numbers (memory G-5).
 
 - **LaTeX:** `POST /api/resumes` — `latex` (40–200,000 chars), optional `name` / `provider` / `model`.
 - **PDF:** `POST /api/resumes/pdf` — multipart `file` plus the same options; ≤`MAX_PDF_UPLOAD_BYTES` (5 MB) and ≤`MAX_IMPORT_PDF_PAGES` (3). The text layer, page images (`pdftoppm`, ~2,000 image tokens per page) and link targets (`pdftohtml -xml`, since linked labels like "GitHub" hide their URLs) go to the model together when it can see images — images fix column order and text the layer drops. Text-only providers get text only, with a warning. A scan (no text layer) goes as images only and is stored as `pdf_scanned`.
-- **New version:** `POST /api/resumes/{id}/versions[/pdf]`, same bodies.
 - **Normalization:** model IDs discarded, positional IDs assigned (R-12); `sanitize_style` forces A4, whitelists font size (10/11/12pt, default 10), clamps margin to 1.0–3.0 cm (default 2.0), accepts an optional 6-hex accent. Headlines are trimmed to 12 words.
-- **Template:** fully server-authored, embedding only the clamped style. The original is stored as `source_text` and never compiled.
-- Every import response carries a "review your import" warning. Quotas: `409 resume_quota_exceeded` / `version_quota_exceeded`.
+- **Template:** fully server-authored, embedding only the clamped style. The original document is neither stored nor compiled.
+- Every import response carries a "review your import" warning. Quota: `409 resume_quota_exceeded`.
 
 ## 6. Compiler (`compiler.py`)
 
@@ -95,7 +94,7 @@ Next.js App Router, React, TypeScript, Tailwind, shadcn/ui on Base UI — built 
 - **Selection is a query parameter** (`/resumes?id=…`, `/history?run=…`, `/tailor?resume=…&jd=…`) — a static export can't prerender per-user `[id]` routes.
 - **API layer:** `lib/api/client.ts` is the only `fetch`, same-origin with the cookie, so no CORS and no `SameSite=None`. `schema.d.ts` is generated from OpenAPI (`npm run gen:api`); `mappers.ts` converts between read models (`ResumeData`, with IDs) and write models (`ResumeDraft`, without).
 - **Server state:** TanStack Query, keys in `lib/api/query-keys.ts`. Mutations never auto-retry; queries never retry a 4xx or a timeout.
-- **Look:** a top bar with text-tab navigation (a drawer on small screens); screens share `PageHero` and the dotted `Canvas` from `components/common`. Resume thumbnails and the tailor screen's "Current version" are HTML typeset from stored facts, never a compile.
+- **Look:** a top bar with text-tab navigation (a drawer on small screens); screens share `PageHero` and the dotted `Canvas` from `components/common`. Resume thumbnails and the tailor screen's resume preview are HTML typeset from stored facts, never a compile.
 - **Tailor screen:** setup → running (a real clock; stages estimated from it, since the API streams nothing) → review. The change list is always visible; the PDF, unified diff and LaTeX sit beside it in tabs (R-14).
 - **PDF preview:** `pdfjs-dist`, loaded client-side on demand.
 - **Accessibility:** skip link; one `<h1>` per page, focused on navigation; `aria-current` in the nav; labelled inputs with `aria-invalid` / `aria-describedby`; focus traps from Base UI.

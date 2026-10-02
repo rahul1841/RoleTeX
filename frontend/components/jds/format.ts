@@ -65,20 +65,3 @@ export function formatRelative(value: string | null | undefined): string {
   }
   return "just now";
 }
-
-/** backend/app/routes_jds.py `EXCERPT_LENGTH`. */
-const EXCERPT_LENGTH = 160;
-
-/**
- * The same excerpt the server derives for a list row or a version entry:
- * whitespace collapsed to single spaces, then the first 160 characters.
- *
- * Reimplemented here for one reason — the version trail shows archived
- * revisions as excerpts because that is all the API returns for them, and the
- * *current* revision has to appear in the same trail. Deriving it the same way
- * means the newest entry is comparable with the ones under it instead of being
- * the only one showing full text.
- */
-export function serverExcerpt(content: string): string {
-  return content.split(/\s+/).filter(Boolean).join(" ").slice(0, EXCERPT_LENGTH);
-}

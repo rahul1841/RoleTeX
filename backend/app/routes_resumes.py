@@ -1,4 +1,4 @@
-"""Per-user resume library routes: import, manual authoring, versions, preview.
+"""Per-user resume library routes: import, manual authoring, saving tailored results, preview.
 
 Security rationale:
 - Import is the one sanctioned flow where a user's full document (identity
@@ -37,6 +37,7 @@ from pydantic import ValidationError
 from .auth import _api_error, require_user, resolve_llm_selection
 from .builder import (
     ResumeDraftError,
+    apply_proposal,
     baseline_proposal,
     build_manual_artifacts,
     render_baseline,
@@ -50,7 +51,12 @@ from .llm import (
     LLMResponseError,
 )
 from .pdftext import PdfExtractionError
-from .resume import ProposalValidationError, ResumeError, render_template_text
+from .resume import (
+    ProposalValidationError,
+    ResumeError,
+    render_template_text,
+    validate_proposal,
+)
 from .routes_runs import compile_report, compiler_failure
 from .schemas import (
     OkResponse,
@@ -66,9 +72,7 @@ from .schemas import (
     ResumeRenameRequest,
     ResumeResponse,
     ResumeSummary,
-    ResumeVersionSourceResponse,
-    ResumeVersionSummary,
-    ResumeVersionsResponse,
+    TailoredResumeSaveRequest,
     dump_model,
     validate_model,
 )
@@ -78,6 +82,8 @@ logger = logging.getLogger(__name__)
 
 #: ``source_type`` for a resume typed into the editor rather than imported.
 MANUAL_SOURCE_TYPE = "manual"
+#: ``source_type`` for a resume saved from a tailoring result.
+TAILORED_SOURCE_TYPE = "tailored"
 
 IMPORT_REVIEW_WARNING = (
     "Review the imported fields; the AI extraction may have missed or "
@@ -147,7 +153,6 @@ def _resume_summary(doc: Dict[str, Any]) -> ResumeSummary:
         id=doc["_id"],
         name=doc.get("name", ""),
         source_type=doc.get("source_type", ""),
-        version=int(doc.get("current_version", 1)),
         provider=doc.get("provider", "") or "",
         model=doc.get("model", "") or "",
         created_at=doc.get("created_at"),
@@ -166,28 +171,19 @@ def _pdf_filename(label: str) -> str:
 
 
 def register_resumes_routes(app: FastAPI, services: Any) -> None:
-    async def _current_content(user_id: str, doc: Dict[str, Any]) -> Tuple[ResumeData, str]:
-        """Validated facts plus the stored template for a resume's live version."""
+    def _stored_content(doc: Dict[str, Any]) -> Tuple[ResumeData, str]:
+        """Validated facts plus the stored template."""
 
-        version = await services.database.resumes.get_version(
-            user_id, doc["_id"], int(doc.get("current_version", 1))
-        )
-        if version is None:
-            raise _api_error(
-                500, "resume_configuration_error", "The stored resume is incomplete."
-            )
         try:
-            data = validate_model(ResumeData, version.get("data"))
+            data = validate_model(ResumeData, doc.get("data"))
         except ValidationError as exc:
             raise _api_error(
                 500, "resume_configuration_error", "The stored resume is invalid."
             ) from exc
-        return data, version.get("template_tex", "") or ""
+        return data, doc.get("template_tex", "") or ""
 
-    async def _resume_detail(
-        user_id: str, doc: Dict[str, Any]
-    ) -> ResumeDetail:
-        data, _template = await _current_content(user_id, doc)
+    def _resume_detail(doc: Dict[str, Any]) -> ResumeDetail:
+        data, _template = _stored_content(doc)
         summary = _resume_summary(doc)
         return ResumeDetail(
             style=sanitize_style(doc.get("style")),
@@ -363,16 +359,6 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
                 "You already have {0} resumes; delete one to add another.".format(count),
             )
 
-    def _check_version_quota(existing: Dict[str, Any]) -> None:
-        if int(existing.get("current_version", 1)) >= services.config.max_versions_per_resume:
-            raise _api_error(
-                409,
-                "version_quota_exceeded",
-                "This resume already has {0} versions.".format(
-                    existing.get("current_version")
-                ),
-            )
-
     def _manual_artifacts(
         draft: Any, style: Any, *, require_content: bool = True
     ) -> Tuple[ResumeData, Any, str, str]:
@@ -413,48 +399,12 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
             source_type,
             dump_model(resume),
             template,
-            source_text,
             dump_model(style),
             extraction.provider,
             extraction.model,
         )
         return ResumeCreateResponse(
-            resume=await _resume_detail(user["_id"], doc), warnings=warnings
-        )
-
-    async def _add_resume_version(
-        user: Dict[str, Any],
-        resume_id: str,
-        source_text: str,
-        source_kind: str,
-        provider: Optional[str],
-        model: Optional[str],
-        images: Optional[List[bytes]] = None,
-        links: Optional[List[Dict[str, str]]] = None,
-    ) -> ResumeCreateResponse:
-        existing = await services.database.resumes.get(user["_id"], resume_id)
-        if existing is None:
-            raise _resume_not_found()
-        _check_version_quota(existing)
-        resume, style, template, extraction, warnings = await _extract_validated_import(
-            user, source_text, source_kind, provider, model, images, links
-        )
-        source_type = _import_source_type(source_kind)
-        doc = await services.database.resumes.add_version(
-            user["_id"],
-            resume_id,
-            source_type,
-            dump_model(resume),
-            template,
-            source_text,
-            dump_model(style),
-            extraction.provider,
-            extraction.model,
-        )
-        if doc is None:
-            raise _resume_not_found()
-        return ResumeCreateResponse(
-            resume=await _resume_detail(user["_id"], doc), warnings=warnings
+            resume=_resume_detail(doc), warnings=warnings
         )
 
     @app.get("/api/resumes", response_model=ResumeListResponse)
@@ -500,24 +450,18 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
 
         user = await require_user(request, services)
         await _check_resume_quota(user)
-        resume, style, template, latex_source = _manual_artifacts(
-            payload.resume, payload.style
-        )
+        resume, style, template, _latex = _manual_artifacts(payload.resume, payload.style)
         doc = await services.database.resumes.create(
             user["_id"],
             (payload.name or "").strip() or _default_resume_name(resume),
             MANUAL_SOURCE_TYPE,
             dump_model(resume),
             template,
-            # Imports keep the document they came from; a resume written here
-            # has no such original, so the version stores the LaTeX the server
-            # rendered from it — which is what "download the source" should mean.
-            latex_source,
             dump_model(style),
             "",
             "",
         )
-        return ResumeCreateResponse(resume=await _resume_detail(user["_id"], doc))
+        return ResumeCreateResponse(resume=_resume_detail(doc))
 
     @app.put(
         "/api/resumes/{resume_id}/content", response_model=ResumeCreateResponse
@@ -525,35 +469,27 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
     async def update_resume_content(
         resume_id: str, payload: ResumeContentUpdateRequest, request: Request
     ) -> ResumeCreateResponse:
-        """Save edited facts as the resume's next version.
+        """Overwrite the resume with edited facts.
 
-        Editing is version-additive like re-importing, so the previous wording
-        survives an experiment. It works on imported resumes too: the first save
-        turns that version into a manually authored one.
+        Works on imported resumes too: saving turns one into a manually authored
+        resume. To keep the original, the editor saves a new resume instead.
         """
 
         user = await require_user(request, services)
-        existing = await services.database.resumes.get(user["_id"], resume_id)
-        if existing is None:
-            raise _resume_not_found()
-        _check_version_quota(existing)
-        resume, style, template, latex_source = _manual_artifacts(
-            payload.resume, payload.style
-        )
-        doc = await services.database.resumes.add_version(
+        resume, style, template, _latex = _manual_artifacts(payload.resume, payload.style)
+        doc = await services.database.resumes.replace_content(
             user["_id"],
             resume_id,
             MANUAL_SOURCE_TYPE,
             dump_model(resume),
             template,
-            latex_source,
             dump_model(style),
             "",
             "",
         )
         if doc is None:
             raise _resume_not_found()
-        return ResumeCreateResponse(resume=await _resume_detail(user["_id"], doc))
+        return ResumeCreateResponse(resume=_resume_detail(doc))
 
     @app.post("/api/resumes/preview", response_model=ResumePreviewResponse)
     async def preview_resume(
@@ -585,7 +521,7 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
             doc = await services.database.resumes.get(user["_id"], payload.resume_id)
             if doc is None:
                 raise _resume_not_found()
-            resume, template = await _current_content(user["_id"], doc)
+            resume, template = _stored_content(doc)
             if payload.style is not None:
                 # A style override previews a different look without touching
                 # what is stored; saving is what makes it permanent.
@@ -620,7 +556,7 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
         doc = await services.database.resumes.get(user["_id"], resume_id)
         if doc is None:
             raise _resume_not_found()
-        return ResumeResponse(resume=await _resume_detail(user["_id"], doc))
+        return ResumeResponse(resume=_resume_detail(doc))
 
     @app.patch("/api/resumes/{resume_id}", response_model=ResumeResponse)
     async def rename_resume(
@@ -635,7 +571,7 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
         doc = await services.database.resumes.get(user["_id"], resume_id)
         if doc is None:
             raise _resume_not_found()
-        return ResumeResponse(resume=await _resume_detail(user["_id"], doc))
+        return ResumeResponse(resume=_resume_detail(doc))
 
     @app.delete("/api/resumes/{resume_id}", response_model=OkResponse)
     async def delete_resume(resume_id: str, request: Request) -> OkResponse:
@@ -646,74 +582,68 @@ def register_resumes_routes(app: FastAPI, services: Any) -> None:
         return OkResponse()
 
     @app.post(
-        "/api/resumes/{resume_id}/versions",
-        response_model=ResumeCreateResponse,
-        status_code=201,
+        "/api/resumes/{resume_id}/tailored", response_model=ResumeCreateResponse
     )
-    async def add_version(
-        resume_id: str, payload: ResumeCreateRequest, request: Request
+    async def save_tailored_resume(
+        resume_id: str, payload: TailoredResumeSaveRequest, request: Request
     ) -> ResumeCreateResponse:
-        user = await require_user(request, services)
-        return await _add_resume_version(
-            user, resume_id, payload.latex, "latex", payload.provider, payload.model
-        )
+        """Keep a tailoring result: as a new resume, or by overwriting this one.
 
-    @app.post(
-        "/api/resumes/{resume_id}/versions/pdf",
-        response_model=ResumeCreateResponse,
-        status_code=201,
-    )
-    async def add_version_from_pdf(
-        resume_id: str,
-        request: Request,
-        file: UploadFile = File(...),
-        provider: Optional[str] = Form(default=None),
-        model: Optional[str] = Form(default=None),
-    ) -> ResumeCreateResponse:
-        user = await require_user(request, services)
-        text, kind, images, links = await _read_pdf_upload(file)
-        return await _add_resume_version(
-            user, resume_id, text, kind, provider, model, images, links
-        )
+        The proposal comes back from the browser, so it is validated against the
+        stored resume again, exactly as when the model returned it. A resume
+        edited since it was tailored no longer matches and is refused.
+        """
 
-    @app.get(
-        "/api/resumes/{resume_id}/versions", response_model=ResumeVersionsResponse
-    )
-    async def list_versions(resume_id: str, request: Request) -> ResumeVersionsResponse:
         user = await require_user(request, services)
-        doc = await services.database.resumes.get(user["_id"], resume_id)
-        if doc is None:
+        existing = await services.database.resumes.get(user["_id"], resume_id)
+        if existing is None:
             raise _resume_not_found()
-        versions = await services.database.resumes.list_versions(user["_id"], resume_id)
-        return ResumeVersionsResponse(
-            versions=[
-                ResumeVersionSummary(
-                    version=int(item.get("version", 0)),
-                    source_type=item.get("source_type", ""),
-                    provider=item.get("provider", "") or "",
-                    model=item.get("model", "") or "",
-                    created_at=item.get("created_at"),
-                )
-                for item in versions
-            ]
-        )
+        resume, template = _stored_content(existing)
+        try:
+            validate_proposal(resume, payload.proposal)
+        except ProposalValidationError as exc:
+            raise _api_error(
+                409,
+                "resume_changed",
+                "This resume changed after it was tailored. Tailor it again.",
+                errors=exc.errors,
+            ) from exc
+        tailored = apply_proposal(resume, payload.proposal)
+        try:
+            render_baseline(template, tailored)
+        except ResumeDraftError as exc:
+            raise _api_error(
+                500,
+                "render_failed",
+                "The tailored resume could not be rendered.",
+                errors=exc.errors,
+            ) from exc
 
-    @app.get(
-        "/api/resumes/{resume_id}/versions/{version}/source",
-        response_model=ResumeVersionSourceResponse,
-    )
-    async def get_version_source(
-        resume_id: str, version: int, request: Request
-    ) -> ResumeVersionSourceResponse:
-        user = await require_user(request, services)
-        doc = await services.database.resumes.get_version(
-            user["_id"], resume_id, version
-        )
-        if doc is None:
-            raise _resume_not_found()
-        return ResumeVersionSourceResponse(
-            version=int(doc.get("version", version)),
-            source_type=doc.get("source_type", ""),
-            source_text=doc.get("source_text", "") or "",
-            template_tex=doc.get("template_tex", "") or "",
-        )
+        style = existing.get("style") or {}
+        if payload.mode == "new":
+            await _check_resume_quota(user)
+            default_name = "{0} (tailored)".format(existing.get("name", "Resume"))
+            doc = await services.database.resumes.create(
+                user["_id"],
+                ((payload.name or "").strip() or default_name)[:120],
+                TAILORED_SOURCE_TYPE,
+                dump_model(tailored),
+                template,
+                style,
+                "",
+                "",
+            )
+        else:
+            doc = await services.database.resumes.replace_content(
+                user["_id"],
+                resume_id,
+                TAILORED_SOURCE_TYPE,
+                dump_model(tailored),
+                template,
+                style,
+                "",
+                "",
+            )
+            if doc is None:
+                raise _resume_not_found()
+        return ResumeCreateResponse(resume=_resume_detail(doc))

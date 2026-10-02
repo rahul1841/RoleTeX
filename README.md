@@ -8,7 +8,7 @@ app_port: 7860
 
 *AI + LaTeX.* Tailor a resume to any job description: an LLM proposes plain-text edits, the server validates them, renders them into a locked LaTeX template, and compiles the PDF with Tectonic. You review every change before downloading.
 
-Accounts, private resume and job-description libraries with versions, tailoring history, and per-user encrypted provider keys, all stored in MongoDB. The server won't start without `MONGODB_URI`.
+Accounts, private resume and job-description libraries, tailoring history, and per-user encrypted provider keys, all stored in MongoDB. The server won't start without `MONGODB_URI`.
 
 > `backend/resume/data.json` holds the owner's real contact details; only the Docker build's cache prewarm reads it. Keep the repository private.
 
@@ -171,9 +171,7 @@ Set these in `.env` locally or in your host's secret store — never in code or 
 | `RATE_LIMIT_EMAIL_CALLS` / `RATE_LIMIT_EMAIL_WINDOW_SECONDS` | `5` / `900` | Per IP and per address; 1–100 / 60–86400 |
 | `LOGIN_MAX_ATTEMPTS` / `LOGIN_WINDOW_SECONDS` | `10` / `900` | Failed logins per email + IP; 1–100 / 10–3600 |
 | `MAX_RESUMES_PER_USER` | `10` | 1–100 |
-| `MAX_VERSIONS_PER_RESUME` | `20` | 1–100 |
 | `MAX_JDS_PER_USER` | `50` | 1–500 |
-| `MAX_VERSIONS_PER_JD` | `20` | 1–100; oldest pruned |
 | `MAX_RUNS_PER_USER` | `200` | 10–2000; oldest pruned |
 
 ## Docker

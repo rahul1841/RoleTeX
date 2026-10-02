@@ -93,8 +93,8 @@ MAX_RUN_LATEX_CHARACTERS = 200_000
 MAX_RUN_DIFF_CHARACTERS = 100_000
 RUN_JD_EXCERPT_CHARACTERS = 300
 
-_PDF_UPLOAD_PATH = re.compile(r"^/api/resumes(?:/[^/]+/versions)?/pdf$")
-_LATEX_IMPORT_PATH = re.compile(r"^/api/resumes(?:/[^/]+/versions)?$")
+_PDF_UPLOAD_PATH = re.compile(r"^/api/resumes/pdf$")
+_LATEX_IMPORT_PATH = re.compile(r"^/api/resumes$")
 # A whole resume authored in the editor arrives as one JSON document, so these
 # routes need the import ceiling rather than the 64KB API default.
 _STRUCTURED_RESUME_PATH = re.compile(
@@ -103,7 +103,7 @@ _STRUCTURED_RESUME_PATH = re.compile(
 # Routes that spend a scarce resource — a provider call, a Tectonic compile, or
 # both. ``/api/resumes/preview`` calls no model but does compile.
 _LLM_BUCKET_PATH = re.compile(
-    r"^/api/(?:tailor|resumes(?:/pdf|/preview|/[^/]+/versions(?:/pdf)?)?"
+    r"^/api/(?:tailor|resumes(?:/pdf|/preview)?"
     r"|runs/[^/]+/compile)$"
 )
 _STATE_CHANGING_METHODS = ("POST", "PUT", "PATCH", "DELETE")
@@ -689,20 +689,13 @@ def create_app(
                 "resume_not_found",
                 "No resume with this id in your library. Import a resume first.",
             )
-        version_doc = await services.database.resumes.get_version(
-            user["_id"], resume_id, int(doc.get("current_version", 1))
-        )
-        if version_doc is None:
-            raise _api_error(
-                500, "resume_configuration_error", "The stored resume is incomplete."
-            )
         try:
-            resume = validate_model(ResumeData, version_doc.get("data"))
+            resume = validate_model(ResumeData, doc.get("data"))
         except ValidationError as exc:
             raise _api_error(
                 500, "resume_configuration_error", "The stored resume profile is invalid."
             ) from exc
-        template = version_doc.get("template_tex", "") or ""
+        template = doc.get("template_tex", "") or ""
         return resume, template, doc
 
     @application.post("/api/tailor", response_model=TailorResponse)
@@ -770,7 +763,6 @@ def create_app(
             run_doc = {
                 "resume_id": resume_doc["_id"],
                 "resume_name": resume_doc.get("name", ""),
-                "resume_version": int(resume_doc.get("current_version", 1)),
                 "jd_id": jd_doc["_id"] if jd_doc is not None else None,
                 "jd_title": jd_doc.get("title") if jd_doc is not None else None,
                 "jd_excerpt": " ".join(job_description.split())[

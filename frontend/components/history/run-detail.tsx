@@ -120,11 +120,8 @@ export function RunDetail({ run, onDeleted, className }: RunDetailProps) {
                 </Badge>
               ) : null}
             </p>
-            <h2 className="font-heading flex flex-wrap items-baseline gap-x-3 gap-y-1 text-2xl leading-tight font-semibold tracking-[-0.02em] sm:text-3xl">
-              <span className="min-w-0">{run.resume_name || "Untitled resume"}</span>
-              <span className="text-muted-foreground font-mono text-sm font-normal tracking-normal">
-                v{run.resume_version}
-              </span>
+            <h2 className="font-heading min-w-0 text-2xl leading-tight font-semibold tracking-[-0.02em] sm:text-3xl">
+              {run.resume_name || "Untitled resume"}
             </h2>
             <p className="text-muted-foreground flex items-start gap-2 text-[0.9375rem] text-pretty">
               <ArrowRightIcon aria-hidden="true" className="mt-1 size-4 shrink-0" />

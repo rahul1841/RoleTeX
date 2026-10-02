@@ -333,11 +333,10 @@ export interface paths {
         get?: never;
         /**
          * Update Resume Content
-         * @description Save edited facts as the resume's next version.
+         * @description Overwrite the resume with edited facts.
          *
-         *     Editing is version-additive like re-importing, so the previous wording
-         *     survives an experiment. It works on imported resumes too: the first save
-         *     turns that version into a manually authored one.
+         *     Works on imported resumes too: saving turns one into a manually authored
+         *     resume. To keep the original, the editor saves a new resume instead.
          */
         put: operations["update_resume_content_api_resumes__resume_id__content_put"];
         post?: never;
@@ -390,25 +389,7 @@ export interface paths {
         patch: operations["rename_resume_api_resumes__resume_id__patch"];
         trace?: never;
     };
-    "/api/resumes/{resume_id}/versions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Versions */
-        get: operations["list_versions_api_resumes__resume_id__versions_get"];
-        put?: never;
-        /** Add Version */
-        post: operations["add_version_api_resumes__resume_id__versions_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/resumes/{resume_id}/versions/pdf": {
+    "/api/resumes/{resume_id}/tailored": {
         parameters: {
             query?: never;
             header?: never;
@@ -417,25 +398,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Add Version From Pdf */
-        post: operations["add_version_from_pdf_api_resumes__resume_id__versions_pdf_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/resumes/{resume_id}/versions/{version}/source": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Version Source */
-        get: operations["get_version_source_api_resumes__resume_id__versions__version__source_get"];
-        put?: never;
-        post?: never;
+        /**
+         * Save Tailored Resume
+         * @description Keep a tailoring result: as a new resume, or by overwriting this one.
+         *
+         *     The proposal comes back from the browser, so it is validated against the
+         *     stored resume again, exactly as when the model returned it. A resume
+         *     edited since it was tailored no longer matches and is refused.
+         */
+        post: operations["save_tailored_resume_api_resumes__resume_id__tailored_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -474,23 +445,6 @@ export interface paths {
         post?: never;
         /** Delete Jd */
         delete: operations["delete_jd_api_jds__jd_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/jds/{jd_id}/versions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Jd Versions */
-        get: operations["list_jd_versions_api_jds__jd_id__versions_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -552,15 +506,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** Body_add_version_from_pdf_api_resumes__resume_id__versions_pdf_post */
-        Body_add_version_from_pdf_api_resumes__resume_id__versions_pdf_post: {
-            /** File */
-            file: string;
-            /** Provider */
-            provider?: string | null;
-            /** Model */
-            model?: string | null;
-        };
         /** Body_create_resume_from_pdf_api_resumes_pdf_post */
         Body_create_resume_from_pdf_api_resumes_pdf_post: {
             /** File */
@@ -654,8 +599,6 @@ export interface components {
             title: string;
             /** Content */
             content: string;
-            /** Version */
-            version: number;
             /** Created At */
             created_at?: string | null;
             /** Updated At */
@@ -676,8 +619,6 @@ export interface components {
             id: string;
             /** Title */
             title: string;
-            /** Version */
-            version: number;
             /**
              * Excerpt
              * @default
@@ -694,28 +635,6 @@ export interface components {
             title?: string | null;
             /** Content */
             content?: string | null;
-        };
-        /** JdVersionSummary */
-        JdVersionSummary: {
-            /** Version */
-            version: number;
-            /**
-             * Title
-             * @default
-             */
-            title: string;
-            /**
-             * Excerpt
-             * @default
-             */
-            excerpt: string;
-            /** Created At */
-            created_at?: string | null;
-        };
-        /** JdVersionsResponse */
-        JdVersionsResponse: {
-            /** Versions */
-            versions?: components["schemas"]["JdVersionSummary"][];
         };
         /** KeyInfo */
         KeyInfo: {
@@ -906,8 +825,6 @@ export interface components {
             name: string;
             /** Source Type */
             source_type: string;
-            /** Version */
-            version: number;
             /**
              * Provider
              * @default
@@ -1164,7 +1081,7 @@ export interface components {
         };
         /**
          * ResumePreviewRequest
-         * @description Compile a draft as typed, or the stored current version of one resume.
+         * @description Compile a draft as typed, or one stored resume.
          *
          *     Exactly one of ``resume`` / ``resume_id`` is accepted; the route enforces
          *     that pairing so the mistake gets its own error code.
@@ -1286,8 +1203,6 @@ export interface components {
             name: string;
             /** Source Type */
             source_type: string;
-            /** Version */
-            version: number;
             /**
              * Provider
              * @default
@@ -1302,47 +1217,6 @@ export interface components {
             created_at?: string | null;
             /** Updated At */
             updated_at?: string | null;
-        };
-        /** ResumeVersionSourceResponse */
-        ResumeVersionSourceResponse: {
-            /** Version */
-            version: number;
-            /** Source Type */
-            source_type: string;
-            /**
-             * Source Text
-             * @default
-             */
-            source_text: string;
-            /**
-             * Template Tex
-             * @default
-             */
-            template_tex: string;
-        };
-        /** ResumeVersionSummary */
-        ResumeVersionSummary: {
-            /** Version */
-            version: number;
-            /** Source Type */
-            source_type: string;
-            /**
-             * Provider
-             * @default
-             */
-            provider: string;
-            /**
-             * Model
-             * @default
-             */
-            model: string;
-            /** Created At */
-            created_at?: string | null;
-        };
-        /** ResumeVersionsResponse */
-        ResumeVersionsResponse: {
-            /** Versions */
-            versions?: components["schemas"]["ResumeVersionSummary"][];
         };
         /** RunCompileResponse */
         RunCompileResponse: {
@@ -1373,11 +1247,6 @@ export interface components {
              * @default
              */
             resume_name: string;
-            /**
-             * Resume Version
-             * @default 0
-             */
-            resume_version: number;
             /** Jd Id */
             jd_id?: string | null;
             /** Jd Title */
@@ -1445,11 +1314,6 @@ export interface components {
              * @default
              */
             resume_name: string;
-            /**
-             * Resume Version
-             * @default 0
-             */
-            resume_version: number;
             /** Jd Id */
             jd_id?: string | null;
             /** Jd Title */
@@ -1560,6 +1424,20 @@ export interface components {
             compiler: components["schemas"]["CompilerReport"];
             /** Run Id */
             run_id?: string | null;
+        };
+        /**
+         * TailoredResumeSaveRequest
+         * @description Keep a tailoring result as resume content.
+         */
+        TailoredResumeSaveRequest: {
+            proposal: components["schemas"]["TailorProposal"];
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "new" | "overwrite";
+            /** Name */
+            name?: string | null;
         };
         /** UpdateMeRequest */
         UpdateMeRequest: {
@@ -2438,38 +2316,7 @@ export interface operations {
             };
         };
     };
-    list_versions_api_resumes__resume_id__versions_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                resume_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResumeVersionsResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    add_version_api_resumes__resume_id__versions_post: {
+    save_tailored_resume_api_resumes__resume_id__tailored_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2480,76 +2327,9 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ResumeCreateRequest"];
+                "application/json": components["schemas"]["TailoredResumeSaveRequest"];
             };
         };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResumeCreateResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    add_version_from_pdf_api_resumes__resume_id__versions_pdf_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                resume_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_add_version_from_pdf_api_resumes__resume_id__versions_pdf_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResumeCreateResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_version_source_api_resumes__resume_id__versions__version__source_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                resume_id: string;
-                version: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -2557,7 +2337,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ResumeVersionSourceResponse"];
+                    "application/json": components["schemas"]["ResumeCreateResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2708,37 +2488,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OkResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_jd_versions_api_jds__jd_id__versions_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                jd_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JdVersionsResponse"];
                 };
             };
             /** @description Validation Error */

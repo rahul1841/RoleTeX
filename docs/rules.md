@@ -6,10 +6,10 @@
 ## 1. Security invariants
 
 - **R-1 · No PII to the LLM during tailoring.** `build_llm_resume_payload` excludes `identity` (name, email, phone, location, links); it is restored only at render time. Compiler logs pass through `redact_identity` before any repair prompt.
-- **R-2 · The import exception stays scoped to import.** Resume import (`POST /api/resumes`, `/api/resumes/pdf` and their `/versions` variants) sends the user's whole document, contact details included, to the LLM. This must never reach the tailor path, and must stay documented in the README and prd.md.
+- **R-2 · The import exception stays scoped to import.** Resume import (`POST /api/resumes`, `/api/resumes/pdf`) sends the user's whole document, contact details included, to the LLM. This must never reach the tailor path, and must stay documented in the README and prd.md.
 - **R-3 · The LLM never emits LaTeX.** It returns plain text in a strict JSON schema; only the server writes LaTeX, and every model string goes through `escape_latex`.
 - **R-4 · The template is locked.** Every template (seed and server-assembled) contains each of the 7 tokens exactly once — `@@CONTACT@@ @@SUMMARY@@ @@EXPERIENCE@@ @@PROJECTS@@ @@EDUCATION@@ @@SKILLS@@ @@ACHIEVEMENTS@@` — plus the optional `@@CUSTOM@@`. `validate_template` enforces it; rendering substitutes each once and rejects leftovers.
-- **R-5 · User LaTeX is never compiled.** Imported source is stored verbatim as `source_text`; the compiler only receives server-assembled templates. Only clamped style values (font size, margin, accent) vary per resume.
+- **R-5 · User LaTeX is never compiled.** Imported source is read once by the LLM and not stored; the compiler only receives server-assembled templates. Only clamped style values (font size, margin, accent) vary per resume.
 - **R-6 · Compilation is always sandboxed.** Fresh temp dir per compile, `tectonic -X compile --untrusted`, `--only-cached` by default, argument-list invocation (never `shell=True`), timeout, POSIX resource limits, bounded concurrency. No exceptions.
 - **R-7 · The JD is data, never instructions.** Prompts frame it as reference data; the strict schema (`extra="forbid"`) and server-side validation are the enforcement. Never relax `StrictModel`.
 - **R-8 · No fabrication passes validation.** `validate_proposal` must keep rejecting unknown/duplicate bullet IDs, any `skills_order` that isn't an exact permutation of existing skills, new numeric claims, and over-limit text. Extend, never weaken.

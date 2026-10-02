@@ -343,19 +343,17 @@ class ApiKeyStore:
 
 
 class ResumeStore:
-    """Resume documents plus immutable per-version payload documents.
+    """One document per resume; saving replaces its content in place.
 
-    resume doc:  {_id, user_id, name, source_type, style, provider, model,
-                  current_version, created_at, updated_at}
-    version doc: {_id, resume_id, user_id, version, data, template_tex,
-                  source_text, source_type, style, provider, model, created_at}
+    resume doc: {_id, user_id, name, source_type, style, provider, model,
+                 data, template_tex, created_at, updated_at}
     """
 
-    _VERSION_PAYLOAD_FIELDS = ("data", "template_tex", "source_text")
+    # Large fields a list view never needs.
+    _CONTENT_FIELDS = ("data", "template_tex")
 
-    def __init__(self, resumes: Any, versions: Any) -> None:
+    def __init__(self, resumes: Any) -> None:
         self._resumes = resumes
-        self._versions = versions
 
     async def create(
         self,
@@ -364,7 +362,6 @@ class ResumeStore:
         source_type: str,
         data: Dict[str, Any],
         template_tex: str,
-        source_text: str,
         style: Dict[str, Any],
         provider: str,
         model: str,
@@ -378,77 +375,52 @@ class ResumeStore:
             "style": style,
             "provider": provider,
             "model": model,
-            "current_version": 1,
+            "data": data,
+            "template_tex": template_tex,
             "created_at": now,
             "updated_at": now,
         }
         await self._resumes.insert_one(resume_doc)
-        await self._versions.insert_one(
-            self._version_doc(
-                resume_doc["_id"], user_id, 1, source_type, data, template_tex,
-                source_text, style, provider, model, now,
-            )
-        )
         return resume_doc
 
-    async def add_version(
+    async def replace_content(
         self,
         user_id: str,
         resume_id: str,
         source_type: str,
         data: Dict[str, Any],
         template_tex: str,
-        source_text: str,
         style: Dict[str, Any],
         provider: str,
         model: str,
     ) -> Optional[Dict[str, Any]]:
-        now = _utc_now()
-        updated = await self._resumes.find_one_and_update(
+        """Overwrite a resume's content; None when it is not this user's."""
+
+        return await self._resumes.find_one_and_update(
             {"_id": resume_id, "user_id": user_id},
             {
-                "$inc": {"current_version": 1},
                 "$set": {
                     "source_type": source_type,
                     "style": style,
                     "provider": provider,
                     "model": model,
-                    "updated_at": now,
+                    "data": data,
+                    "template_tex": template_tex,
+                    "updated_at": _utc_now(),
                 },
             },
             return_document=ReturnDocument.AFTER,
         )
-        if updated is None:
-            return None
-        await self._versions.insert_one(
-            self._version_doc(
-                resume_id, user_id, int(updated["current_version"]), source_type,
-                data, template_tex, source_text, style, provider, model, now,
-            )
-        )
-        return updated
 
     async def list_for_user(self, user_id: str) -> List[Dict[str, Any]]:
-        cursor = self._resumes.find({"user_id": user_id}).sort("updated_at", -1)
+        projection = {field: 0 for field in self._CONTENT_FIELDS}
+        cursor = (
+            self._resumes.find({"user_id": user_id}, projection).sort("updated_at", -1)
+        )
         return await cursor.to_list(length=None)
 
     async def get(self, user_id: str, resume_id: str) -> Optional[Dict[str, Any]]:
         return await self._resumes.find_one({"_id": resume_id, "user_id": user_id})
-
-    async def get_version(
-        self, user_id: str, resume_id: str, version: int
-    ) -> Optional[Dict[str, Any]]:
-        return await self._versions.find_one(
-            {"resume_id": resume_id, "user_id": user_id, "version": version}
-        )
-
-    async def list_versions(self, user_id: str, resume_id: str) -> List[Dict[str, Any]]:
-        projection = {field: 0 for field in self._VERSION_PAYLOAD_FIELDS}
-        cursor = (
-            self._versions.find({"resume_id": resume_id, "user_id": user_id}, projection)
-            .sort("version", -1)
-        )
-        return await cursor.to_list(length=None)
 
     async def rename(self, user_id: str, resume_id: str, name: str) -> bool:
         result = await self._resumes.update_one(
@@ -459,58 +431,23 @@ class ResumeStore:
 
     async def delete(self, user_id: str, resume_id: str) -> bool:
         result = await self._resumes.delete_one({"_id": resume_id, "user_id": user_id})
-        if result.deleted_count == 0:
-            return False
-        await self._versions.delete_many({"resume_id": resume_id, "user_id": user_id})
-        return True
+        return result.deleted_count > 0
 
     async def delete_for_user(self, user_id: str) -> None:
         await self._resumes.delete_many({"user_id": user_id})
-        await self._versions.delete_many({"user_id": user_id})
 
     async def count_for_user(self, user_id: str) -> int:
         return await self._resumes.count_documents({"user_id": user_id})
 
-    @staticmethod
-    def _version_doc(
-        resume_id: str,
-        user_id: str,
-        version: int,
-        source_type: str,
-        data: Dict[str, Any],
-        template_tex: str,
-        source_text: str,
-        style: Dict[str, Any],
-        provider: str,
-        model: str,
-        created_at: datetime,
-    ) -> Dict[str, Any]:
-        return {
-            "_id": _new_id(),
-            "resume_id": resume_id,
-            "user_id": user_id,
-            "version": version,
-            "data": data,
-            "template_tex": template_tex,
-            "source_text": source_text,
-            "source_type": source_type,
-            "style": style,
-            "provider": provider,
-            "model": model,
-            "created_at": created_at,
-        }
-
 
 class JdStore:
-    """Job descriptions with archive-on-update version history.
+    """Job descriptions; editing one overwrites it in place.
 
-    jd doc:         {_id, user_id, title, content, version, created_at, updated_at}
-    jd_version doc: {_id, jd_id, user_id, version, title, content, created_at}
+    jd doc: {_id, user_id, title, content, created_at, updated_at}
     """
 
-    def __init__(self, jds: Any, versions: Any) -> None:
+    def __init__(self, jds: Any) -> None:
         self._jds = jds
-        self._versions = versions
 
     async def create(self, user_id: str, title: str, content: str) -> Dict[str, Any]:
         now = _utc_now()
@@ -519,7 +456,6 @@ class JdStore:
             "user_id": user_id,
             "title": title,
             "content": content,
-            "version": 1,
             "created_at": now,
             "updated_at": now,
         }
@@ -532,58 +468,19 @@ class JdStore:
         jd_id: str,
         title: Optional[str],
         content: Optional[str],
-        max_versions: Optional[int] = None,
     ) -> Optional[Dict[str, Any]]:
-        """Archive the current revision then apply the update.
+        """Overwrite the title and/or content; None when it is not this user's."""
 
-        ``max_versions`` caps the archived history per JD (oldest pruned),
-        mirroring ``RunStore._prune``; None disables pruning.
-        """
-
-        current = await self._jds.find_one({"_id": jd_id, "user_id": user_id})
-        if current is None:
-            return None
-        now = _utc_now()
-        await self._versions.insert_one(
-            {
-                "_id": _new_id(),
-                "jd_id": jd_id,
-                "user_id": user_id,
-                "version": int(current.get("version", 1)),
-                "title": current.get("title", ""),
-                "content": current.get("content", ""),
-                "created_at": now,
-            }
-        )
-        updates = {
-            "title": title if title is not None else current.get("title", ""),
-            "content": content if content is not None else current.get("content", ""),
-            "version": int(current.get("version", 1)) + 1,
-            "updated_at": now,
-        }
-        if max_versions is not None and max_versions > 0:
-            await self._prune_versions(user_id, jd_id, max_versions)
+        updates: Dict[str, Any] = {"updated_at": _utc_now()}
+        if title is not None:
+            updates["title"] = title
+        if content is not None:
+            updates["content"] = content
         return await self._jds.find_one_and_update(
             {"_id": jd_id, "user_id": user_id},
             {"$set": updates},
             return_document=ReturnDocument.AFTER,
         )
-
-    async def _prune_versions(self, user_id: str, jd_id: str, max_versions: int) -> None:
-        query = {"jd_id": jd_id, "user_id": user_id}
-        count = await self._versions.count_documents(query)
-        excess = count - max_versions
-        if excess <= 0:
-            return
-        cursor = (
-            self._versions.find(query, {"_id": 1}).sort("version", 1).limit(excess)
-        )
-        oldest = await cursor.to_list(length=excess)
-        ids = [doc["_id"] for doc in oldest]
-        if ids:
-            await self._versions.delete_many(
-                {"_id": {"$in": ids}, "user_id": user_id}
-            )
 
     async def list_for_user(self, user_id: str) -> List[Dict[str, Any]]:
         cursor = self._jds.find({"user_id": user_id}).sort("updated_at", -1)
@@ -592,22 +489,12 @@ class JdStore:
     async def get(self, user_id: str, jd_id: str) -> Optional[Dict[str, Any]]:
         return await self._jds.find_one({"_id": jd_id, "user_id": user_id})
 
-    async def list_versions(self, user_id: str, jd_id: str) -> List[Dict[str, Any]]:
-        cursor = (
-            self._versions.find({"jd_id": jd_id, "user_id": user_id}).sort("version", -1)
-        )
-        return await cursor.to_list(length=None)
-
     async def delete(self, user_id: str, jd_id: str) -> bool:
         result = await self._jds.delete_one({"_id": jd_id, "user_id": user_id})
-        if result.deleted_count == 0:
-            return False
-        await self._versions.delete_many({"jd_id": jd_id, "user_id": user_id})
-        return True
+        return result.deleted_count > 0
 
     async def delete_for_user(self, user_id: str) -> None:
         await self._jds.delete_many({"user_id": user_id})
-        await self._versions.delete_many({"user_id": user_id})
 
     async def count_for_user(self, user_id: str) -> int:
         return await self._jds.count_documents({"user_id": user_id})
@@ -692,8 +579,8 @@ class Database:
         self.auth_tokens = AuthTokenStore(motor_db["auth_tokens"])
         self.signup_codes = SignupCodeStore(motor_db["signup_codes"])
         self.api_keys = ApiKeyStore(motor_db["api_keys"])
-        self.resumes = ResumeStore(motor_db["resumes"], motor_db["resume_versions"])
-        self.jds = JdStore(motor_db["jds"], motor_db["jd_versions"])
+        self.resumes = ResumeStore(motor_db["resumes"])
+        self.jds = JdStore(motor_db["jds"])
         self.runs = RunStore(motor_db["runs"])
 
     @classmethod
@@ -743,10 +630,7 @@ class Database:
             (self._db["signup_codes"], "expires_at", {"expireAfterSeconds": 0}),
             (self._db["api_keys"], [("user_id", 1), ("provider", 1)], {"unique": True}),
             (self._db["resumes"], "user_id", {}),
-            (self._db["resume_versions"], [("resume_id", 1), ("version", 1)], {"unique": True}),
-            (self._db["resume_versions"], "user_id", {}),
             (self._db["jds"], "user_id", {}),
-            (self._db["jd_versions"], [("jd_id", 1), ("version", 1)], {}),
             (self._db["runs"], [("user_id", 1), ("created_at", 1)], {}),
         ]
         for collection, keys, options in index_plan:

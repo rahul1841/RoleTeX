@@ -57,6 +57,7 @@ export const API_ERROR_CODES = [
   "registration_disabled",
   "render_failed",
   "request_too_large",
+  "resume_changed",
   "resume_configuration_error",
   "resume_not_found",
   "resume_quota_exceeded",
@@ -65,7 +66,6 @@ export const API_ERROR_CODES = [
   "too_many_attempts",
   "too_many_requests",
   "unknown_provider",
-  "version_quota_exceeded",
   "weak_password",
   // Compile failures, surfaced from CompileResult rather than _api_error.
   "compile_timeout",

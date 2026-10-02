@@ -1,5 +1,6 @@
 /**
- * Resume endpoints: list, create (three ways), edit, version, preview, delete.
+ * Resume endpoints: list, create (three ways), edit, save a tailored result,
+ * preview, delete.
  *
  * ⚠️ Read/write asymmetry. `GET` returns `ResumeData` (server-owned ids on every
  * entry; bullets are `{ id, text }` objects). Writes take `ResumeDraft` (no ids
@@ -20,8 +21,7 @@ import type {
   ResumePreviewResponse,
   ResumeRenameRequest,
   ResumeResponse,
-  ResumeVersionSourceResponse,
-  ResumeVersionsResponse,
+  TailoredResumeSaveRequest,
 } from "../types";
 
 const base = "/api/resumes";
@@ -79,40 +79,19 @@ export const renameResume = (id: string, body: ResumeRenameRequest) =>
 
 export const deleteResume = (id: string) => api.delete<OkResponse>(one(id));
 
-/** Saves edited content as a new version of an existing resume. */
+/** Overwrites an existing resume's content. */
 export const updateResumeContent = (
   id: string,
   body: ResumeContentUpdateRequest,
 ) => api.put<ResumeCreateResponse>(`${one(id)}/content`, body);
 
-export const listResumeVersions = (id: string) =>
-  api.get<ResumeVersionsResponse>(`${one(id)}/versions`);
-
-export const getResumeVersionSource = (id: string, version: number) =>
-  api.get<ResumeVersionSourceResponse>(
-    `${one(id)}/versions/${version}/source`,
-  );
-
-export const addResumeVersionFromLatex = (
-  id: string,
-  body: ResumeCreateRequest,
-) =>
-  api.post<ResumeCreateResponse>(`${one(id)}/versions`, body, {
-    timeoutMs: LONG_REQUEST_TIMEOUT_MS,
-  });
-
-export const addResumeVersionFromPdf = (
-  id: string,
-  { file, provider, model, signal }: Omit<PdfImportOptions, "name">,
-) => {
-  const form = new FormData();
-  form.append("file", file);
-  if (provider) form.append("provider", provider);
-  if (model) form.append("model", model);
-  return api.upload<ResumeCreateResponse>(`${one(id)}/versions/pdf`, form, {
-    signal,
-  });
-};
+/**
+ * Keep a tailoring result: as a new resume (`mode: "new"`) or by overwriting
+ * the resume it was tailored from. The server re-validates the proposal, so a
+ * resume edited since the run answers 409 `resume_changed`.
+ */
+export const saveTailoredResume = (id: string, body: TailoredResumeSaveRequest) =>
+  api.post<ResumeCreateResponse>(`${one(id)}/tailored`, body);
 
 /**
  * Compile a preview PDF. Accepts either a stored `resume_id` or an unsaved

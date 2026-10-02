@@ -7,7 +7,7 @@ Python release, so this module deliberately avoids newer union/type syntax.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -324,7 +324,6 @@ class ResumeSummary(StrictModel):
     id: str
     name: str
     source_type: str
-    version: int
     provider: str = ""
     model: str = ""
     created_at: Optional[datetime] = None
@@ -360,23 +359,15 @@ class ResumeRenameRequest(StrictModel):
     name: str = Field(..., min_length=1, max_length=120)
 
 
-class ResumeVersionSummary(StrictModel):
-    version: int
-    source_type: str
-    provider: str = ""
-    model: str = ""
-    created_at: Optional[datetime] = None
+class TailoredResumeSaveRequest(StrictModel):
+    """Keep a tailoring result as resume content."""
 
-
-class ResumeVersionsResponse(StrictModel):
-    versions: List[ResumeVersionSummary] = Field(default_factory=list)
-
-
-class ResumeVersionSourceResponse(StrictModel):
-    version: int
-    source_type: str
-    source_text: str = ""
-    template_tex: str = ""
+    proposal: TailorProposal
+    #: ``new`` adds a resume and leaves the original alone; ``overwrite``
+    #: replaces the original's content.
+    mode: Literal["new", "overwrite"]
+    #: Name for a new resume; ignored when overwriting.
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
 
 
 # --- Manual authoring (the in-app resume builder) ---------------------------
@@ -479,7 +470,7 @@ class ResumeContentUpdateRequest(StrictModel):
 
 
 class ResumePreviewRequest(StrictModel):
-    """Compile a draft as typed, or the stored current version of one resume.
+    """Compile a draft as typed, or one stored resume.
 
     Exactly one of ``resume`` / ``resume_id`` is accepted; the route enforces
     that pairing so the mistake gets its own error code.
@@ -501,7 +492,6 @@ class ResumePreviewResponse(StrictModel):
 class JdSummary(StrictModel):
     id: str
     title: str
-    version: int
     excerpt: str = ""
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -511,7 +501,6 @@ class JdDetail(StrictModel):
     id: str
     title: str
     content: str
-    version: int
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -534,23 +523,11 @@ class JdUpdateRequest(StrictModel):
     content: Optional[str] = Field(default=None, min_length=50, max_length=20_000)
 
 
-class JdVersionSummary(StrictModel):
-    version: int
-    title: str = ""
-    excerpt: str = ""
-    created_at: Optional[datetime] = None
-
-
-class JdVersionsResponse(StrictModel):
-    versions: List[JdVersionSummary] = Field(default_factory=list)
-
-
 class RunSummary(StrictModel):
     id: str
     created_at: Optional[datetime] = None
     resume_id: str = ""
     resume_name: str = ""
-    resume_version: int = 0
     jd_id: Optional[str] = None
     jd_title: Optional[str] = None
     jd_excerpt: str = ""

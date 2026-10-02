@@ -5,14 +5,12 @@ import Link from "next/link";
 import { cn } from "cn";
 import {
   ClipboardPasteIcon,
-  HistoryIcon,
   PlusIcon,
   SearchIcon,
   SparklesIcon,
   XIcon,
   type LucideIcon,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -259,14 +257,9 @@ function JdListRow({ jd, selected }: { jd: JdSummary; selected: boolean }) {
           : "hover:bg-muted/50",
       )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <span className="line-clamp-2 text-[0.9375rem] leading-snug font-medium">
-          {jd.title}
-        </span>
-        <Badge variant="outline" className="bg-card shrink-0 font-mono">
-          v{jd.version}
-        </Badge>
-      </div>
+      <span className="line-clamp-2 text-[0.9375rem] leading-snug font-medium">
+        {jd.title}
+      </span>
       {jd.excerpt ? (
         <p className="text-muted-foreground mt-1.5 line-clamp-2 text-[0.8125rem] leading-5">
           {jd.excerpt}
@@ -293,11 +286,6 @@ const STEPS: { icon: LucideIcon; title: string; body: string }[] = [
     title: "Tailor any resume against it",
     body: "Pick it on the tailor screen instead of pasting it again, as many times and with as many resumes as you like.",
   },
-  {
-    icon: HistoryIcon,
-    title: "Edits keep the old wording",
-    body: "Changing the text records a new version; the earlier one is archived rather than overwritten.",
-  },
 ];
 
 /** Empty library: what saving a posting gets you, and the way in. */
@@ -323,7 +311,7 @@ function EmptyLibrary({ onCreate }: { onCreate: () => void }) {
         </Button>
       </div>
 
-      <ol className="grid gap-5 md:grid-cols-3">
+      <ol className="grid gap-5 md:grid-cols-2">
         {STEPS.map(({ icon: Icon, title, body }, index) => (
           <li
             key={title}

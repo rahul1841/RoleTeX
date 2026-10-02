@@ -34,7 +34,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     href: "/resumes",
     label: "Resumes",
     icon: FileTextIcon,
-    description: "Your saved resumes and their versions.",
+    description: "Your saved resumes.",
   },
   {
     href: "/jds",

@@ -21,16 +21,12 @@ export const queryKeys = {
     all: ["resumes"] as const,
     list: ["resumes", "list"] as const,
     detail: (id: string) => ["resumes", "detail", id] as const,
-    versions: (id: string) => ["resumes", "versions", id] as const,
-    versionSource: (id: string, version: number) =>
-      ["resumes", "versions", id, version, "source"] as const,
   },
 
   jds: {
     all: ["jds"] as const,
     list: ["jds", "list"] as const,
     detail: (id: string) => ["jds", "detail", id] as const,
-    versions: (id: string) => ["jds", "versions", id] as const,
   },
 
   runs: {

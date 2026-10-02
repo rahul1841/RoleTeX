@@ -9,7 +9,7 @@ import {
   useFormContext,
   useWatch,
 } from "react-hook-form";
-import { SaveIcon } from "lucide-react";
+import { CopyPlusIcon, SaveIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Canvas, ErrorState, Spinner } from "@/components/common";
 import { ReorderAnnouncer } from "./entry-card";
@@ -167,7 +167,12 @@ export interface ResumeBuilderProps {
   saveError: unknown;
   /** Resolve to keep the edits and mark the form clean; reject to keep it dirty. */
   onSubmit: (payload: ResumeBuilderSubmit) => Promise<void>;
-  /** Rendered next to the save button — a version note, a cancel link. */
+  /**
+   * Edit mode only: keep the original untouched and save these edits as a new
+   * resume. Shown as a second button beside Save when provided.
+   */
+  onSaveAsNew?: (payload: ResumeBuilderSubmit) => Promise<void>;
+  /** Rendered next to the save button — a cancel link, for instance. */
   footer?: React.ReactNode;
   className?: string;
 }
@@ -178,6 +183,7 @@ export function ResumeBuilder({
   isSaving,
   saveError,
   onSubmit,
+  onSaveAsNew,
   footer,
   className,
 }: ResumeBuilderProps) {
@@ -194,30 +200,35 @@ export function ResumeBuilder({
 
   const guidance = resumeErrorGuidance(saveError);
 
-  const handleSubmit = form.handleSubmit(async (values) => {
-    // The "at least one section" rule is a save-time rule only: previewing a
-    // contact-block-only resume is allowed and useful. It has no field to
-    // attach to, so it becomes a form-level error next to the save button.
-    if (!hasContent(values)) {
-      form.setError("root.content", {
-        type: "manual",
-        message:
-          "Add at least one section — a role, a project, education, skills, an achievement, or a section of your own.",
-      });
-      return;
-    }
-    form.clearErrors("root.content");
+  // Both save actions share one validation path; only the destination differs.
+  const submitWith = (save: (payload: ResumeBuilderSubmit) => Promise<void>) =>
+    form.handleSubmit(async (values) => {
+      // The "at least one section" rule is a save-time rule only: previewing a
+      // contact-block-only resume is allowed and useful. It has no field to
+      // attach to, so it becomes a form-level error next to the save button.
+      if (!hasContent(values)) {
+        form.setError("root.content", {
+          type: "manual",
+          message:
+            "Add at least one section — a role, a project, education, skills, an achievement, or a section of your own.",
+        });
+        return;
+      }
+      form.clearErrors("root.content");
 
-    await onSubmit({
-      draft: formToDraft(values),
-      style: formToStyle(values),
-      name: values.resumeName.trim(),
+      await save({
+        draft: formToDraft(values),
+        style: formToStyle(values),
+        name: values.resumeName.trim(),
+      });
+      // Marks the form clean without discarding anything typed while the save
+      // was in flight — `getValues()` is read after the await, so it is the
+      // current content, not the snapshot that was submitted.
+      form.reset(form.getValues());
     });
-    // Marks the form clean without discarding anything typed while the save
-    // was in flight — `getValues()` is read after the await, so it is the
-    // current content, not the snapshot that was submitted.
-    form.reset(form.getValues());
-  });
+  const handleSubmit = submitWith(onSubmit);
+  const handleSaveAsNew =
+    mode === "edit" && onSaveAsNew ? submitWith(onSaveAsNew) : null;
 
   const rootError = form.formState.errors.root?.content?.message;
   const isDirty = form.formState.isDirty;
@@ -241,13 +252,25 @@ export function ResumeBuilder({
                     Unsaved changes
                   </span>
                 ) : null}
+                {handleSaveAsNew ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isSaving}
+                    onClick={() => void handleSaveAsNew()}
+                    className="h-9 rounded-xl px-4"
+                  >
+                    <CopyPlusIcon data-icon="inline-start" />
+                    Save as new resume
+                  </Button>
+                ) : null}
                 <Button type="submit" disabled={isSaving} className="h-9 rounded-xl px-4">
                   {isSaving ? (
                     <Spinner data-icon="inline-start" />
                   ) : (
                     <SaveIcon data-icon="inline-start" />
                   )}
-                  {mode === "create" ? "Create resume" : "Save as new version"}
+                  {mode === "create" ? "Create resume" : "Save"}
                 </Button>
               </div>
             </div>
@@ -298,14 +321,28 @@ export function ResumeBuilder({
 
               <div className="flex flex-wrap items-center justify-between gap-3">
                 {footer}
-                <Button type="submit" disabled={isSaving} className="h-11 rounded-xl px-5 text-[0.9375rem]">
-                  {isSaving ? (
-                    <Spinner data-icon="inline-start" />
-                  ) : (
-                    <SaveIcon data-icon="inline-start" />
-                  )}
-                  {mode === "create" ? "Create resume" : "Save as new version"}
-                </Button>
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                  {handleSaveAsNew ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={isSaving}
+                      onClick={() => void handleSaveAsNew()}
+                      className="h-11 rounded-xl px-5 text-[0.9375rem]"
+                    >
+                      <CopyPlusIcon data-icon="inline-start" />
+                      Save as new resume
+                    </Button>
+                  ) : null}
+                  <Button type="submit" disabled={isSaving} className="h-11 rounded-xl px-5 text-[0.9375rem]">
+                    {isSaving ? (
+                      <Spinner data-icon="inline-start" />
+                    ) : (
+                      <SaveIcon data-icon="inline-start" />
+                    )}
+                    {mode === "create" ? "Create resume" : "Save"}
+                  </Button>
+                </div>
               </div>
             </div>
           </form>

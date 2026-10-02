@@ -115,8 +115,8 @@ export function JdWorkspace({ createOpen, onCreateOpenChange }: JdWorkspaceProps
                   Pick a posting to read
                 </p>
                 <p className="text-muted-foreground max-w-sm text-sm leading-6 text-pretty">
-                  Open one from the library to read it, tailor a resume against
-                  it, edit it into a new version, or see what it said before.
+                  Open one from the library to read it, edit it, or tailor a
+                  resume against it.
                 </p>
               </Canvas>
             ) : null}

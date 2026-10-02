@@ -93,9 +93,7 @@ export type ResumeContentUpdateRequest = S["ResumeContentUpdateRequest"];
 export type ResumeRenameRequest = S["ResumeRenameRequest"];
 export type ResumePreviewRequest = S["ResumePreviewRequest"];
 export type ResumePreviewResponse = S["ResumePreviewResponse"];
-export type ResumeVersionSummary = S["ResumeVersionSummary"];
-export type ResumeVersionsResponse = S["ResumeVersionsResponse"];
-export type ResumeVersionSourceResponse = S["ResumeVersionSourceResponse"];
+export type TailoredResumeSaveRequest = S["TailoredResumeSaveRequest"];
 
 // ---------------------------------------------------------------------------
 // Job descriptions
@@ -107,8 +105,6 @@ export type JdListResponse = S["JdListResponse"];
 export type JdResponse = S["JdResponse"];
 export type JdCreateRequest = S["JdCreateRequest"];
 export type JdUpdateRequest = S["JdUpdateRequest"];
-export type JdVersionSummary = S["JdVersionSummary"];
-export type JdVersionsResponse = S["JdVersionsResponse"];
 
 // ---------------------------------------------------------------------------
 // Tailoring and runs

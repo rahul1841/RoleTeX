@@ -1,24 +1,37 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   CheckIcon,
+  ChevronDownIcon,
+  CopyPlusIcon,
   DownloadIcon,
   PencilIcon,
   RotateCcwIcon,
+  SaveIcon,
   WrenchIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { downloadBase64Pdf } from "@/components/pdf/blob-url";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { TailorResponse } from "@/lib/api/types";
+import { useSaveTailoredResume } from "@/hooks/use-resumes";
+import type { TailorProposal, TailorResponse } from "@/lib/api/types";
 import { ChangeList } from "./change-list";
 import { CodeBlock } from "./code-block";
 import { ResultPdf } from "./result-pdf";
 import { RunWarnings } from "./run-warnings";
 import { UnifiedDiff } from "./unified-diff";
-import { Canvas, PageHero } from "@/components/common";
+import { Canvas, ConfirmDialog, PageHero, Spinner } from "@/components/common";
 
 /**
  * The result of a run — the heart of the screen.
@@ -30,6 +43,8 @@ import { Canvas, PageHero } from "@/components/common";
  */
 export interface ResultReviewProps {
   result: TailorResponse;
+  /** The resume the run tailored; saving targets it. */
+  resumeId: string | null;
   resume: string;
   jd: string;
   onEditInputs: () => void;
@@ -38,6 +53,7 @@ export interface ResultReviewProps {
 
 export function ResultReview({
   result,
+  resumeId,
   resume,
   jd,
   onEditInputs,
@@ -110,6 +126,13 @@ export function ResultReview({
               <RotateCcwIcon data-icon="inline-start" />
               Run again
             </Button>
+            {resumeId && changes.length > 0 ? (
+              <SaveTailoredMenu
+                resumeId={resumeId}
+                resumeName={resume}
+                proposal={result.proposal}
+              />
+            ) : null}
             {result.pdf_base64 ? (
               <Button
                 type="button"
@@ -164,5 +187,99 @@ export function ResultReview({
         </div>
       </Canvas>
     </section>
+  );
+}
+
+/**
+ * Keep the tailored content: as a new resume beside the original, or over the
+ * original. Nothing is saved until one of these is chosen.
+ */
+function SaveTailoredMenu({
+  resumeId,
+  resumeName,
+  proposal,
+}: {
+  resumeId: string;
+  resumeName: string;
+  proposal: TailorProposal;
+}) {
+  const router = useRouter();
+  const save = useSaveTailoredResume(resumeId);
+  const [confirmingOverwrite, setConfirmingOverwrite] = React.useState(false);
+
+  function reportFailure(thrown: unknown) {
+    toast.error("Could not save the resume", {
+      description: thrown instanceof Error ? thrown.message : "Please try again.",
+    });
+  }
+
+  async function saveAsNew() {
+    try {
+      const response = await save.mutateAsync({ mode: "new", proposal });
+      toast.success("Saved as a new resume", {
+        description: response.resume.name,
+        action: {
+          label: "Open",
+          onClick: () =>
+            router.push(`/resumes?id=${encodeURIComponent(response.resume.id)}`),
+        },
+      });
+    } catch (thrown) {
+      reportFailure(thrown);
+    }
+  }
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 rounded-xl px-4"
+              disabled={save.isPending}
+            >
+              {save.isPending ? (
+                <Spinner data-icon="inline-start" />
+              ) : (
+                <SaveIcon data-icon="inline-start" />
+              )}
+              Save resume
+              <ChevronDownIcon data-icon="inline-end" />
+            </Button>
+          }
+        />
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => void saveAsNew()}>
+            <CopyPlusIcon data-icon="inline-start" />
+            Save as new resume
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setConfirmingOverwrite(true)}>
+            <SaveIcon data-icon="inline-start" />
+            Update “{resumeName}”
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <ConfirmDialog
+        open={confirmingOverwrite}
+        onOpenChange={setConfirmingOverwrite}
+        title={`Replace “${resumeName}” with the tailored version?`}
+        description="Its current content is overwritten. Runs in History keep their own copy and are not affected."
+        confirmLabel="Replace"
+        pending={save.isPending}
+        onConfirm={async () => {
+          try {
+            await save.mutateAsync({ mode: "overwrite", proposal });
+            toast.success(`“${resumeName}” updated`);
+          } catch (thrown) {
+            // <ConfirmDialog> stays open on rejection; the toast says why.
+            reportFailure(thrown);
+            throw thrown;
+          }
+        }}
+      />
+    </>
   );
 }

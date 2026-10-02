@@ -202,13 +202,11 @@ export function SetupPanel({
   const resumeOptions: PickerOption[] = resumes.map((resume) => ({
     value: resume.id,
     label: resume.name,
-    meta: `v${resume.version}`,
   }));
 
   const jdOptions: PickerOption[] = jds.map((jd) => ({
     value: jd.id,
     label: jd.title,
-    meta: `v${jd.version}`,
   }));
 
   const providerOptions: PickerOption[] = providers.map((provider) => ({
@@ -302,7 +300,6 @@ export function SetupPanel({
               hint={
                 selectedResume
                   ? [
-                      `Version ${selectedResume.version}`,
                       sourceLabel(selectedResume.source_type),
                       selectedResume.updated_at
                         ? `updated ${relativeTime(selectedResume.updated_at)}`
@@ -547,7 +544,6 @@ export function SetupPanel({
 
       <ResumePreviewPanel
         resumeId={selectedResume?.id ?? null}
-        version={selectedResume?.version ?? null}
         noResumes={noResumes}
       />
 
@@ -658,11 +654,9 @@ function OptionPill({
 /** Preview of the resume about to be tailored. */
 function ResumePreviewPanel({
   resumeId,
-  version,
   noResumes,
 }: {
   resumeId: string | null;
-  version: number | null;
   noResumes: boolean;
 }) {
   const detail = useResume(resumeId);
@@ -686,12 +680,7 @@ function ResumePreviewPanel({
 
   return (
     <Canvas className="hidden flex-col gap-5 px-8 pt-6 pb-6 xl:flex">
-      <div className="flex items-center gap-3">
-        <span className="text-sm font-medium">Current version</span>
-        <span className="text-muted-foreground ml-auto font-mono text-[0.6875rem]">
-          {version !== null ? `v${version} · ` : ""}unchanged until you download
-        </span>
-      </div>
+      <span className="text-sm font-medium">Resume preview</span>
       <div className="flex flex-1 items-center">{body}</div>
     </Canvas>
   );

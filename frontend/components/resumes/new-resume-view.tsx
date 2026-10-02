@@ -72,11 +72,7 @@ export function NewResumeView() {
         />
       </div>
 
-      <ImportResumeDialog
-        open={importing}
-        onOpenChange={setImporting}
-        target={{ kind: "new" }}
-      />
+      <ImportResumeDialog open={importing} onOpenChange={setImporting} />
     </PageContainer>
   );
 }

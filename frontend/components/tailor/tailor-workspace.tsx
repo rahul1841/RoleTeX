@@ -174,6 +174,7 @@ export function TailorWorkspace() {
       {reviewing && run.result ? (
         <ResultReview
           result={run.result}
+          resumeId={lastRequest?.resume_id ?? null}
           resume={current.resume}
           jd={current.jd}
           onEditInputs={() => setEditing(true)}

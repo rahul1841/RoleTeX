@@ -18,7 +18,7 @@ Tailoring a resume to each job is valuable but tedious, and doing it naively wit
 | G4 | Make LaTeX injection impossible: the model returns plain text; the server writes all LaTeX |
 | G5 | Compile safely: temp dir per job, `--untrusted`, `--only-cached`, timeouts, resource limits |
 | G6 | Run at ~$0: free-tier LLMs, Tectonic, free MongoDB tier, a private Hugging Face Space |
-| G7 | Import an existing resume (LaTeX or PDF) into a private, versioned library |
+| G7 | Import an existing resume (LaTeX or PDF) into a private library |
 | G8 | Write a resume in the app and get a PDF with no AI key |
 
 ## 3. Non-goals
@@ -37,14 +37,14 @@ Email + password accounts, stored in MongoDB (`MONGODB_URI` is required). Each u
 - **Sign up** — details → a 6-digit code emailed to the address → account created, already verified. Passwords need 8–128 characters with a lowercase letter, an uppercase letter, a number and a symbol.
 - **Write a resume** — contact details, a one-line headline, experience, projects, education, skills, achievements, custom sections, plus font size, margins and accent colour (always A4); live PDF preview; no model call.
 - **Import a resume** — paste LaTeX or upload a PDF (≤5 MB, ≤3 pages). **The whole document, contact details included, is sent to the LLM** to extract structured fields — the one deliberate exception to G2, scoped to import only. The result is reviewed and edited like a hand-written resume.
-- **Save job descriptions** — a library with version history.
-- **Tailor** — pick a resume and a job description (saved or pasted) → the model proposes edits → the server validates, renders and compiles → the review shows every change beside the PDF, unified diff and LaTeX (R-14). Runs are saved to history.
+- **Save job descriptions** — a library to tailor against.
+- **Tailor** — pick a resume and a job description (saved or pasted) → the model proposes edits → the server validates, renders and compiles → the review shows every change beside the PDF, unified diff and LaTeX (R-14). Runs are saved to history, and the result can be saved as a new resume or over the original.
 - **History** — reopen any run, re-read its changes, and recompile its PDF without an LLM call.
 - **Account** — change password, reset by email, verify email, delete the account.
 
 ## 6. Requirements
 
-**Built:** everything in §5; provider keys for Groq, Cerebras, Gemini, OpenRouter, Mistral, OpenAI, Anthropic, Grid and a custom endpoint; per-user and per-IP rate limits, a login throttle and a CSRF origin check; quotas on resumes, versions, job descriptions and runs; an offline stub LLM for development.
+**Built:** everything in §5; provider keys for Groq, Cerebras, Gemini, OpenRouter, Mistral, OpenAI, Anthropic, Grid and a custom endpoint; per-user and per-IP rate limits, a login throttle and a CSRF origin check; quotas on resumes, job descriptions and runs; an offline stub LLM for development.
 
 **Not built:** evaluation harness, automatic provider failover, cover letters, an admin UI for disabling accounts.
 

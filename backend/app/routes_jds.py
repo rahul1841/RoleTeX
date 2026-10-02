@@ -1,4 +1,4 @@
-"""Per-user job-description library routes with archive-on-update versioning.
+"""Per-user job-description library routes; editing overwrites in place.
 
 Security rationale:
 - JD content is untrusted data (rule R-7); it is stored verbatim but only ever
@@ -22,8 +22,6 @@ from .schemas import (
     JdResponse,
     JdSummary,
     JdUpdateRequest,
-    JdVersionSummary,
-    JdVersionsResponse,
     OkResponse,
 )
 
@@ -43,7 +41,6 @@ def _jd_summary(doc: Dict[str, Any]) -> JdSummary:
     return JdSummary(
         id=doc["_id"],
         title=doc.get("title", ""),
-        version=int(doc.get("version", 1)),
         excerpt=_excerpt(doc.get("content", "")),
         created_at=doc.get("created_at"),
         updated_at=doc.get("updated_at"),
@@ -55,7 +52,6 @@ def _jd_detail(doc: Dict[str, Any]) -> JdDetail:
         id=doc["_id"],
         title=doc.get("title", ""),
         content=doc.get("content", ""),
-        version=int(doc.get("version", 1)),
         created_at=doc.get("created_at"),
         updated_at=doc.get("updated_at"),
     )
@@ -107,30 +103,10 @@ def register_jds_routes(app: FastAPI, services: Any) -> None:
             jd_id,
             payload.title.strip() if payload.title is not None else None,
             payload.content,
-            max_versions=services.config.max_versions_per_jd,
         )
         if doc is None:
             raise _jd_not_found()
         return JdResponse(jd=_jd_detail(doc))
-
-    @app.get("/api/jds/{jd_id}/versions", response_model=JdVersionsResponse)
-    async def list_jd_versions(jd_id: str, request: Request) -> JdVersionsResponse:
-        user = await require_user(request, services)
-        doc = await services.database.jds.get(user["_id"], jd_id)
-        if doc is None:
-            raise _jd_not_found()
-        versions = await services.database.jds.list_versions(user["_id"], jd_id)
-        return JdVersionsResponse(
-            versions=[
-                JdVersionSummary(
-                    version=int(item.get("version", 0)),
-                    title=item.get("title", ""),
-                    excerpt=_excerpt(item.get("content", "")),
-                    created_at=item.get("created_at"),
-                )
-                for item in versions
-            ]
-        )
 
     @app.delete("/api/jds/{jd_id}", response_model=OkResponse)
     async def delete_jd(jd_id: str, request: Request) -> OkResponse:

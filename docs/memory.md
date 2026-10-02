@@ -11,7 +11,7 @@
 | D-3 | Tectonic 0.16.9 with `--untrusted --only-cached`, one Docker image, private Hugging Face Space as the target | Free, single binary, cacheable at build time |
 | D-4 | One shared LLM repair per request (semantic, compile or page-shortening) | Caps cost and stops repair ping-pong (R-11) |
 | D-5 | Import sends the whole document, contact details included, to the LLM; tailoring never does | The user is importing their own document (R-1, R-2) |
-| D-6 | Imports are re-rendered into a server-assembled template; the original source is stored, never compiled | See §3 — user LaTeX cannot be compiled safely (R-5) |
+| D-6 | Imports are re-rendered into a server-assembled template; the original document is neither stored nor compiled | See §3 — user LaTeX cannot be compiled safely (R-5) |
 | D-9 | The backend assigns positional IDs to imported and hand-written resumes; client or model IDs are discarded | IDs are a security contract the model must not control (R-12) |
 | D-14 | Rate limits and the login throttle are in-memory, per process | Fits the single-container target (see G-12) |
 | D-15 | Mongo failures return `503 database_unavailable`; index creation retries in the background; login runs full PBKDF2 even for unknown emails | The app boots without Mongo, and login timing reveals nothing |
@@ -25,6 +25,7 @@
 | D-27 | No automated test suite; verification follows rules.md §4 | Deliberate — don't recreate `tests/` |
 | D-28 | Users choose the model per provider (`provider_models`); the registry's model names are only fallbacks. Grid is left as is — no model picker, still configured by `GRID_BASE_URL` / `GRID_MODEL` | Model catalogues change faster than releases. Grid is a temporary exception the owner will remove |
 | D-29 | MongoDB is required: the server refuses to start without `MONGODB_URI`, and tailoring always needs an owned `resume_id` | Every feature is per-user, so there is nothing to serve without a database |
+| D-30 | Resumes and job descriptions are single documents with no version history. A resume: Save overwrites it, "Save as new resume" copies it, and a tailoring result can be kept either way (`POST /api/resumes/{id}/tailored`, re-validated server-side) | Old versions were only visible as raw LaTeX and could not be restored or tailored, so they cost a 20-save cap for no user value; runs keep their own LaTeX |
 
 ## 2. Open gaps
 
@@ -39,7 +40,6 @@
 | G-12 | 🟠 | Rate-limit state is per process; multiple replicas would need a shared store |
 | G-11 | 🟡 | Not built: evaluation harness, provider failover, cover letters |
 | G-13 | 🟡 | Rotating `APP_SECRET_KEY` makes every stored user key unreadable; no re-encryption tool |
-| G-17 | 🟡 | PDF imports keep the extracted text, not the original PDF |
 | G-18 | 🟡 | `default_provider` can be set to `custom`, which has no storable key; public `/api/health` shows provider, model and version |
 | G-20 | 🟡 | No admin UI for disabling an account — edit the user document in MongoDB |
 | G-21 | 🟡 | The builder requires a phone number and location (shared `ResumeIdentity` schema) |
