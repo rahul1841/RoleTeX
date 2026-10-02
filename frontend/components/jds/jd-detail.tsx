@@ -3,10 +3,8 @@
 import * as React from "react";
 import { cn } from "cn";
 import {
-  HistoryIcon,
   MoreHorizontalIcon,
   PencilIcon,
-  ScrollTextIcon,
   SparklesIcon,
   Trash2Icon,
 } from "lucide-react";
@@ -21,12 +19,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
-import {
   Canvas,
   ConfirmDialog,
   CopyButton,
@@ -38,7 +30,6 @@ import { useDeleteJd, useJd } from "@/hooks/use-jds";
 import { describeJdFailure, jdFailureLine } from "./errors";
 import { formatAbsolute, formatRelative } from "./format";
 import { JdFormDialog } from "./jd-form-dialog";
-import { JdVersionHistory } from "./jd-versions";
 import { formatNumber } from "./limits";
 
 export interface JdDetailPanelProps {
@@ -118,9 +109,6 @@ function JdDetailCard({
         <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0 space-y-3">
             <p className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs">
-              <span className="bg-muted text-foreground rounded-full px-2 py-0.5">
-                v{jd.version}
-              </span>
               <span title={formatAbsolute(jd.created_at)}>
                 added {formatRelative(jd.created_at)}
               </span>
@@ -184,21 +172,8 @@ function JdDetailCard({
         </div>
       </div>
 
-      <Tabs defaultValue="text" className="gap-5">
-        <div className="flex items-center justify-between gap-3">
-          <TabsList className="bg-card h-10 rounded-xl p-1 ring-1 ring-foreground/10 group-data-horizontal/tabs:h-10">
-            <TabsTrigger value="text" className="rounded-lg px-4">
-              <ScrollTextIcon data-icon="inline-start" />
-              Posting
-            </TabsTrigger>
-            <TabsTrigger value="history" className="rounded-lg px-4">
-              <HistoryIcon data-icon="inline-start" />
-              Versions
-              <span className="text-muted-foreground font-mono text-[0.6875rem] tabular-nums">
-                {jd.version}
-              </span>
-            </TabsTrigger>
-          </TabsList>
+      <div className="space-y-3">
+        <div className="flex justify-end">
           <CopyButton
             value={jd.content}
             subject="Job description"
@@ -207,15 +182,8 @@ function JdDetailCard({
             size="sm"
           />
         </div>
-        <TabsContent value="text">
-          <JdText content={jd.content} />
-        </TabsContent>
-        <TabsContent value="history">
-          <div className="bg-card rounded-[1.25rem] p-6 ring-1 ring-foreground/10 sm:p-7">
-            <JdVersionHistory jd={jd} />
-          </div>
-        </TabsContent>
-      </Tabs>
+        <JdText content={jd.content} />
+      </div>
 
       <JdFormDialog open={editing} onOpenChange={setEditing} jd={jd} />
 
@@ -223,7 +191,7 @@ function JdDetailCard({
         open={confirmingDelete}
         onOpenChange={setConfirmingDelete}
         title={`Delete “${jd.title}”?`}
-        description="This removes the job description and every archived version of it. Past tailoring runs that used it keep their own copy of the text. This cannot be undone."
+        description="Past tailoring runs that used it keep their own copy of the text. This cannot be undone."
         confirmLabel="Delete job description"
         pending={remove.isPending}
         onConfirm={async () => {

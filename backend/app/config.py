@@ -103,9 +103,7 @@ class AppConfig:
     login_max_attempts: int
     login_window_seconds: int
     max_resumes_per_user: int
-    max_versions_per_resume: int
     max_jds_per_user: int
-    max_versions_per_jd: int
     max_runs_per_user: int
     max_pdf_upload_bytes: int
     max_import_pdf_pages: int
@@ -172,9 +170,7 @@ def load_config() -> AppConfig:
         login_max_attempts=_bounded_int("LOGIN_MAX_ATTEMPTS", 10, 1, 100),
         login_window_seconds=_bounded_int("LOGIN_WINDOW_SECONDS", 900, 10, 3_600),
         max_resumes_per_user=_bounded_int("MAX_RESUMES_PER_USER", 10, 1, 100),
-        max_versions_per_resume=_bounded_int("MAX_VERSIONS_PER_RESUME", 20, 1, 100),
         max_jds_per_user=_bounded_int("MAX_JDS_PER_USER", 50, 1, 500),
-        max_versions_per_jd=_bounded_int("MAX_VERSIONS_PER_JD", 20, 1, 100),
         max_runs_per_user=_bounded_int("MAX_RUNS_PER_USER", 200, 10, 2_000),
         max_pdf_upload_bytes=_bounded_int(
             "MAX_PDF_UPLOAD_BYTES", 5_000_000, 1_000_000, 20_000_000

@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import { LoadingState, PageContainer, RequiresStorage } from "@/components/common";
+import { LoadingState, PageContainer } from "@/components/common";
 import { ResumesWorkspace } from "@/components/resumes";
 
 export const metadata: Metadata = {
@@ -22,23 +22,17 @@ export const metadata: Metadata = {
  * resume from `useSearchParams`, and Next refuses to prerender a component
  * that does so without a boundary above it — which under `output: "export"`
  * is a build error, not a warning.
- *
- * <RequiresStorage> is outside the Suspense boundary because in demo mode
- * there is no database at all: the honest answer is "this server cannot do
- * this", not an empty list that implies the user simply has no resumes yet.
  */
 export default function ResumesPage() {
   return (
-    <RequiresStorage feature="Saved resumes" title="Resumes">
-      <Suspense
-        fallback={
-          <PageContainer>
-            <LoadingState label="Loading your resumes…" />
-          </PageContainer>
-        }
-      >
-        <ResumesWorkspace />
-      </Suspense>
-    </RequiresStorage>
+    <Suspense
+      fallback={
+        <PageContainer>
+          <LoadingState label="Loading your resumes…" />
+        </PageContainer>
+      }
+    >
+      <ResumesWorkspace />
+    </Suspense>
   );
 }

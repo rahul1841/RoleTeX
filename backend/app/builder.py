@@ -28,9 +28,10 @@ from .resume import (
     ProposalValidationError,
     ResumeError,
     flattened_skills,
+    ordered_skill_categories,
     render_template_text,
 )
-from .schemas import ResumeData, ResumeStyle, TailorProposal, validate_model
+from .schemas import ResumeData, ResumeStyle, TailorProposal, dump_model, validate_model
 
 
 #: Mirrors ``ResumeBullet.text``; applied to the free-text lists the editor
@@ -428,6 +429,38 @@ def baseline_proposal(resume: ResumeData) -> TailorProposal:
         bullet_rewrites=[],
         skills_order=flattened_skills(resume),
     )
+
+
+def apply_proposal(resume: ResumeData, proposal: TailorProposal) -> ResumeData:
+    """The resume a tailoring proposal describes, as storable facts.
+
+    Stable IDs, links and every field the proposal does not touch carry over
+    unchanged. The caller must have run ``validate_proposal`` first.
+    """
+
+    rewrites = {item.id: item.text.strip() for item in proposal.bullet_rewrites}
+
+    def rewrite(bullets: List[Dict[str, Any]]) -> None:
+        for bullet in bullets:
+            if bullet["id"] in rewrites:
+                bullet["text"] = rewrites[bullet["id"]]
+
+    raw = dump_model(resume)
+    raw["summary"] = proposal.summary.strip()
+    for item in raw["experience"]:
+        rewrite(item["bullets"])
+    for item in raw["projects"]:
+        rewrite(item["bullets"])
+    rewrite(raw["achievements"])
+    for section in raw["custom_sections"]:
+        rewrite(section["bullets"])
+    raw["skills"] = [
+        {"category": category, "items": items}
+        for category, items in ordered_skill_categories(
+            resume.skills, proposal.skills_order
+        )
+    ]
+    return validate_model(ResumeData, raw)
 
 
 def render_baseline(template: str, resume: ResumeData) -> str:

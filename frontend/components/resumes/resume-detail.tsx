@@ -5,11 +5,9 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeftIcon,
   DownloadIcon,
-  HistoryIcon,
   MoreHorizontalIcon,
   PencilIcon,
   SparklesIcon,
-  SquarePenIcon,
   TrashIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -22,7 +20,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   CardSkeleton,
   ConfirmDialog,
@@ -35,6 +32,7 @@ import {
 } from "@/components/common";
 import { downloadBase64Pdf } from "@/components/pdf";
 import {
+  useCreateResume,
   useDeleteResume,
   usePreviewResume,
   useResume,
@@ -51,21 +49,19 @@ import {
 import { RenameResumeDialog } from "./rename-dialog";
 import { ResumeBuilder } from "./resume-builder";
 import { resumeDataToForm } from "./resume-form";
-import { VersionsPanel } from "./versions-panel";
 
 /**
- * One saved resume: edit it, or look at where it came from.
+ * One saved resume, open in the editor.
  *
- * Saving is version-additive — `PUT /api/resumes/{id}/content` appends a new
- * version rather than overwriting, and the first save of an imported resume
- * turns that version into a manually authored one. The button therefore says
- * "Save as new version", because that is what it does, and the version count
- * in the header is the receipt.
+ * Save overwrites it (`PUT /api/resumes/{id}/content`); the first save of an
+ * imported resume turns it into a manually authored one. "Save as new resume"
+ * leaves it untouched and creates a copy with the edits, then opens the copy.
  */
 export function ResumeDetailView({ id }: { id: string }) {
   const router = useRouter();
   const query = useResume(id);
   const update = useUpdateResumeContent(id);
+  const create = useCreateResume();
   const remove = useDeleteResume();
   const compile = usePreviewResume();
 
@@ -79,8 +75,7 @@ export function ResumeDetailView({ id }: { id: string }) {
       resume
         ? resumeDataToForm(resume.data, resume.style, resume.name)
         : null,
-    // Re-seeded when the stored version changes — a save, or an import that
-    // added a version in another tab.
+    // Re-seeded when the stored resume changes — a save here or in another tab.
     [resume],
   );
 
@@ -151,9 +146,7 @@ export function ResumeDetailView({ id }: { id: string }) {
     <PageContainer width="wide" className="sm:pt-12 sm:pb-16">
       <PageHero
         eyebrow={
-          <span className="tabular-nums">
-            {sourceLabel(resume.source_type)} · v{resume.version}
-          </span>
+          <span>{sourceLabel(resume.source_type)}</span>
         }
         title={resume.name}
         description={
@@ -236,48 +229,32 @@ export function ResumeDetailView({ id }: { id: string }) {
         }
       />
 
-      <Tabs defaultValue="edit" className="mt-10 gap-6">
-        <TabsList className="bg-card h-10 rounded-xl p-1 ring-1 ring-foreground/10 group-data-horizontal/tabs:h-10">
-          <TabsTrigger value="edit" className="rounded-lg px-4">
-            <SquarePenIcon data-icon="inline-start" />
-            Edit
-          </TabsTrigger>
-          <TabsTrigger value="versions" className="rounded-lg px-4">
-            <HistoryIcon data-icon="inline-start" />
-            Versions
-            <span className="text-muted-foreground font-mono text-[0.6875rem] tabular-nums">
-              {resume.version}
-            </span>
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="edit">
-          <ResumeBuilder
-            // Remounting on id alone: a save changes the version but the form
-            // already holds exactly what was saved, and remounting there would
-            // throw away the user's scroll position and focus.
-            key={resume.id}
-            mode="edit"
-            defaultValues={defaultValues}
-            isSaving={update.isPending}
-            saveError={update.error}
-            onSubmit={async ({ draft, style }) => {
-              await update.mutateAsync({ resume: draft, style });
-              toast.success("Saved as a new version");
-            }}
-            footer={
-              <p className="text-muted-foreground text-xs text-pretty">
-                Saving appends a version; the previous wording stays in the
-                Versions tab.
-              </p>
-            }
-          />
-        </TabsContent>
-
-        <TabsContent value="versions">
-          <VersionsPanel resume={resume} />
-        </TabsContent>
-      </Tabs>
+      <ResumeBuilder
+        // Remounting on id alone: a save changes the stored resume but the
+        // form already holds exactly what was saved, and remounting there
+        // would throw away the user's scroll position and focus.
+        key={resume.id}
+        className="mt-10"
+        mode="edit"
+        defaultValues={defaultValues}
+        isSaving={update.isPending || create.isPending}
+        saveError={update.error ?? create.error}
+        onSubmit={async ({ draft, style }) => {
+          await update.mutateAsync({ resume: draft, style });
+          toast.success("Saved");
+        }}
+        onSaveAsNew={async ({ draft, style }) => {
+          const response = await create.mutateAsync({
+            resume: draft,
+            style,
+            name: `${resume.name} (copy)`.slice(0, 120),
+          });
+          toast.success("Saved as a new resume", {
+            description: `“${resume.name}” is unchanged.`,
+          });
+          router.push(`/resumes?id=${encodeURIComponent(response.resume.id)}`);
+        }}
+      />
 
       <RenameResumeDialog
         resume={renaming ? { id: resume.id, name: resume.name } : null}
@@ -288,7 +265,7 @@ export function ResumeDetailView({ id }: { id: string }) {
         open={confirmingDelete}
         onOpenChange={setConfirmingDelete}
         title={`Delete “${resume.name}”?`}
-        description="Every version of it goes too. Tailoring runs made from it keep their own copy of the resume and are not affected. This cannot be undone."
+        description="Tailoring runs made from it keep their own copy of the resume and are not affected. This cannot be undone."
         confirmLabel="Delete resume"
         pending={remove.isPending}
         onConfirm={async () => {

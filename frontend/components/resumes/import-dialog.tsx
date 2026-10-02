@@ -36,12 +36,7 @@ import { loadPdfjs } from "@/components/pdf";
 import { listProviders } from "@/lib/api/endpoints/keys";
 import { queryKeys } from "@/lib/api/query-keys";
 import { useSession } from "@/hooks/use-session";
-import {
-  useAddResumeVersionFromLatex,
-  useAddResumeVersionFromPdf,
-  useImportResumeFromLatex,
-  useImportResumeFromPdf,
-} from "@/hooks/use-resumes";
+import { useImportResumeFromLatex, useImportResumeFromPdf } from "@/hooks/use-resumes";
 import { resumeErrorGuidance } from "./errors";
 import { LIMITS } from "./resume-form";
 
@@ -70,10 +65,6 @@ const MAX_PDF_BYTES = 5_000_000;
 const MAX_PDF_PAGES = 3;
 /** backend/app/schemas.py ResumeCreateRequest.latex min_length. */
 const MIN_LATEX_CHARS = 40;
-
-export type ImportTarget =
-  | { kind: "new" }
-  | { kind: "version"; resumeId: string; resumeName: string };
 
 interface ImportOutcome {
   warnings: string[];
@@ -228,13 +219,7 @@ function SourceTab({
  * form — no effect watching `open` to clear a stale file, a stale error, or
  * the LaTeX from a document the user changed their mind about.
  */
-function ImportDialogBody({
-  target,
-  onClose,
-}: {
-  target: ImportTarget;
-  onClose: () => void;
-}) {
+function ImportDialogBody({ onClose }: { onClose: () => void }) {
   const { user } = useSession();
   const providers = useQuery({
     queryKey: queryKeys.providers,
@@ -254,20 +239,9 @@ function ImportDialogBody({
 
   const importLatex = useImportResumeFromLatex();
   const importPdf = useImportResumeFromPdf();
-  const versionLatex = useAddResumeVersionFromLatex();
-  const versionPdf = useAddResumeVersionFromPdf();
 
-  const isVersion = target.kind === "version";
-  const pending =
-    importLatex.isPending ||
-    importPdf.isPending ||
-    versionLatex.isPending ||
-    versionPdf.isPending;
-  const error =
-    importLatex.error ??
-    importPdf.error ??
-    versionLatex.error ??
-    versionPdf.error;
+  const pending = importLatex.isPending || importPdf.isPending;
+  const error = importLatex.error ?? importPdf.error;
   const guidance = resumeErrorGuidance(error);
 
   // Only providers the account actually holds a key for can run an extraction,
@@ -313,16 +287,11 @@ function ImportDialogBody({
     if (!provider) return;
     try {
       if (tab === "latex") {
-        const response = isVersion
-          ? await versionLatex.mutateAsync({
-              id: target.resumeId,
-              body: { latex, provider },
-            })
-          : await importLatex.mutateAsync({
-              latex,
-              name: name.trim() || null,
-              provider,
-            });
+        const response = await importLatex.mutateAsync({
+          latex,
+          name: name.trim() || null,
+          provider,
+        });
         setOutcome({
           warnings: response.warnings ?? [],
           resumeId: response.resume.id,
@@ -331,16 +300,11 @@ function ImportDialogBody({
       }
 
       if (!file) return;
-      const response = isVersion
-        ? await versionPdf.mutateAsync({
-            id: target.resumeId,
-            options: { file, provider },
-          })
-        : await importPdf.mutateAsync({
-            file,
-            name: name.trim() || undefined,
-            provider,
-          });
+      const response = await importPdf.mutateAsync({
+        file,
+        name: name.trim() || undefined,
+        provider,
+      });
       setOutcome({
         warnings: response.warnings ?? [],
         resumeId: response.resume.id,
@@ -360,9 +324,7 @@ function ImportDialogBody({
     return (
       <>
         <DialogHeader>
-          <DialogTitle>
-            {isVersion ? "Version added" : "Resume imported"}
-          </DialogTitle>
+          <DialogTitle>Resume imported</DialogTitle>
           <DialogDescription>
             An AI model read this document. Check what it produced before you
             tailor from it.
@@ -372,9 +334,7 @@ function ImportDialogBody({
         <div className="space-y-4 py-2">
           <p className="bg-diff-added text-diff-added-foreground border-diff-added-border flex items-center gap-2.5 rounded-xl border px-4 py-3 text-sm font-medium">
             <CheckIcon aria-hidden="true" className="size-4" strokeWidth={2.5} />
-            {isVersion
-              ? "The new version is now the current one."
-              : "Saved to your library."}
+            Saved to your library.
           </p>
           <WarningList warnings={outcome.warnings} />
         </div>
@@ -383,22 +343,20 @@ function ImportDialogBody({
           <Button variant="outline" size="sm" onClick={onClose}>
             Close
           </Button>
-          {!isVersion ? (
-            <Button
-              size="sm"
-              render={
-                <Link
-                  href={{
-                    pathname: "/resumes",
-                    query: { id: outcome.resumeId },
-                  }}
-                  onClick={onClose}
-                />
-              }
-            >
-              Review the import
-            </Button>
-          ) : null}
+          <Button
+            size="sm"
+            render={
+              <Link
+                href={{
+                  pathname: "/resumes",
+                  query: { id: outcome.resumeId },
+                }}
+                onClick={onClose}
+              />
+            }
+          >
+            Review the import
+          </Button>
         </DialogFooter>
       </>
     );
@@ -407,13 +365,10 @@ function ImportDialogBody({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>
-          {isVersion ? "Add a version from a document" : "Import a resume"}
-        </DialogTitle>
+        <DialogTitle>Import a resume</DialogTitle>
         <DialogDescription>
-          {isVersion
-            ? `A new version of “${target.resumeName}”, extracted from a document you already have.`
-            : "Upload a PDF or paste LaTeX. An AI model reads it into fields you can check and edit."}
+          Upload a PDF or paste LaTeX. An AI model reads it into fields you can
+          check and edit.
         </DialogDescription>
       </DialogHeader>
 
@@ -546,20 +501,18 @@ function ImportDialogBody({
         </Tabs>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          {!isVersion ? (
-            <div className="space-y-1.5">
-              <Label htmlFor="import-name">Name (optional)</Label>
-              <Input
-                id="import-name"
-                value={name}
-                maxLength={LIMITS.resumeName}
-                placeholder="Taken from the document"
-                className="h-10 rounded-lg"
-                onChange={(event) => setName(event.target.value)}
-              />
-            </div>
-          ) : null}
-          <div className={cn(isVersion && "sm:col-span-2")}>
+          <div className="space-y-1.5">
+            <Label htmlFor="import-name">Name (optional)</Label>
+            <Input
+              id="import-name"
+              value={name}
+              maxLength={LIMITS.resumeName}
+              placeholder="Taken from the document"
+              className="h-10 rounded-lg"
+              onChange={(event) => setName(event.target.value)}
+            />
+          </div>
+          <div>
             {providers.isLoading ? (
               <p className="text-muted-foreground flex items-center gap-2 pt-7 text-xs">
                 <Spinner className="size-3" />
@@ -603,7 +556,7 @@ function ImportDialogBody({
           onClick={() => void submit()}
         >
           {pending ? <Spinner data-icon="inline-start" /> : null}
-          {pending ? "Reading the document…" : isVersion ? "Add version" : "Import resume"}
+          {pending ? "Reading the document…" : "Import resume"}
         </Button>
       </DialogFooter>
     </>
@@ -613,18 +566,13 @@ function ImportDialogBody({
 export interface ImportResumeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  target: ImportTarget;
 }
 
-export function ImportResumeDialog({
-  open,
-  onOpenChange,
-  target,
-}: ImportResumeDialogProps) {
+export function ImportResumeDialog({ open, onOpenChange }: ImportResumeDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
-        <ImportDialogBody target={target} onClose={() => onOpenChange(false)} />
+        <ImportDialogBody onClose={() => onOpenChange(false)} />
       </DialogContent>
     </Dialog>
   );

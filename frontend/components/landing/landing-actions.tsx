@@ -11,14 +11,12 @@ import { useSession } from "@/hooks/use-session";
  *
  * The page is prerendered once for every visitor, so its HTML carries the
  * signed-out answer — create an account, or sign in — which is the right one
- * for everybody <AppShell> sends here. Two visitors need a different answer,
- * and both are only known once the session resolves: someone who is already
- * signed in, and anyone on a demo server, which has no accounts to create or
- * sign in to. For them every way in is the app itself.
+ * for everybody <AppShell> sends here. Someone who is already signed in needs
+ * a different answer, known only once the session resolves: for them every
+ * way in is the app itself.
  */
 function useGoesStraightIn(): boolean {
-  const { mode, isAuthenticated } = useSession();
-  return mode === "demo" || isAuthenticated;
+  return useSession().isAuthenticated;
 }
 
 /** The hero and the closing band ask for more than an in-app button. */

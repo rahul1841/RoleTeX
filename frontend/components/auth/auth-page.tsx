@@ -53,8 +53,7 @@ export function AuthPage({
  *
  * `tone` maps onto the app's semantic tokens rather than raw colours —
  * `destructive` stays reserved for failures, `warning` for advisory states
- * (per the shell contract), and success borrows the diff-added pair, which is
- * the same choice Settings' server status already makes for "Available".
+ * (per the shell contract), and success borrows the diff-added pair.
  */
 const TONES = {
   success: "bg-diff-added text-diff-added-foreground",

@@ -24,7 +24,6 @@ import {
   relativeTime,
   sourceHint,
   sourceLabel,
-  versionLabel,
 } from "./format";
 import { ResumeSheet } from "./resume-sheet";
 import type { ResumeSummary } from "@/lib/api/types";
@@ -108,9 +107,6 @@ export function ResumeCard({ resume, onRename, onDelete }: ResumeCardProps) {
             title={sourceHint(resume.source_type)}
           >
             {sourceLabel(resume.source_type)}
-          </Badge>
-          <Badge variant="outline" className="font-mono tabular-nums">
-            {versionLabel(resume.version)}
           </Badge>
         </div>
 

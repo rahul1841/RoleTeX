@@ -51,12 +51,6 @@ const settingsLink = (
   </ButtonLink>
 );
 
-const resumesLink = (
-  <ButtonLink variant="outline" size="sm" href="/resumes">
-    Go to Resumes
-  </ButtonLink>
-);
-
 function explain(error: unknown): Explanation {
   if (!isApiError(error)) {
     return {
@@ -124,16 +118,6 @@ function explain(error: unknown): Explanation {
         offerSkipCompile: false,
       };
 
-    case "resume_required":
-      return {
-        title: "Pick a resume to tailor",
-        guidance:
-          "This server stores resumes per account, so a run has to name one. Import or build a resume first.",
-        action: resumesLink,
-        retryable: false,
-        offerSkipCompile: false,
-      };
-
     case "resume_not_found":
     case "jd_not_found":
       return {
@@ -190,15 +174,6 @@ function explain(error: unknown): Explanation {
         guidance:
           "This server requires a verified address before spending provider tokens.",
         action: settingsLink,
-        retryable: false,
-        offerSkipCompile: false,
-      };
-
-    case "database_not_configured":
-      return {
-        title: "This server has no database",
-        guidance:
-          "It is running in demo mode, so saved resumes, saved job descriptions and run history do not exist. Paste a job description instead and it will tailor the built-in sample resume.",
         retryable: false,
         offerSkipCompile: false,
       };

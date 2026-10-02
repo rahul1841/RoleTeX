@@ -5,7 +5,7 @@ set -euo pipefail
 # Run from the repo root, where .venv and .env live.
 cd "$(dirname "$0")/.."
 
-# The app doesn't load .env itself; without it, it boots in demo mode.
+# The app doesn't load .env itself; without it, MONGODB_URI is unset and it won't start.
 env_args=()
 [[ -f .env ]] && env_args=(--env-file .env)
 

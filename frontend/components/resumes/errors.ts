@@ -28,11 +28,6 @@ const GUIDANCE: Record<string, ResumeErrorGuidance> = {
     hint: "Delete a resume you no longer need, then try again.",
     isQuota: true,
   },
-  version_quota_exceeded: {
-    title: "This resume has too many versions",
-    hint: "Every save adds a version. Start a new resume to keep going.",
-    isQuota: true,
-  },
 
   // --- the two 413s, which are genuinely different problems ---------------
   pdf_too_large: {

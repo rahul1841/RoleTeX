@@ -49,17 +49,6 @@ export function describeJdFailure(
         retryable: false,
       };
 
-    // Not currently emitted by the JD routes — backend/app/db.py prunes the oldest
-    // archived revisions instead of refusing the write — but the code is in
-    // the API's error contract, so it is handled rather than falling through
-    // to a generic 409.
-    case "version_quota_exceeded":
-      return {
-        title: "This job description has too many versions",
-        hint: "Its version history is full. Delete the job description and save the new text as a fresh one to keep editing.",
-        retryable: false,
-      };
-
     case "request_too_large":
       return {
         title: "That paste is too large to send",
@@ -89,7 +78,6 @@ export function describeJdFailure(
       };
 
     case "database_unavailable":
-    case "database_not_configured":
       return {
         title: "The job description library is unavailable",
         hint: null,

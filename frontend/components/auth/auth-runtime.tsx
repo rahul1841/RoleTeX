@@ -71,13 +71,11 @@ function useSessionLostHandler() {
       if (handled.current) return;
       handled.current = true;
 
-      // Everything except `health` belonged to the session that just ended.
+      // Everything in the cache belonged to the session that just ended.
       // Removing the session query is also what makes `useSession()` report
       // signed out; the refetch it triggers 401s again, and the guard above
       // absorbs it.
-      queryClient.removeQueries({
-        predicate: (query) => query.queryKey[0] !== queryKeys.health[0],
-      });
+      queryClient.removeQueries();
 
       toast.error("You have been signed out", {
         description:

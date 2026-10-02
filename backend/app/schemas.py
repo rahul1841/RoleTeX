@@ -7,7 +7,7 @@ Python release, so this module deliberately avoids newer union/type syntax.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -122,7 +122,8 @@ class TailorProposal(StrictModel):
     """Only plain text is accepted from the model; never LaTeX."""
 
     summary: str = Field(default="", max_length=1000)
-    bullet_rewrites: List[BulletRewrite] = Field(..., max_length=6)
+    # A server-side ceiling only; the prompt deliberately never states a count.
+    bullet_rewrites: List[BulletRewrite] = Field(..., max_length=30)
     skills_order: List[str] = Field(..., max_length=300)
 
 
@@ -135,10 +136,8 @@ class TailorRequest(StrictModel):
     model: Optional[str] = Field(default=None, min_length=1, max_length=200)
     compile: bool = True
     require_one_page: bool = True
-    # Per-user resume id. Required in multi-user mode; omitted in demo mode,
-    # where the server falls back to the canonical seed resume.
-    resume_id: Optional[str] = Field(default=None, min_length=1, max_length=64)
-    # Multi-user mode: persist the run into tailor history (default on).
+    resume_id: str = Field(..., min_length=1, max_length=64)
+    # Persist the run into tailor history (default on).
     save_run: bool = True
 
 
@@ -183,23 +182,21 @@ class TailorResponse(StrictModel):
     repaired: bool = False
     warnings: List[str] = Field(default_factory=list)
     compiler: CompilerReport
-    # Multi-user mode: id of the persisted tailor-history entry, when saved.
+    # Id of the persisted tailor-history entry, when saved.
     run_id: Optional[str] = None
 
 
 class HealthResponse(StrictModel):
     status: str
     version: str
-    mode: str = "demo"
     provider: str
     model: str
-    resume_valid: bool
     compiler_available: bool
     checks: Dict[str, Any] = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
-# Multi-user API models (auth, keys, resumes, JDs, runs)
+# Account and library API models (auth, keys, resumes, JDs, runs)
 # ---------------------------------------------------------------------------
 
 
@@ -285,25 +282,6 @@ class MailDispatchResponse(StrictModel):
     delivered: bool = False
 
 
-class SessionInfo(StrictModel):
-    id: str
-    created_at: Optional[datetime] = None
-    last_seen_at: Optional[datetime] = None
-    expires_at: Optional[datetime] = None
-    user_agent: str = ""
-    client_ip: str = ""
-    current: bool = False
-
-
-class SessionListResponse(StrictModel):
-    sessions: List[SessionInfo] = Field(default_factory=list)
-
-
-class RevokedResponse(StrictModel):
-    ok: bool = True
-    revoked: int = 0
-
-
 class UserResponse(StrictModel):
     user: UserOut
 
@@ -346,7 +324,6 @@ class ResumeSummary(StrictModel):
     id: str
     name: str
     source_type: str
-    version: int
     provider: str = ""
     model: str = ""
     created_at: Optional[datetime] = None
@@ -382,23 +359,15 @@ class ResumeRenameRequest(StrictModel):
     name: str = Field(..., min_length=1, max_length=120)
 
 
-class ResumeVersionSummary(StrictModel):
-    version: int
-    source_type: str
-    provider: str = ""
-    model: str = ""
-    created_at: Optional[datetime] = None
+class TailoredResumeSaveRequest(StrictModel):
+    """Keep a tailoring result as resume content."""
 
-
-class ResumeVersionsResponse(StrictModel):
-    versions: List[ResumeVersionSummary] = Field(default_factory=list)
-
-
-class ResumeVersionSourceResponse(StrictModel):
-    version: int
-    source_type: str
-    source_text: str = ""
-    template_tex: str = ""
+    proposal: TailorProposal
+    #: ``new`` adds a resume and leaves the original alone; ``overwrite``
+    #: replaces the original's content.
+    mode: Literal["new", "overwrite"]
+    #: Name for a new resume; ignored when overwriting.
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
 
 
 # --- Manual authoring (the in-app resume builder) ---------------------------
@@ -501,7 +470,7 @@ class ResumeContentUpdateRequest(StrictModel):
 
 
 class ResumePreviewRequest(StrictModel):
-    """Compile a draft as typed, or the stored current version of one resume.
+    """Compile a draft as typed, or one stored resume.
 
     Exactly one of ``resume`` / ``resume_id`` is accepted; the route enforces
     that pairing so the mistake gets its own error code.
@@ -523,7 +492,6 @@ class ResumePreviewResponse(StrictModel):
 class JdSummary(StrictModel):
     id: str
     title: str
-    version: int
     excerpt: str = ""
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -533,7 +501,6 @@ class JdDetail(StrictModel):
     id: str
     title: str
     content: str
-    version: int
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -556,23 +523,11 @@ class JdUpdateRequest(StrictModel):
     content: Optional[str] = Field(default=None, min_length=50, max_length=20_000)
 
 
-class JdVersionSummary(StrictModel):
-    version: int
-    title: str = ""
-    excerpt: str = ""
-    created_at: Optional[datetime] = None
-
-
-class JdVersionsResponse(StrictModel):
-    versions: List[JdVersionSummary] = Field(default_factory=list)
-
-
 class RunSummary(StrictModel):
     id: str
     created_at: Optional[datetime] = None
     resume_id: str = ""
     resume_name: str = ""
-    resume_version: int = 0
     jd_id: Optional[str] = None
     jd_title: Optional[str] = None
     jd_excerpt: str = ""

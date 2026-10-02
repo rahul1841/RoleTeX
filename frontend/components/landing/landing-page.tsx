@@ -1,11 +1,4 @@
 import type { ReactNode } from "react";
-import {
-  BracesIcon,
-  EyeOffIcon,
-  HashIcon,
-  ListChecksIcon,
-  type LucideIcon,
-} from "lucide-react";
 import { cn } from "cn";
 // Imported from their own files rather than the @/components/layout barrel,
 // which also re-exports <AppShell>; this page must not pull the application
@@ -23,21 +16,18 @@ import { ProductPreview } from "./product-preview";
 import { JobVisual, LibraryVisual, ReviewVisual } from "./step-visuals";
 
 /**
- * The public front door: what RoleTeX does, why its output can be trusted,
- * and the way in.
+ * The public front door: what RoleTeX does and the way in.
  *
  * A server component, prerendered to static HTML like every other route; only
  * the calls to action are client code, because only they depend on who is
  * looking (see landing-actions.tsx). Every claim here is one the server
- * enforces — the safeguards section in particular restates rules from
- * backend/app/resume.py, so change them together.
+ * enforces.
  */
 
 const CONTAINER = "mx-auto w-full max-w-[78rem] px-4 sm:px-6";
 
 const SECTION_LINKS = [
   { href: "#how", label: "How it works" },
-  { href: "#safeguards", label: "Safeguards" },
   { href: "#providers", label: "Providers" },
 ] as const;
 
@@ -62,33 +52,6 @@ const STEPS: { number: string; title: string; body: string; visual: ReactNode }[
   },
 ];
 
-const SAFEGUARDS: { icon: LucideIcon; title: string; body: string; rule: string }[] = [
-  {
-    icon: ListChecksIcon,
-    title: "It edits what is already there",
-    body: "The model can reword your headline, rewrite up to six of your existing bullets and reorder your skills. An edit aimed at a bullet that doesn’t exist is rejected.",
-    rule: "bullet_rewrites ≤ 6",
-  },
-  {
-    icon: HashIcon,
-    title: "No new numbers. No new skills.",
-    body: "A rewrite that introduces a number your resume doesn’t already contain is rejected, and the skills list must be exactly your skills — reordered, never added to or renamed.",
-    rule: "skills_order = your skills, reordered",
-  },
-  {
-    icon: EyeOffIcon,
-    title: "Your contact details stay out of it",
-    body: "Your name, email, phone and links are never sent to the model when you tailor. The server puts them back when it typesets the page.",
-    rule: "identity → never sent",
-  },
-  {
-    icon: BracesIcon,
-    title: "The model never writes LaTeX",
-    body: "It returns plain text. The server escapes it, places it into a locked template and compiles the PDF with Tectonic in a sandbox.",
-    rule: "tectonic --untrusted",
-  },
-];
-
 export function LandingPage() {
   return (
     <div className="flex min-h-svh flex-1 flex-col">
@@ -101,7 +64,6 @@ export function LandingPage() {
       >
         <Hero />
         <HowItWorks />
-        <Safeguards />
         <Providers />
         <Closing />
       </main>
@@ -240,56 +202,6 @@ function HowItWorks() {
             </li>
           ))}
         </ol>
-      </div>
-    </section>
-  );
-}
-
-function Safeguards() {
-  return (
-    <section
-      id="safeguards"
-      aria-labelledby="safeguards-heading"
-      className="scroll-mt-8 pt-24 sm:pt-32"
-    >
-      <div className={CONTAINER}>
-        <div className="grid gap-6 lg:grid-cols-2 lg:items-end lg:gap-16">
-          <SectionIntro
-            id="safeguards-heading"
-            eyebrow="Safeguards"
-            title="The model proposes. The server checks. You decide."
-          />
-          <p className="text-muted-foreground text-[1.0625rem] leading-7 text-pretty">
-            Tailoring with an LLM goes wrong in familiar ways — invented
-            numbers, broken formatting, personal details sent to a third
-            party. RoleTeX narrows what the model can do, checks what it
-            returns, and leaves the final call to you.
-          </p>
-        </div>
-        <ul className="mt-12 grid gap-4 md:grid-cols-2">
-          {SAFEGUARDS.map(({ icon: Icon, title, body, rule }) => (
-            <li
-              key={title}
-              className="bg-card flex gap-5 rounded-2xl p-7 ring-1 ring-foreground/10"
-            >
-              <span
-                aria-hidden="true"
-                className="bg-muted flex size-10 shrink-0 items-center justify-center rounded-lg"
-              >
-                <Icon className="size-5" />
-              </span>
-              <div className="flex min-w-0 flex-col gap-2">
-                <h3 className="text-[1.0625rem] leading-6 font-semibold">{title}</h3>
-                <p className="text-muted-foreground text-[0.9375rem] leading-6 text-pretty">
-                  {body}
-                </p>
-                <code className="bg-code text-code-foreground border-code-border mt-1.5 self-start rounded-md border px-2 py-0.5 font-mono text-xs">
-                  {rule}
-                </code>
-              </div>
-            </li>
-          ))}
-        </ul>
       </div>
     </section>
   );

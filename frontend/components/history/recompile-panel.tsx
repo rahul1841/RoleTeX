@@ -236,11 +236,6 @@ function CompileError({
     );
   } else if (code === "compiler_not_found" || code === "compiler_start_failed") {
     title = "This server has no LaTeX compiler";
-    action = (
-      <ButtonLink variant="outline" size="sm" href="/settings">
-        Check server status
-      </ButtonLink>
-    );
   } else if (code === "compile_timeout") {
     title = "Compiling took too long";
   }

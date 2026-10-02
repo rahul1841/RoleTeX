@@ -26,7 +26,7 @@ import type { TailorFormValues } from "./form-values";
 export interface PickerOption {
   value: string;
   label: string;
-  /** Right-aligned secondary text: a version number, "no key". */
+  /** Right-aligned secondary text, e.g. "no key". */
   meta?: string;
 }
 

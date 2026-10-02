@@ -17,9 +17,8 @@ export {
   type LivePreviewState,
   type PreviewResult,
 } from "./use-live-preview";
-export { ImportResumeDialog, type ImportTarget } from "./import-dialog";
+export { ImportResumeDialog } from "./import-dialog";
 export { RenameResumeDialog } from "./rename-dialog";
-export { VersionsPanel } from "./versions-panel";
 export { ResumeCard } from "./resume-card";
 export { ResumeSheet } from "./resume-sheet";
 export {
@@ -37,7 +36,6 @@ export {
   sortResumes,
   sourceHint,
   sourceLabel,
-  versionLabel,
 } from "./format";
 export {
   draftToForm,

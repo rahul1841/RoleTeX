@@ -4,14 +4,8 @@ import * as React from "react";
 import { PlusIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  LoadingState,
-  PageContainer,
-  PageHero,
-  RequiresStorage,
-} from "@/components/common";
+import { LoadingState, PageContainer, PageHero } from "@/components/common";
 import { useJds } from "@/hooks/use-jds";
-import { useSession } from "@/hooks/use-session";
 import { JdWorkspace } from "./jd-workspace";
 
 /**
@@ -22,21 +16,13 @@ import { JdWorkspace } from "./jd-workspace";
  * works from a server page, and everything interactive here has to live
  * somewhere else for that to hold.
  *
- * The header sits OUTSIDE <RequiresStorage> on purpose. The gate replaces its
- * children with an explanation when the server has no database, and the page's
- * single <h1> lives in <PageHero> — if the heading went inside the gate,
- * demo mode would render a page with no <h1> at all and the shell's
- * route-change focus would have nothing to move to.
- *
- * The "New job description" action shows only once there are postings: in
- * demo mode the gate below explains why there are none, and an empty library
- * offers its own "Add your first posting" button.
+ * The "New job description" action shows only once there are postings: an
+ * empty library offers its own "Add your first posting" button.
  */
 export function JdScreen() {
-  const { mode } = useSession();
   const [createOpen, setCreateOpen] = React.useState(false);
   // Shares the list's cache entry, so this costs no extra request.
-  const jds = useJds({ enabled: mode === "multi_user" });
+  const jds = useJds();
   const hasAny = (jds.data?.length ?? 0) > 0;
 
   return (
@@ -44,9 +30,9 @@ export function JdScreen() {
       <PageHero
         eyebrow="Library"
         title="Job descriptions"
-        description="Postings you have saved, ready to tailor any resume against. Editing one records a new version rather than overwriting it."
+        description="Postings you have saved, ready to tailor any resume against."
         actions={
-          mode === "multi_user" && hasAny ? (
+          hasAny ? (
             <Button className="h-10 rounded-xl px-4" onClick={() => setCreateOpen(true)}>
               <PlusIcon data-icon="inline-start" />
               New job description
@@ -55,18 +41,16 @@ export function JdScreen() {
         }
       />
 
-      <RequiresStorage feature="Job descriptions">
-        {/* Required by the static export: <JdWorkspace> reads `?id=` with
-            `useSearchParams`, and a client hook that reads URL data must have
-            a Suspense boundary above it or `next build` refuses to prerender
-            the route. */}
-        <React.Suspense fallback={<JdWorkspaceFallback />}>
-          <JdWorkspace
-            createOpen={createOpen}
-            onCreateOpenChange={setCreateOpen}
-          />
-        </React.Suspense>
-      </RequiresStorage>
+      {/* Required by the static export: <JdWorkspace> reads `?id=` with
+          `useSearchParams`, and a client hook that reads URL data must have
+          a Suspense boundary above it or `next build` refuses to prerender
+          the route. */}
+      <React.Suspense fallback={<JdWorkspaceFallback />}>
+        <JdWorkspace
+          createOpen={createOpen}
+          onCreateOpenChange={setCreateOpen}
+        />
+      </React.Suspense>
     </PageContainer>
   );
 }

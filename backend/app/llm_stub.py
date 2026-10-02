@@ -30,7 +30,7 @@ STUB_MARKER = "[stub]"
 STUB_MODEL = "stub-model"
 STUB_PROVIDER = "stub"
 
-# Bounded by TailorProposal.bullet_rewrites (max_length=6).
+# Bounded by TailorProposal.bullet_rewrites (max_length=30).
 MAX_STUB_REWRITES = 2
 
 

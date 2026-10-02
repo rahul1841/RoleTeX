@@ -1,5 +1,5 @@
 /**
- * Session, account, and server-mode endpoints.
+ * Session and account endpoints.
  *
  * Thin typed wrappers over `api.*` — no caching or React here, so they stay
  * usable from anywhere and easy to test. Caching lives in the hooks.
@@ -10,25 +10,16 @@ import type {
   ChangePasswordRequest,
   DeleteMeRequest,
   ForgotPasswordRequest,
-  HealthResponse,
   LoginRequest,
   MailDispatchResponse,
   OkResponse,
   RegisterRequest,
   ResetPasswordRequest,
-  RevokedResponse,
-  SessionListResponse,
   SignupCodeRequest,
   UpdateMeRequest,
   UserResponse,
   VerifyEmailRequest,
 } from "../types";
-
-/**
- * Unauthenticated. Reports `mode` ("demo" | "multi_user"), which decides
- * whether accounts and storage exist at all, plus a per-subsystem check map.
- */
-export const getHealth = () => api.get<HealthResponse>("/api/health");
 
 /**
  * The signed-in user. Returns 401 `not_authenticated` when signed out, which
@@ -74,12 +65,3 @@ export const requestVerification = () =>
  */
 export const confirmVerification = (body: VerifyEmailRequest) =>
   api.post<OkResponse>("/api/auth/verify/confirm", body);
-
-export const listSessions = () =>
-  api.get<SessionListResponse>("/api/sessions");
-
-export const revokeSession = (sessionId: string) =>
-  api.delete<RevokedResponse>(`/api/sessions/${encodeURIComponent(sessionId)}`);
-
-export const revokeOtherSessions = () =>
-  api.delete<RevokedResponse>("/api/sessions");

@@ -1,7 +1,5 @@
 "use client";
 
-import * as React from "react";
-import { RequiresStorage } from "@/components/common";
 import {
   AppearanceControl,
   DangerZone,
@@ -9,13 +7,10 @@ import {
   PasswordForm,
   ProfileForm,
   ProviderKeys,
-  SessionsPanel,
   SettingsNav,
   SettingsSection,
   type SettingsNavItem,
 } from "@/components/settings";
-import { useSession } from "@/hooks/use-session";
-import { ServerStatus } from "./server-status";
 
 /**
  * ONE SCROLLING DOCUMENT, NOT TABS — the layout decision for this screen.
@@ -31,7 +26,7 @@ import { ServerStatus } from "./server-status";
  *     meaningful next to "which providers have a key", and the warning that
  *     joins them (a default with no key stored) spans both. Tabs would put a
  *     scroll between a cause and its effect.
- *  3. There are eight of them and they are short. Tab strips are for content
+ *  3. There are six of them and they are short. Tab strips are for content
  *     too large to coexist; this is a page you read down once when you set the
  *     product up, and search with Ctrl+F afterwards.
  *
@@ -39,102 +34,64 @@ import { ServerStatus } from "./server-status";
  * care about — is handled by the sticky section index, which is real anchor
  * navigation: linkable, restorable, and legible to a screen reader as a list of
  * where the page goes.
- *
- * MODE. Settings is one of the two routes reachable in demo mode, where the
- * server has no database and therefore no accounts, no keys and no sessions.
- * Appearance and Deployment are properties of the browser and the server rather
- * than of a user, so they stay; everything else sits behind <RequiresStorage>,
- * which explains the absence instead of rendering empty forms that would 401.
  */
 
-const ACCOUNT_SECTIONS: readonly SettingsNavItem[] = [
+const SECTIONS: readonly SettingsNavItem[] = [
   { id: "providers", label: "Providers & keys" },
   { id: "defaults", label: "Tailoring defaults" },
   { id: "account", label: "Account" },
   { id: "password", label: "Password" },
-  { id: "sessions", label: "Active sessions" },
-] as const;
-
-const SERVER_SECTIONS: readonly SettingsNavItem[] = [
   { id: "appearance", label: "Appearance" },
-  { id: "deployment", label: "Deployment" },
-] as const;
-
-const DANGER_SECTION: readonly SettingsNavItem[] = [
   { id: "danger", label: "Danger zone" },
 ] as const;
 
+/** Same numbering as the index. */
+function number(id: string) {
+  const index = SECTIONS.findIndex((item) => item.id === id);
+  return index >= 0 ? String(index + 1).padStart(2, "0") : undefined;
+}
+
 export function SettingsScreen() {
-  const { mode } = useSession();
-  const storageAvailable = mode === "multi_user";
-
-  // The index must describe the sections that are actually rendered, or demo
-  // mode ships anchors pointing at nothing.
-  const navItems = React.useMemo(
-    () =>
-      storageAvailable
-        ? [...ACCOUNT_SECTIONS, ...SERVER_SECTIONS, ...DANGER_SECTION]
-        : SERVER_SECTIONS,
-    [storageAvailable],
-  );
-
-  // Same numbering as the index.
-  const number = (id: string) => {
-    const index = navItems.findIndex((item) => item.id === id);
-    return index >= 0 ? String(index + 1).padStart(2, "0") : undefined;
-  };
-
   return (
     <div className="mt-10 gap-10 lg:grid lg:grid-cols-[minmax(0,14rem)_minmax(0,56rem)]">
-      <SettingsNav items={navItems} className="hidden lg:block" />
+      <SettingsNav items={SECTIONS} className="hidden lg:block" />
 
       <div className="min-w-0 space-y-5">
-        <RequiresStorage feature="Account settings">
-          <SettingsSection
-            id="providers"
-            number={number("providers")}
-            title="AI providers and keys"
-            description="RoleTeX calls the provider you choose with the key you store here. Keys are encrypted before they are saved and cannot be read back."
-          >
-            <ProviderKeys />
-          </SettingsSection>
+        <SettingsSection
+          id="providers"
+          number={number("providers")}
+          title="AI providers and keys"
+          description="RoleTeX calls the provider you choose with the key you store here. Keys are encrypted before they are saved and cannot be read back."
+        >
+          <ProviderKeys />
+        </SettingsSection>
 
-          <SettingsSection
-            id="defaults"
-            number={number("defaults")}
-            title="Tailoring defaults"
-            description="The provider a tailoring run uses when it doesn't name one. Each provider's model is set in the list above."
-          >
-            <DefaultProviderForm />
-          </SettingsSection>
+        <SettingsSection
+          id="defaults"
+          number={number("defaults")}
+          title="Tailoring defaults"
+          description="The provider a tailoring run uses when it doesn't name one. Each provider's model is set in the list above."
+        >
+          <DefaultProviderForm />
+        </SettingsSection>
 
-          <SettingsSection
-            id="account"
-            number={number("account")}
-            title="Account"
-            description="The address you sign in with and the name shown around the app."
-          >
-            <ProfileForm />
-          </SettingsSection>
+        <SettingsSection
+          id="account"
+          number={number("account")}
+          title="Account"
+          description="The address you sign in with and the name shown around the app."
+        >
+          <ProfileForm />
+        </SettingsSection>
 
-          <SettingsSection
-            id="password"
-            number={number("password")}
-            title="Password"
-            description="Changing your password signs out every other device."
-          >
-            <PasswordForm />
-          </SettingsSection>
-
-          <SettingsSection
-            id="sessions"
-            number={number("sessions")}
-            title="Active sessions"
-            description="Every browser and device currently signed in to this account."
-          >
-            <SessionsPanel />
-          </SettingsSection>
-        </RequiresStorage>
+        <SettingsSection
+          id="password"
+          number={number("password")}
+          title="Password"
+          description="Changing your password signs out every other device."
+        >
+          <PasswordForm />
+        </SettingsSection>
 
         <SettingsSection
           id="appearance"
@@ -146,25 +103,14 @@ export function SettingsScreen() {
         </SettingsSection>
 
         <SettingsSection
-          id="deployment"
-          number={number("deployment")}
-          title="Deployment"
-          description="What this RoleTeX server is configured with, and what that means for what you can do."
+          id="danger"
+          number={number("danger")}
+          tone="danger"
+          title="Danger zone"
+          description="Irreversible actions on this account."
         >
-          <ServerStatus />
+          <DangerZone />
         </SettingsSection>
-
-        {storageAvailable ? (
-          <SettingsSection
-            id="danger"
-            number={number("danger")}
-            tone="danger"
-            title="Danger zone"
-            description="Irreversible actions on this account."
-          >
-            <DangerZone />
-          </SettingsSection>
-        ) : null}
       </div>
     </div>
   );

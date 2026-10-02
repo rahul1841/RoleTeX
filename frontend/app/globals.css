@@ -81,9 +81,9 @@
   --color-code-foreground: var(--code-foreground);
   --color-code-border: var(--code-border);
 
-  /* Advisory, non-destructive states: demo-mode notice, unverified email,
-     compile warnings. `destructive` is reserved for things that failed or
-     things that delete data — overloading it there would cry wolf. */
+  /* Advisory, non-destructive states: unverified email, compile warnings.
+     `destructive` is reserved for things that failed or things that delete
+     data — overloading it there would cry wolf. */
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-warning-border: var(--warning-border);

@@ -81,7 +81,6 @@ def _run_summary(doc: Dict[str, Any]) -> RunSummary:
         created_at=doc.get("created_at"),
         resume_id=doc.get("resume_id", "") or "",
         resume_name=doc.get("resume_name", "") or "",
-        resume_version=int(doc.get("resume_version", 0) or 0),
         jd_id=doc.get("jd_id"),
         jd_title=doc.get("jd_title"),
         jd_excerpt=doc.get("jd_excerpt", "") or "",

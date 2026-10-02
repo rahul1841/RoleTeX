@@ -22,4 +22,3 @@ export {
 } from "./loading-state";
 export { ConfirmDialog, type ConfirmDialogProps } from "./confirm-dialog";
 export { CopyButton, type CopyButtonProps } from "./copy-button";
-export { RequiresStorage, type RequiresStorageProps } from "./requires-storage";

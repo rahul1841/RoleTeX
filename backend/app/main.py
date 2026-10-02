@@ -1,11 +1,8 @@
 """FastAPI application for JD-based, locked-template resume tailoring.
 
-Two runtime modes (decided once at app creation):
-- Multi-user mode (``MONGODB_URI`` set / a ``Database`` injected): accounts,
-  per-user resume/JD libraries, encrypted per-user provider keys, and tailor
-  history. Tailoring requires an authenticated session and an owned resume.
-- Demo mode (no database): only the seed-resume tailor flow works, exactly as
-  in the single-user app; every DB-backed route returns a structured 503.
+Backed by MongoDB (``MONGODB_URI``, or an injected ``Database``): accounts,
+per-user resume/JD libraries, encrypted per-user provider keys, and tailor
+history. Tailoring requires an authenticated session and an owned resume.
 
 Middleware defends in depth: declared body-size limits per route family, a
 CSRF origin check for cookie-carrying state changes, and sliding-window rate
@@ -57,7 +54,6 @@ from .resume import (
     ResumeRepository,
     build_change_list,
     build_unified_diff,
-    flattened_skills,
     redact_identity,
     render_template_text,
     validate_proposal,
@@ -76,7 +72,6 @@ from .schemas import (
     CompilerReport,
     HealthResponse,
     ResumeData,
-    TailorProposal,
     TailorRequest,
     TailorResponse,
     dump_model,
@@ -98,8 +93,8 @@ MAX_RUN_LATEX_CHARACTERS = 200_000
 MAX_RUN_DIFF_CHARACTERS = 100_000
 RUN_JD_EXCERPT_CHARACTERS = 300
 
-_PDF_UPLOAD_PATH = re.compile(r"^/api/resumes(?:/[^/]+/versions)?/pdf$")
-_LATEX_IMPORT_PATH = re.compile(r"^/api/resumes(?:/[^/]+/versions)?$")
+_PDF_UPLOAD_PATH = re.compile(r"^/api/resumes/pdf$")
+_LATEX_IMPORT_PATH = re.compile(r"^/api/resumes$")
 # A whole resume authored in the editor arrives as one JSON document, so these
 # routes need the import ceiling rather than the 64KB API default.
 _STRUCTURED_RESUME_PATH = re.compile(
@@ -108,7 +103,7 @@ _STRUCTURED_RESUME_PATH = re.compile(
 # Routes that spend a scarce resource — a provider call, a Tectonic compile, or
 # both. ``/api/resumes/preview`` calls no model but does compile.
 _LLM_BUCKET_PATH = re.compile(
-    r"^/api/(?:tailor|resumes(?:/pdf|/preview|/[^/]+/versions(?:/pdf)?)?"
+    r"^/api/(?:tailor|resumes(?:/pdf|/preview)?"
     r"|runs/[^/]+/compile)$"
 )
 _STATE_CHANGING_METHODS = ("POST", "PUT", "PATCH", "DELETE")
@@ -119,7 +114,7 @@ class ApplicationServices:
     repository: ResumeRepository
     llm: LLMClient
     compiler: CompileService
-    database: Optional[Database]
+    database: Database
     config: AppConfig
     rate_limiter_llm: security.RateLimiter
     rate_limiter_llm_ip: security.RateLimiter
@@ -406,20 +401,17 @@ def create_app(
         """
 
         database = instance.state.services.database
-        index_task: Optional["asyncio.Task[None]"] = None
-        if database is not None:
-            index_task = asyncio.create_task(_ensure_indexes_with_retry(database))
+        index_task = asyncio.create_task(_ensure_indexes_with_retry(database))
         # Exposed so a caller can await or inspect the background work.
         instance.state.index_task = index_task
         try:
             yield
         finally:
-            if index_task is not None and not index_task.done():
+            if not index_task.done():
                 index_task.cancel()
-            if database is not None:
-                # Release the motor pool and its monitor threads; a reload that
-                # leaves them running leaks a connection per restart.
-                database.close()
+            # Release the motor pool and its monitor threads; a reload that
+            # leaves them running leaks a connection per restart.
+            database.close()
 
     application = FastAPI(
         title="RoleTeX",
@@ -567,18 +559,15 @@ def create_app(
         # monitoring probes.
         if path != "/api/health":
             user_key = ""
-            if services.database is not None:
-                # This runs before routing, so route-level exception handlers
-                # cannot catch a Mongo outage here; translate it in place.
-                try:
-                    context = await resolve_session(request, services)
-                except PyMongoError as exc:
-                    logger.error(
-                        "Database error resolving session for %s: %s", path, exc
-                    )
-                    return _database_unavailable_response()
-                if context is not None:
-                    user_key = context[0]["_id"]
+            # This runs before routing, so route-level exception handlers
+            # cannot catch a Mongo outage here; translate it in place.
+            try:
+                context = await resolve_session(request, services)
+            except PyMongoError as exc:
+                logger.error("Database error resolving session for %s: %s", path, exc)
+                return _database_unavailable_response()
+            if context is not None:
+                user_key = context[0]["_id"]
             client_host = (
                 security.client_ip(
                     request,
@@ -609,37 +598,6 @@ def create_app(
     @application.get("/api/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
         checks: Dict[str, Any] = {}
-        mode = "multi_user" if services.database is not None else "demo"
-
-        # Seed resume: mandatory in demo mode, optional in multi-user mode.
-        resume_valid = False
-        resume_ok_for_status = False
-        data_path = getattr(services.repository, "data_path", None)
-        template_path = getattr(services.repository, "template_path", None)
-        seed_present = bool(
-            data_path
-            and template_path
-            and Path(data_path).is_file()
-            and Path(template_path).is_file()
-        )
-        if mode == "multi_user" and not seed_present:
-            checks["resume"] = "not_configured"
-            resume_ok_for_status = True
-        else:
-            try:
-                resume, template = services.repository.load()
-                baseline = TailorProposal(
-                    summary=resume.summary,
-                    bullet_rewrites=[],
-                    skills_order=flattened_skills(resume),
-                )
-                # This validates every token and all deterministic renderer inputs.
-                render_template_text(template, resume, baseline)
-                resume_valid = True
-                resume_ok_for_status = True
-                checks["resume"] = "ok"
-            except (ResumeError, ProposalValidationError, OSError) as exc:
-                checks["resume"] = "error: {0}".format(str(exc)[:300])
 
         compiler_available = services.compiler.is_available()
         checks["compiler"] = (
@@ -651,7 +609,7 @@ def create_app(
         model = os.getenv("LLM_MODEL", "")
         llm_configured = True
         resolver = getattr(services.llm, "resolve_config", None)
-        if mode == "multi_user" and not os.getenv("LLM_PROVIDER", "").strip():
+        if not os.getenv("LLM_PROVIDER", "").strip():
             # No operator env provider: users bring their own keys per request.
             checks["llm"] = "user_keys"
             provider = "user_keys"
@@ -670,9 +628,7 @@ def create_app(
             model = model or "injected"
 
         database_ok = True
-        if services.database is None:
-            checks["database"] = "not_configured"
-        elif await services.database.ping():
+        if await services.database.ping():
             checks["database"] = "ok"
         else:
             database_ok = False
@@ -709,8 +665,7 @@ def create_app(
 
         status = (
             "ok"
-            if resume_ok_for_status
-            and compiler_available
+            if compiler_available
             and llm_configured
             and database_ok
             else "degraded"
@@ -718,23 +673,11 @@ def create_app(
         return HealthResponse(
             status=status,
             version=__version__,
-            mode=mode,
             provider=provider,
             model=model or "not-configured",
-            resume_valid=resume_valid,
             compiler_available=compiler_available,
             checks=checks,
         )
-
-    def _load_seed_resume() -> Tuple[Any, str]:
-        try:
-            return services.repository.load()
-        except ResumeError as exc:
-            raise _api_error(
-                500,
-                "resume_configuration_error",
-                "The locked resume source is invalid. Check the server configuration.",
-            ) from exc
 
     async def _load_owned_resume(
         user: Dict[str, Any], resume_id: str
@@ -746,20 +689,13 @@ def create_app(
                 "resume_not_found",
                 "No resume with this id in your library. Import a resume first.",
             )
-        version_doc = await services.database.resumes.get_version(
-            user["_id"], resume_id, int(doc.get("current_version", 1))
-        )
-        if version_doc is None:
-            raise _api_error(
-                500, "resume_configuration_error", "The stored resume is incomplete."
-            )
         try:
-            resume = validate_model(ResumeData, version_doc.get("data"))
+            resume = validate_model(ResumeData, doc.get("data"))
         except ValidationError as exc:
             raise _api_error(
                 500, "resume_configuration_error", "The stored resume profile is invalid."
             ) from exc
-        template = version_doc.get("template_tex", "") or ""
+        template = doc.get("template_tex", "") or ""
         return resume, template, doc
 
     @application.post("/api/tailor", response_model=TailorResponse)
@@ -771,56 +707,27 @@ def create_app(
                 "Provide exactly one of job_description or jd_id.",
             )
 
-        warnings: List[str] = []
-        user: Optional[Dict[str, Any]] = None
-        resume_doc: Optional[Dict[str, Any]] = None
         jd_doc: Optional[Dict[str, Any]] = None
 
-        if services.database is None:
-            # Demo mode: seed-resume tailoring only, exactly as the
-            # single-user app behaved (env LLM config, no auth, no history).
-            if payload.jd_id is not None or payload.resume_id:
+        user = await require_user(request, services)
+        resume, template, resume_doc = await _load_owned_resume(user, payload.resume_id)
+        if payload.jd_id is not None:
+            jd_doc = await services.database.jds.get(user["_id"], payload.jd_id)
+            if jd_doc is None:
                 raise _api_error(
-                    503,
-                    "database_not_configured",
-                    "Saved resumes and JDs need a database; this deployment runs in demo mode.",
+                    404,
+                    "jd_not_found",
+                    "No job description with this id in your library.",
                 )
-            resume, template = _load_seed_resume()
-            sectioned = False
-            job_description = payload.job_description or ""
-            llm_kwargs: Dict[str, Any] = {
-                "provider": payload.provider,
-                "model": payload.model,
-            }
+            job_description = jd_doc.get("content", "")
         else:
-            user = await require_user(request, services)
-            if not payload.resume_id:
-                raise _api_error(
-                    400,
-                    "resume_required",
-                    "Select one of your imported resumes to tailor.",
-                )
-            resume, template, resume_doc = await _load_owned_resume(
-                user, payload.resume_id
-            )
-            sectioned = True
-            if payload.jd_id is not None:
-                jd_doc = await services.database.jds.get(user["_id"], payload.jd_id)
-                if jd_doc is None:
-                    raise _api_error(
-                        404,
-                        "jd_not_found",
-                        "No job description with this id in your library.",
-                    )
-                job_description = jd_doc.get("content", "")
-            else:
-                job_description = payload.job_description or ""
-            provider, model, api_key, warnings = await resolve_llm_selection(
-                services, user, payload.provider, payload.model
-            )
-            llm_kwargs = {"provider": provider, "model": model}
-            if api_key:
-                llm_kwargs["api_key"] = api_key
+            job_description = payload.job_description or ""
+        provider, model, api_key, warnings = await resolve_llm_selection(
+            services, user, payload.provider, payload.model
+        )
+        llm_kwargs: Dict[str, Any] = {"provider": provider, "model": model}
+        if api_key:
+            llm_kwargs["api_key"] = api_key
 
         try:
             result, repair_used = await _generate_valid_proposal(
@@ -833,7 +740,9 @@ def create_app(
             raise _api_error(status_code, "llm_provider_error", str(exc)) from exc
 
         try:
-            latex_source = render_template_text(template, resume, result.proposal, sectioned)
+            latex_source = render_template_text(
+                template, resume, result.proposal, sectioned=True
+            )
             changes = build_change_list(resume, result.proposal)
             unified_diff = build_unified_diff(changes)
         except (ResumeError, ProposalValidationError) as exc:
@@ -849,12 +758,11 @@ def create_app(
         async def _persist_run(
             response: TailorResponse,
         ) -> TailorResponse:
-            if user is None or resume_doc is None or not payload.save_run:
+            if not payload.save_run:
                 return response
             run_doc = {
                 "resume_id": resume_doc["_id"],
                 "resume_name": resume_doc.get("name", ""),
-                "resume_version": int(resume_doc.get("current_version", 1)),
                 "jd_id": jd_doc["_id"] if jd_doc is not None else None,
                 "jd_title": jd_doc.get("title") if jd_doc is not None else None,
                 "jd_excerpt": " ".join(job_description.split())[
@@ -937,7 +845,7 @@ def create_app(
                 )
                 validate_proposal(resume, repaired_result.proposal)
                 repaired_latex = render_template_text(
-                    template, resume, repaired_result.proposal, sectioned
+                    template, resume, repaired_result.proposal, sectioned=True
                 )
                 repaired_compile = await services.compiler.compile(
                     repaired_latex, services.repository.assets_dir

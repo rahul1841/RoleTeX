@@ -3,19 +3,11 @@
 import { useRouter } from "next/navigation";
 import {
   useMutation,
-  useQuery,
   useQueryClient,
   type QueryClient,
 } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  changePassword,
-  deleteMe,
-  listSessions,
-  revokeOtherSessions,
-  revokeSession,
-  updateMe,
-} from "@/lib/api/endpoints/session";
+import { changePassword, deleteMe, updateMe } from "@/lib/api/endpoints/session";
 import { queryKeys } from "@/lib/api/query-keys";
 import type {
   ChangePasswordRequest,
@@ -33,11 +25,6 @@ import type {
  * returned rather than invalidating and refetching a fact we were just told.
  */
 
-/** Query keys describing the deployment rather than the person using it. */
-function isServerScopedKey(key: readonly unknown[]): boolean {
-  return key[0] === queryKeys.health[0];
-}
-
 /**
  * Drop every cached thing this account could see.
  *
@@ -47,9 +34,7 @@ function isServerScopedKey(key: readonly unknown[]): boolean {
  * resumes.
  */
 function clearAccountCache(queryClient: QueryClient): void {
-  queryClient.removeQueries({
-    predicate: (query) => !isServerScopedKey(query.queryKey),
-  });
+  queryClient.removeQueries();
 }
 
 // ---------------------------------------------------------------------------
@@ -95,9 +80,7 @@ export function useUpdateMe() {
  *
  * The server treats a password change as a suspected compromise: it destroys
  * every OTHER session for the account and every outstanding reset link, keeping
- * only the one that made the request. So the session list is invalidated — it
- * is now shorter, and a stale list would invite the user to revoke sessions
- * that no longer exist.
+ * only the one that made the request.
  *
  * ⚠️ The endpoint helper is declared `api.post<OkResponse>`, but the route's
  * `response_model` is `UserResponse` and the running server returns
@@ -112,58 +95,6 @@ export function useChangePassword() {
     mutationFn: (body: ChangePasswordRequest) => changePassword(body),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.session.me });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.session.list });
-    },
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Sessions
-// ---------------------------------------------------------------------------
-
-/**
- * `GET /api/sessions` — every session token currently valid for this account.
- *
- * This is a security readout, so it is deliberately NOT cached aggressively:
- * a revocation made on another device should be visible here on the next look,
- * not minutes later. Refetched when the window regains focus for the same
- * reason.
- */
-export function useSessions(enabled: boolean) {
-  return useQuery({
-    queryKey: queryKeys.session.list,
-    queryFn: listSessions,
-    enabled,
-    staleTime: 0,
-    refetchOnWindowFocus: true,
-  });
-}
-
-/**
- * `DELETE /api/sessions/{id}` — revoke one other session.
- *
- * Not optimistic: a row that vanishes before the server has agreed is a lie on
- * a screen whose entire purpose is telling the truth about who is signed in.
- */
-export function useRevokeSession() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (sessionId: string) => revokeSession(sessionId),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.session.list });
-    },
-  });
-}
-
-/** `DELETE /api/sessions` — revoke every session except this one. */
-export function useRevokeOtherSessions() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: revokeOtherSessions,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.session.list });
     },
   });
 }
