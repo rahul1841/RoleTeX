@@ -18,7 +18,6 @@ export interface TailorFormValues {
   jobDescription: string;
   provider: string;
   model: string;
-  compile: boolean;
   requireOnePage: boolean;
   saveRun: boolean;
 }
@@ -50,7 +49,6 @@ export const tailorSchema = z
     jobDescription: z.string(),
     provider: z.string(),
     model: z.string(),
-    compile: z.boolean(),
     requireOnePage: z.boolean(),
     saveRun: z.boolean(),
   })
@@ -112,7 +110,7 @@ export const tailorSchema = z
 export function buildTailorRequest(values: TailorFormValues): TailorRequest {
   const request: TailorRequest = {
     resume_id: values.resumeId,
-    compile: values.compile,
+    compile: true,
     require_one_page: values.requireOnePage,
     save_run: values.saveRun,
   };

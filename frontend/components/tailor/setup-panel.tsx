@@ -107,7 +107,6 @@ export function SetupPanel({
       jobDescription: "",
       provider: "",
       model: "",
-      compile: true,
       requireOnePage: true,
       saveRun: true,
     },
@@ -515,19 +514,11 @@ export function SetupPanel({
             <legend className="sr-only">Run options</legend>
             <div className="flex flex-wrap gap-2">
               <OptionPill
-                id="tailor-compile"
-                label="Compile the PDF"
-                hint="Off returns the changes, the diff and the LaTeX in seconds, with no Tectonic run."
-                checked={values.compile}
-                onChange={(next) => setValue("compile", next)}
-              />
-              <OptionPill
                 id="tailor-one-page"
                 label="Keep to one page"
                 hint="Lets the server spend its single repair attempt shortening a resume that spills onto page two."
                 checked={values.requireOnePage}
                 onChange={(next) => setValue("requireOnePage", next)}
-                disabled={!values.compile}
               />
               <OptionPill
                 id="tailor-save-run"
@@ -541,16 +532,7 @@ export function SetupPanel({
         </Step>
 
         {/* --- Run bar ---------------------------------------------------- */}
-        <div className="bg-code mt-auto flex flex-col gap-4 border-t px-5 py-5 sm:flex-row sm:items-center sm:px-7">
-          <div className="min-w-0 flex-1 space-y-1">
-            <p className="text-code-foreground font-mono text-xs">
-              {completion("one")}
-              {values.compile ? " · one Tectonic compile" : ""}
-            </p>
-            <p className="text-muted-foreground text-[0.8125rem] leading-5 text-pretty">
-              Your name, email, phone and links are never sent to the model.
-            </p>
-          </div>
+        <div className="bg-code mt-auto flex flex-col gap-4 border-t px-5 py-5 sm:flex-row sm:items-center sm:justify-end sm:px-7">
           <Button
             type="submit"
             disabled={isRunning || noResumes}
@@ -575,7 +557,7 @@ export function SetupPanel({
         destructive={false}
         title="Run tailoring again?"
         confirmLabel="Run again"
-        description={`This replaces the result you are reviewing and spends ${completion("another")}${values.compile ? " and another Tectonic compile" : ""}.`}
+        description={`This replaces the result you are reviewing and spends ${completion("another")} and another Tectonic compile.`}
         onConfirm={() => {
           const pending = pendingRef.current;
           pendingRef.current = null;
@@ -711,25 +693,9 @@ function ResumePreviewPanel({
         </span>
       </div>
       <div className="flex flex-1 items-center">{body}</div>
-      <div className="flex flex-wrap justify-center gap-1.5">
-        {SAFEGUARD_RULES.map((rule) => (
-          <code
-            key={rule}
-            className="bg-card text-code-foreground border-code-border rounded-md border px-2 py-0.5 font-mono text-[0.6875rem]"
-          >
-            {rule}
-          </code>
-        ))}
-      </div>
     </Canvas>
   );
 }
-
-/** Rules the server enforces on every run. */
-const SAFEGUARD_RULES = [
-  "identity → never sent",
-  "no new numbers",
-] as const;
 
 function PanelNote({ children }: { children: React.ReactNode }) {
   return (
