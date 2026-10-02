@@ -1,8 +1,7 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { AppMode, User } from "@/lib/api/types";
+import type { User } from "@/lib/api/types";
 import { AppNav } from "./app-nav";
 import { MobileNav } from "./mobile-nav";
 import { NAV_ITEMS } from "./nav";
@@ -11,8 +10,6 @@ import { UserMenu } from "./user-menu";
 import { Wordmark } from "./wordmark";
 
 export interface AppHeaderProps {
-  mode: AppMode | null;
-  storageAvailable: boolean;
   user: User | null;
   needsEmailVerification: boolean;
   /** False while the session is still resolving, or when it failed to. */
@@ -34,8 +31,6 @@ export interface AppHeaderProps {
  * backdrop-filter.
  */
 export function AppHeader({
-  mode,
-  storageAvailable,
   user,
   needsEmailVerification,
   showNav,
@@ -45,7 +40,7 @@ export function AppHeader({
     <header className="bg-background/90 supports-backdrop-filter:bg-background/70 sticky top-0 z-40 shrink-0 border-b backdrop-blur">
       <div className="mx-auto flex h-16 w-full max-w-[96rem] items-center gap-2 px-4 sm:px-6 lg:h-18 lg:gap-10 lg:px-8">
       {showNav ? (
-        <MobileNav storageAvailable={storageAvailable} />
+        <MobileNav />
       ) : (
         // Holds the drawer trigger's footprint while the session resolves, so
         // the wordmark does not jump sideways when the nav appears.
@@ -56,7 +51,6 @@ export function AppHeader({
 
       {showNav ? (
         <AppNav
-          storageAvailable={storageAvailable}
           orientation="horizontal"
           className="hidden lg:block"
         />
@@ -69,14 +63,6 @@ export function AppHeader({
       ) : null}
 
       <div className="ml-auto flex items-center gap-1.5">
-        {/* Demo mode has no accounts, so the header says what the server is
-            instead of who the user is. */}
-        {mode === "demo" ? (
-          <Badge variant="outline" className="hidden sm:inline-flex">
-            Demo
-          </Badge>
-        ) : null}
-
         <ThemeToggle />
 
         {user ? (

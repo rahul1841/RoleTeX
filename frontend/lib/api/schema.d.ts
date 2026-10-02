@@ -216,41 +216,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/sessions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Sessions */
-        get: operations["list_sessions_api_sessions_get"];
-        put?: never;
-        post?: never;
-        /** Revoke Other Sessions */
-        delete: operations["revoke_other_sessions_api_sessions_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/sessions/{session_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Revoke Session */
-        delete: operations["revoke_session_api_sessions__session_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/providers": {
         parameters: {
             query?: never;
@@ -663,17 +628,10 @@ export interface components {
             status: string;
             /** Version */
             version: string;
-            /**
-             * Mode
-             * @default demo
-             */
-            mode: string;
             /** Provider */
             provider: string;
             /** Model */
             model: string;
-            /** Resume Valid */
-            resume_valid: boolean;
             /** Compiler Available */
             compiler_available: boolean;
             /** Checks */
@@ -1386,19 +1344,6 @@ export interface components {
             /** Versions */
             versions?: components["schemas"]["ResumeVersionSummary"][];
         };
-        /** RevokedResponse */
-        RevokedResponse: {
-            /**
-             * Ok
-             * @default true
-             */
-            ok: boolean;
-            /**
-             * Revoked
-             * @default 0
-             */
-            revoked: number;
-        };
         /** RunCompileResponse */
         RunCompileResponse: {
             /** Pdf Base64 */
@@ -1532,37 +1477,6 @@ export interface components {
              */
             repaired: boolean;
         };
-        /** SessionInfo */
-        SessionInfo: {
-            /** Id */
-            id: string;
-            /** Created At */
-            created_at?: string | null;
-            /** Last Seen At */
-            last_seen_at?: string | null;
-            /** Expires At */
-            expires_at?: string | null;
-            /**
-             * User Agent
-             * @default
-             */
-            user_agent: string;
-            /**
-             * Client Ip
-             * @default
-             */
-            client_ip: string;
-            /**
-             * Current
-             * @default false
-             */
-            current: boolean;
-        };
-        /** SessionListResponse */
-        SessionListResponse: {
-            /** Sessions */
-            sessions?: components["schemas"]["SessionInfo"][];
-        };
         /**
          * SignupCodeRequest
          * @description Ask for a sign-up code to be mailed to ``email``.
@@ -1607,7 +1521,7 @@ export interface components {
              */
             require_one_page: boolean;
             /** Resume Id */
-            resume_id?: string | null;
+            resume_id: string;
             /**
              * Save Run
              * @default true
@@ -2113,77 +2027,6 @@ export interface operations {
                 "application/json": components["schemas"]["VerifyEmailRequest"];
             };
         };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OkResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_sessions_api_sessions_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionListResponse"];
-                };
-            };
-        };
-    };
-    revoke_other_sessions_api_sessions_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RevokedResponse"];
-                };
-            };
-        };
-    };
-    revoke_session_api_sessions__session_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

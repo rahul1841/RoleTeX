@@ -3,25 +3,18 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { DatabaseIcon } from "lucide-react";
-import { ButtonLink } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState, LoadingState, Spinner } from "@/components/common";
 import { useSession } from "@/hooks/use-session";
 import { queryKeys } from "@/lib/api/query-keys";
-import { AuthPage, AuthStatus } from "./auth-page";
+import { AuthPage } from "./auth-page";
 
 /**
- * The three answers an auth screen has to have before it can show a form.
+ * The two answers an auth screen has to have before it can show a form.
  *
- * BOOTING — health has not resolved, so we do not yet know whether this server
- * even has accounts. Showing a sign-in form now and an "accounts unavailable"
- * message a moment later is worse than showing neither.
- *
- * DEMO MODE — `GET /api/health` reports `mode: "demo"`, which means no
- * database: no users, no sessions, nothing to sign in to. Every auth route is
- * meaningless and says so, rather than offering a form whose every submission
- * would 503. This is the auth-side counterpart to <RequiresStorage>.
+ * BOOTING — `/api/me` has not resolved, so we do not yet know whether this
+ * visitor is already signed in. Showing a sign-in form now and a redirect a
+ * moment later is worse than showing neither.
  *
  * ALREADY SIGNED IN — only for the screens where that is a contradiction.
  * /reset-password and /verify-email must keep working for a signed-in user
@@ -54,12 +47,7 @@ export function AuthGate({
   }, [shouldLeave, router]);
 
   const retryBoot = React.useCallback(() => {
-    // refetch, not invalidate: health is `staleTime: Infinity`, so marking it
-    // stale would never actually send a request.
-    void Promise.all([
-      queryClient.refetchQueries({ queryKey: queryKeys.health }),
-      queryClient.refetchQueries({ queryKey: queryKeys.session.me }),
-    ]);
+    void queryClient.refetchQueries({ queryKey: queryKeys.session.me });
   }, [queryClient]);
 
   if (session.isLoading) {
@@ -84,34 +72,9 @@ export function AuthGate({
     return (
       <AuthPage
         title="Can't reach the server"
-        description="RoleTeX could not read this deployment's status, so there is nothing it can safely offer you yet."
+        description="RoleTeX could not reach this server, so there is nothing it can safely offer you yet."
       >
         <ErrorState error={session.bootError} onRetry={retryBoot} />
-      </AuthPage>
-    );
-  }
-
-  if (session.mode === "demo") {
-    return (
-      <AuthPage
-        title="This server has no accounts"
-        description="It is running in demo mode with no database configured."
-      >
-        <AuthStatus
-          tone="info"
-          icon={DatabaseIcon}
-          actions={
-            <ButtonLink href="/tailor" size="sm">
-              Go to RoleTeX
-            </ButtonLink>
-          }
-        >
-          <p>
-            Signing in, registering and password resets all need the database,
-            so none of them exist here. You can still tailor the built-in sample
-            resume and download the PDF.
-          </p>
-        </AuthStatus>
       </AuthPage>
     );
   }

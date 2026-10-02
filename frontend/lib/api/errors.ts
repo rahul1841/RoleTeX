@@ -21,7 +21,6 @@ export const API_ERROR_CODES = [
   "account_disabled",
   "already_verified",
   "bad_origin",
-  "database_not_configured",
   "database_unavailable",
   "email_taken",
   "email_verification_required",
@@ -61,10 +60,8 @@ export const API_ERROR_CODES = [
   "resume_configuration_error",
   "resume_not_found",
   "resume_quota_exceeded",
-  "resume_required",
   "run_has_no_latex",
   "run_not_found",
-  "session_not_found",
   "too_many_attempts",
   "too_many_requests",
   "unknown_provider",
@@ -96,8 +93,6 @@ const ERROR_COPY: Partial<Record<ApiErrorCode, string>> = {
   timeout: "The server took too long to respond. Please try again.",
   not_authenticated: "Please sign in to continue.",
   account_disabled: "This account has been disabled.",
-  database_not_configured:
-    "This feature needs the database, which is not configured on this server.",
   database_unavailable:
     "The database is temporarily unavailable. Please try again shortly.",
   bad_origin: "The request was blocked for security reasons. Please reload.",

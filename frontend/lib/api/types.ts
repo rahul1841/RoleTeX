@@ -16,9 +16,6 @@ type S = components["schemas"];
 
 export type User = S["UserOut"];
 export type UserResponse = S["UserResponse"];
-export type HealthResponse = S["HealthResponse"];
-export type SessionInfo = S["SessionInfo"];
-export type SessionListResponse = S["SessionListResponse"];
 
 export type LoginRequest = S["LoginRequest"];
 export type RegisterRequest = S["RegisterRequest"];
@@ -29,13 +26,6 @@ export type ResetPasswordRequest = S["ResetPasswordRequest"];
 export type VerifyEmailRequest = S["VerifyEmailRequest"];
 export type UpdateMeRequest = S["UpdateMeRequest"];
 export type DeleteMeRequest = S["DeleteMeRequest"];
-
-/**
- * `GET /api/health` reports which mode the server is in. Nearly every screen
- * branches on this: in `demo` there is no database, so accounts, saved
- * resumes, JDs and history are all unavailable.
- */
-export type AppMode = "demo" | "multi_user";
 
 // ---------------------------------------------------------------------------
 // Providers and keys
@@ -147,5 +137,4 @@ export type CompilerReport = S["CompilerReport"];
 // ---------------------------------------------------------------------------
 
 export type OkResponse = S["OkResponse"];
-export type RevokedResponse = S["RevokedResponse"];
 export type MailDispatchResponse = S["MailDispatchResponse"];

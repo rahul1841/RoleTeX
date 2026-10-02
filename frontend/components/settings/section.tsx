@@ -80,7 +80,7 @@ export function SettingsSection({
 
 /**
  * A bordered surface inside a section card. `divide` splits it into rows that
- * share one outline (provider list, session list).
+ * share one outline (provider list).
  */
 export function SettingsPanel({
   className,

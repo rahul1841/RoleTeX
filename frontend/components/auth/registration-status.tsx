@@ -7,7 +7,7 @@ import * as React from "react";
  *
  * `ALLOW_REGISTRATION=false` makes `POST /api/auth/register` return 403
  * `registration_disabled` — and that is the ONLY way a client can find out.
- * `GET /api/health` reports mode, provider, model and compiler, but not this,
+ * `GET /api/health` reports provider, model and compiler, but not this,
  * so there is nothing to ask before the first attempt. (Getting that flag into
  * health is the one backend change this feature actually wants; see the report.)
  *

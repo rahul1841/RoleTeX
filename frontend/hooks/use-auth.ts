@@ -44,16 +44,7 @@ import type {
  *    a different account's name.
  *  - Signing out, or having a session revoked underneath us, CLEARS the
  *    session: the same drop, without a replacement.
- *
- * `health` survives both. It describes the server, not the user, and it is
- * cached with `staleTime: Infinity` precisely because a running server does
- * not change modes — refetching it on every sign-in would be pure noise.
  */
-
-/** Query keys that describe the deployment rather than the person using it. */
-function isServerScopedKey(key: readonly unknown[]): boolean {
-  return key[0] === queryKeys.health[0];
-}
 
 /**
  * Drop everything the previous user could see.
@@ -63,9 +54,7 @@ function isServerScopedKey(key: readonly unknown[]): boolean {
  * the new request lands. Removal empties them immediately.
  */
 function clearSession(queryClient: QueryClient): void {
-  queryClient.removeQueries({
-    predicate: (query) => !isServerScopedKey(query.queryKey),
-  });
+  queryClient.removeQueries();
 }
 
 /**
@@ -74,17 +63,13 @@ function clearSession(queryClient: QueryClient): void {
  * The session query is written directly from the login/register response
  * instead of being invalidated, so the shell re-renders as authenticated on
  * the same tick and the user is not shown a loading frame for a fact the
- * server just told us. `session.list` (active sessions) IS invalidated,
- * because signing in created a new one.
+ * server just told us.
  */
 function adoptSession(queryClient: QueryClient, response: UserResponse): void {
   queryClient.removeQueries({
-    predicate: (query) =>
-      !isServerScopedKey(query.queryKey) &&
-      query.queryKey[0] !== queryKeys.session.all[0],
+    predicate: (query) => query.queryKey[0] !== queryKeys.session.all[0],
   });
   queryClient.setQueryData(queryKeys.session.me, response);
-  void queryClient.invalidateQueries({ queryKey: queryKeys.session.list });
 }
 
 /**

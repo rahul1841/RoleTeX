@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Controller, useForm, useWatch, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { cn } from "cn";
-import { ArrowRightIcon, CheckIcon, DatabaseIcon, LockIcon } from "lucide-react";
+import { ArrowRightIcon, CheckIcon, LockIcon } from "lucide-react";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -36,21 +36,15 @@ import { FormField, describedBy, fieldErrorId, fieldHintId } from "./form-field"
 import {
   FOCUS_ORDER,
   buildTailorRequest,
-  buildTailorSchema,
+  tailorSchema,
   type RunLabels,
   type TailorFormValues,
 } from "./form-values";
 import { PickerSelect, type PickerOption } from "./picker-select";
 
 /**
- * Everything a tailoring run is assembled from.
- *
- * Works in both deployment shapes, which is why it is deliberately NOT wrapped
- * in <RequiresStorage>. In `multi_user` a run names a saved resume and either a
- * saved or a pasted job description. In `demo` there is no database and no
- * account: the server tailors its own built-in sample resume against pasted
- * text, which is a real product mode rather than a degraded one, so the resume
- * picker and the saved-JD tab simply do not appear there.
+ * Everything a tailoring run is assembled from: a saved resume and either a
+ * saved or a pasted job description.
  */
 
 // Stable identities, so the preselection effects do not re-run every render.
@@ -67,7 +61,6 @@ const MODEL_ID = "tailor-model";
 export type { RunLabels } from "./form-values";
 
 export interface SetupPanelProps {
-  storage: boolean;
   user: User | null;
   /** Preselections from the query string: /tailor?resume=…&jd=… */
   initialResumeId?: string;
@@ -79,7 +72,6 @@ export interface SetupPanelProps {
 }
 
 export function SetupPanel({
-  storage,
   user,
   initialResumeId,
   initialJdId,
@@ -87,8 +79,8 @@ export function SetupPanel({
   hasResult,
   onRun,
 }: SetupPanelProps) {
-  const resumesQuery = useResumeOptions(storage);
-  const jdsQuery = useJdOptions(storage);
+  const resumesQuery = useResumeOptions();
+  const jdsQuery = useJdOptions();
   const providersQuery = useProviderOptions();
 
   const resumes = resumesQuery.data?.resumes ?? NO_RESUMES;
@@ -100,8 +92,6 @@ export function SetupPanel({
     [user],
   );
 
-  const schema = React.useMemo(() => buildTailorSchema(storage), [storage]);
-
   const {
     control,
     register,
@@ -109,17 +99,17 @@ export function SetupPanel({
     setValue,
     formState: { errors },
   } = useForm<TailorFormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(tailorSchema),
     defaultValues: {
       resumeId: "",
-      jdSource: storage ? "saved" : "paste",
+      jdSource: "saved",
       jdId: "",
       jobDescription: "",
       provider: "",
       model: "",
       compile: true,
       requireOnePage: true,
-      saveRun: storage,
+      saveRun: true,
     },
   });
 
@@ -139,16 +129,16 @@ export function SetupPanel({
 
   const pickedResume = React.useRef(false);
   React.useEffect(() => {
-    if (!storage || pickedResume.current || resumes.length === 0) return;
+    if (pickedResume.current || resumes.length === 0) return;
     pickedResume.current = true;
     const preferred =
       resumes.find((resume) => resume.id === initialResumeId) ?? resumes[0];
     setValue("resumeId", preferred.id);
-  }, [storage, resumes, initialResumeId, setValue]);
+  }, [resumes, initialResumeId, setValue]);
 
   const pickedJd = React.useRef(false);
   React.useEffect(() => {
-    if (!storage || pickedJd.current || jdsQuery.isPending) return;
+    if (pickedJd.current || jdsQuery.isPending) return;
     pickedJd.current = true;
     if (jds.length === 0) {
       // Nothing saved to point at, so the only workable source is pasted text.
@@ -157,11 +147,11 @@ export function SetupPanel({
     }
     const preferred = jds.find((jd) => jd.id === initialJdId) ?? jds[0];
     setValue("jdId", preferred.id);
-  }, [storage, jds, jdsQuery.isPending, initialJdId, setValue]);
+  }, [jds, jdsQuery.isPending, initialJdId, setValue]);
 
   const pickedProvider = React.useRef(false);
   React.useEffect(() => {
-    if (!storage || pickedProvider.current || providers.length === 0) return;
+    if (pickedProvider.current || providers.length === 0) return;
     pickedProvider.current = true;
     // The user's own default first, then any provider they hold a key for.
     // Guessing beyond that would silently point a run at a key they lack.
@@ -173,7 +163,7 @@ export function SetupPanel({
       "";
     if (!preferred) return;
     setValue("provider", preferred);
-  }, [storage, providers, user, keyedProviders, setValue]);
+  }, [providers, user, keyedProviders, setValue]);
 
   // ------------------------------------------------------------------------
 
@@ -196,24 +186,19 @@ export function SetupPanel({
   const providerName = selectedProvider?.label || values.provider;
 
   const labels: RunLabels = {
-    resume: storage
-      ? (selectedResume?.name ?? "No resume selected")
-      : "Built-in sample resume",
+    resume: selectedResume?.name ?? "No resume selected",
     jd:
-      storage && values.jdSource === "saved"
+      values.jdSource === "saved"
         ? (selectedJd?.title ?? "No job description selected")
         : "Pasted job description",
-    provider: providerName || "the server's configured provider",
+    provider: providerName,
     model: effectiveModel,
   };
 
-  // With no name to put in front of "completion" (the server picks the
-  // provider), the phrase has to be built the other way round, or it reads
-  // "one the server's configured provider completion".
+  // Before a provider is chosen there is no name to put in front of
+  // "completion".
   const completion = (count: "one" | "another") =>
-    providerName
-      ? `${count} ${providerName} completion`
-      : `${count} completion from the server's configured provider`;
+    `${count} ${providerName || "AI"} completion`;
 
   const resumeOptions: PickerOption[] = resumes.map((resume) => ({
     value: resume.id,
@@ -230,11 +215,11 @@ export function SetupPanel({
   const providerOptions: PickerOption[] = providers.map((provider) => ({
     value: provider.id,
     label: provider.label,
-    meta: storage && !keyedProviders.has(provider.id) ? "no key" : undefined,
+    meta: keyedProviders.has(provider.id) ? undefined : "no key",
   }));
 
   function onValid(formValues: TailorFormValues) {
-    const request = buildTailorRequest(formValues, storage);
+    const request = buildTailorRequest(formValues);
     if (hasResult) {
       // A result is on screen, so this run replaces a review the user may not
       // have finished — and spends another provider call. Ask first.
@@ -258,11 +243,11 @@ export function SetupPanel({
   const modelField = register("model");
 
   const jdLength = values.jobDescription.trim().length;
-  const usingSavedJd = storage && values.jdSource === "saved";
-  const savedJdsUnavailable = storage && !jdsQuery.isPending && jds.length === 0;
-  const noResumes = storage && !resumesQuery.isPending && resumes.length === 0;
+  const usingSavedJd = values.jdSource === "saved";
+  const savedJdsUnavailable = !jdsQuery.isPending && jds.length === 0;
+  const noResumes = !resumesQuery.isPending && resumes.length === 0;
   const providerNeedsKey =
-    storage && Boolean(values.provider) && !keyedProviders.has(values.provider);
+    Boolean(values.provider) && !keyedProviders.has(values.provider);
 
   return (
     <form
@@ -277,17 +262,7 @@ export function SetupPanel({
       <div className="bg-card flex min-w-0 flex-col overflow-hidden rounded-[1.25rem] ring-1 ring-foreground/10">
         {/* --- 01 Resume ------------------------------------------------- */}
         <Step number="01">
-          {!storage ? (
-            <FormField id={RESUME_ID} label={<StepTitle>Resume</StepTitle>}>
-              <div className="text-muted-foreground flex items-start gap-2.5 rounded-xl border border-dashed px-3.5 py-3 text-sm">
-                <DatabaseIcon aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-                <p className="text-pretty">
-                  The server&apos;s built-in sample resume is used. Saved
-                  resumes need a database, which this deployment does not have.
-                </p>
-              </div>
-            </FormField>
-          ) : resumesQuery.isPending ? (
+          {resumesQuery.isPending ? (
             <FormField id={RESUME_ID} label={<StepTitle>Resume</StepTitle>}>
               <TextSkeleton lines={2} />
             </FormField>
@@ -365,27 +340,25 @@ export function SetupPanel({
             id={usingSavedJd ? JD_ID : JD_TEXT_ID}
             label={<StepTitle>Job description</StepTitle>}
             action={
-              storage ? (
-                <Controller
-                  control={control}
-                  name="jdSource"
-                  render={({ field }) => (
-                    <Tabs
-                      value={field.value}
-                      onValueChange={(next) =>
-                        field.onChange(next as TailorFormValues["jdSource"])
-                      }
-                    >
-                      <TabsList>
-                        <TabsTrigger value="saved" disabled={savedJdsUnavailable}>
-                          Saved
-                        </TabsTrigger>
-                        <TabsTrigger value="paste">Paste</TabsTrigger>
-                      </TabsList>
-                    </Tabs>
-                  )}
-                />
-              ) : null
+              <Controller
+                control={control}
+                name="jdSource"
+                render={({ field }) => (
+                  <Tabs
+                    value={field.value}
+                    onValueChange={(next) =>
+                      field.onChange(next as TailorFormValues["jdSource"])
+                    }
+                  >
+                    <TabsList>
+                      <TabsTrigger value="saved" disabled={savedJdsUnavailable}>
+                        Saved
+                      </TabsTrigger>
+                      <TabsTrigger value="paste">Paste</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                )}
+              />
             }
             error={
               usingSavedJd ? errors.jdId?.message : errors.jobDescription?.message
@@ -395,7 +368,7 @@ export function SetupPanel({
                 <span className="inline-flex items-center gap-1.5">
                   <LockIcon aria-hidden="true" className="size-3.5 shrink-0" />
                   Read as reference data, never as instructions.
-                  {!usingSavedJd && storage
+                  {!usingSavedJd
                     ? " Not saved — keep it under Job descriptions to reuse it."
                     : ""}
                 </span>
@@ -490,10 +463,8 @@ export function SetupPanel({
                     </Link>{" "}
                     or the run will fail.
                   </span>
-                ) : storage ? (
-                  "Your key, your account."
                 ) : (
-                  "Optional override."
+                  "Your key, your account."
                 )
               }
             >
@@ -502,7 +473,7 @@ export function SetupPanel({
                 name="provider"
                 control={control}
                 options={providerOptions}
-                placeholder={storage ? "Choose a provider" : "Server default"}
+                placeholder="Choose a provider"
                 invalid={Boolean(errors.provider)}
                 describedBy={describedBy(PROVIDER_ID, {
                   error: errors.provider,
@@ -558,15 +529,13 @@ export function SetupPanel({
                 onChange={(next) => setValue("requireOnePage", next)}
                 disabled={!values.compile}
               />
-              {storage ? (
-                <OptionPill
-                  id="tailor-save-run"
-                  label="Save to History"
-                  hint="Keeps the proposal, diff and LaTeX so this run can be re-compiled without paying for the model again."
-                  checked={values.saveRun}
-                  onChange={(next) => setValue("saveRun", next)}
-                />
-              ) : null}
+              <OptionPill
+                id="tailor-save-run"
+                label="Save to History"
+                hint="Keeps the proposal, diff and LaTeX so this run can be re-compiled without paying for the model again."
+                checked={values.saveRun}
+                onChange={(next) => setValue("saveRun", next)}
+              />
             </div>
           </fieldset>
         </Step>
@@ -595,7 +564,6 @@ export function SetupPanel({
       </div>
 
       <ResumePreviewPanel
-        storage={storage}
         resumeId={selectedResume?.id ?? null}
         version={selectedResume?.version ?? null}
         noResumes={noResumes}
@@ -707,27 +675,18 @@ function OptionPill({
 
 /** Preview of the resume about to be tailored. */
 function ResumePreviewPanel({
-  storage,
   resumeId,
   version,
   noResumes,
 }: {
-  storage: boolean;
   resumeId: string | null;
   version: number | null;
   noResumes: boolean;
 }) {
-  const detail = useResume(storage ? resumeId : null);
+  const detail = useResume(resumeId);
 
   let body: React.ReactNode;
-  if (!storage) {
-    body = (
-      <PanelNote>
-        This server tailors its own built-in sample resume. The compiled PDF
-        appears beside the changes once the run finishes.
-      </PanelNote>
-    );
-  } else if (noResumes) {
+  if (noResumes) {
     body = <PanelNote>Add a resume and it will be shown here before you tailor it.</PanelNote>;
   } else if (detail.data) {
     body = (
@@ -746,9 +705,7 @@ function ResumePreviewPanel({
   return (
     <Canvas className="hidden flex-col gap-5 px-8 pt-6 pb-6 xl:flex">
       <div className="flex items-center gap-3">
-        <span className="text-sm font-medium">
-          {storage ? "Current version" : "Sample resume"}
-        </span>
+        <span className="text-sm font-medium">Current version</span>
         <span className="text-muted-foreground ml-auto font-mono text-[0.6875rem]">
           {version !== null ? `v${version} · ` : ""}unchanged until you download
         </span>
@@ -768,10 +725,9 @@ function ResumePreviewPanel({
   );
 }
 
-/** Same rules as the landing page's safeguards; enforced server-side. */
+/** Rules the server enforces on every run. */
 const SAFEGUARD_RULES = [
   "identity → never sent",
-  "bullet_rewrites ≤ 6",
   "no new numbers",
 ] as const;
 

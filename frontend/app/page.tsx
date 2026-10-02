@@ -12,8 +12,8 @@ export const metadata: Metadata = {
  * The public front door, at "/". The app itself starts at /tailor.
  *
  * Outside both route groups on purpose: it is neither the signed-in shell nor
- * a single-task auth screen, and it has to render for everyone — signed out,
- * signed in, and on a demo server that has no accounts at all.
+ * a single-task auth screen, and it has to render for everyone — signed out
+ * and signed in.
  */
 export default function WelcomePage() {
   return <LandingPage />;

@@ -44,8 +44,8 @@ export function useProviders() {
 /**
  * `GET /api/keys` — which providers this account has stored a key for.
  *
- * Requires a session, so demo mode and the signed-out moment before a redirect
- * must not ask; both would produce a 401 that is noise rather than news.
+ * Requires a session, so the signed-out moment before a redirect must not ask;
+ * it would produce a 401 that is noise rather than news.
  */
 export function useKeys(enabled: boolean) {
   return useQuery({

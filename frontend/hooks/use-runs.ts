@@ -50,12 +50,11 @@ function selectRun(response: RunResponse): RunDetail {
   return response.run;
 }
 
-/** `GET /api/runs`. Multi-user only; the page gates on storage before mounting. */
-export function useRuns({ enabled = true }: { enabled?: boolean } = {}) {
+/** `GET /api/runs`. */
+export function useRuns() {
   return useQuery({
     queryKey: queryKeys.runs.list,
     queryFn: listRuns,
-    enabled,
     select: selectRuns,
   });
 }

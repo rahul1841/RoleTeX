@@ -16,7 +16,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { logout } from "@/lib/api/endpoints/session";
-import { queryKeys } from "@/lib/api/query-keys";
 import type { User } from "@/lib/api/types";
 import { Spinner } from "@/components/common";
 
@@ -50,12 +49,9 @@ export function UserMenu({
   const signOut = useMutation({
     mutationFn: logout,
     onSuccess: () => {
-      // Drop every cached query except health: the mode of the server has not
-      // changed, but everything else in the cache belonged to the account that
-      // just signed out and must not be visible to whoever signs in next.
-      queryClient.removeQueries({
-        predicate: (query) => query.queryKey[0] !== queryKeys.health[0],
-      });
+      // Everything in the cache belonged to the account that just signed out
+      // and must not be visible to whoever signs in next.
+      queryClient.removeQueries();
       router.replace("/sign-in");
     },
     onError: () => {

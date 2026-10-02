@@ -89,7 +89,6 @@ export function describeJdFailure(
       };
 
     case "database_unavailable":
-    case "database_not_configured":
       return {
         title: "The job description library is unavailable",
         hint: null,

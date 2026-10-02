@@ -6,7 +6,6 @@ import {
   LoadingState,
   PageContainer,
   PageHero,
-  RequiresStorage,
 } from "@/components/common";
 import { HistoryActions, HistoryWorkspace } from "@/components/history";
 
@@ -24,11 +23,6 @@ export const metadata: Metadata = {
  * The <Suspense> boundary is not optional. <HistoryWorkspace> reads `?run=`
  * with `useSearchParams`, and under `output: "export"` a static page that does
  * that without a boundary fails the build outright.
- *
- * <RequiresStorage> wraps the body rather than the whole page so the heading
- * survives in demo mode: a server with no database has no runs to show, and an
- * empty list would read as "you have not tailored anything yet" instead of
- * "this deployment cannot store anything".
  */
 export default function HistoryPage() {
   return (
@@ -39,11 +33,9 @@ export default function HistoryPage() {
         description="Every tailoring run, with the changes it proposed, the diff, and the LaTeX it produced. Recompiling a run costs no AI tokens."
         actions={<HistoryActions />}
       />
-      <RequiresStorage feature="Run history">
-        <Suspense fallback={<HistorySkeleton />}>
-          <HistoryWorkspace />
-        </Suspense>
-      </RequiresStorage>
+      <Suspense fallback={<HistorySkeleton />}>
+        <HistoryWorkspace />
+      </Suspense>
     </PageContainer>
   );
 }

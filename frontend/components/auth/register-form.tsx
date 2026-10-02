@@ -297,7 +297,6 @@ export function RegisterForm() {
     <AuthGate redirectWhenAuthenticated>
       <AuthPage
         title="Create your account"
-        description="One account holds your resumes, job descriptions and every tailoring run."
         footer={footer}
       >
         <form onSubmit={onSubmit} noValidate className="space-y-4">
@@ -305,12 +304,7 @@ export function RegisterForm() {
             <ErrorState error={failure} title="Could not create your account" />
           ) : null}
 
-          <Field
-            id="register-name"
-            label="Name"
-            error={errors.name?.message}
-            hint="Optional. Shown in the app; not used on your resume."
-          >
+          <Field id="register-name" label="Name" error={errors.name?.message}>
             <Input
               id="register-name"
               autoComplete="name"
@@ -318,7 +312,6 @@ export function RegisterForm() {
               aria-invalid={Boolean(errors.name)}
               aria-describedby={describedBy("register-name", {
                 error: errors.name,
-                hint: true,
               })}
               {...register("name")}
             />
@@ -360,9 +353,6 @@ export function RegisterForm() {
             {pending ? <Spinner data-icon="inline-start" /> : null}
             Continue
           </Button>
-          <p className="text-muted-foreground text-center text-xs text-pretty">
-            We will email you a 6-digit code to confirm the address.
-          </p>
         </form>
       </AuthPage>
     </AuthGate>

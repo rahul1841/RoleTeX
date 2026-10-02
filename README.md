@@ -8,10 +8,9 @@ app_port: 7860
 
 *AI + LaTeX.* Tailor a resume to any job description: an LLM proposes plain-text edits, the server validates them, renders them into a locked LaTeX template, and compiles the PDF with Tectonic. You review every change before downloading.
 
-- **Multi-user mode** (`MONGODB_URI` set): accounts, private resume and job-description libraries with versions, tailoring history, and per-user encrypted provider keys.
-- **Demo mode** (no `MONGODB_URI`): no accounts; tailors the repository's seed resume.
+Accounts, private resume and job-description libraries with versions, tailoring history, and per-user encrypted provider keys, all stored in MongoDB. The server won't start without `MONGODB_URI`.
 
-> The seed resume (`backend/resume/data.json`) holds the owner's real contact details. Keep the repository and any demo deployment private.
+> `backend/resume/data.json` holds the owner's real contact details; only the Docker build's cache prewarm reads it. Keep the repository private.
 
 Docs: [prd](docs/prd.md) · [architecture](docs/architecture.md) · [design](docs/design.md) · [rules](docs/rules.md) · [memory](docs/memory.md)
 
@@ -28,7 +27,7 @@ Docs: [prd](docs/prd.md) · [architecture](docs/architecture.md) · [design](doc
 
 - **Sign-up** needs a 6-digit code emailed to the address (valid 10 minutes, 5 tries). Nothing is created until the code checks out, so every account starts verified. Without `SMTP_HOST`, codes and links are printed in the server log instead.
 - **Passwords:** 8–128 characters with a lowercase letter, an uppercase letter, a number and a symbol; not a common password; not containing your email name. Checked when a password is set, never at sign-in.
-- Password change and reset, email verification, and session listing and revocation are built in.
+- Password change and reset and email verification are built in.
 - **Disabling an account:** set `disabled: true` on the user document in MongoDB. The next request from that account is refused and its session removed.
 
 ## Repository layout
@@ -36,7 +35,7 @@ Docs: [prd](docs/prd.md) · [architecture](docs/architecture.md) · [design](doc
 ```text
 backend/            FastAPI service (see docs/architecture.md for modules)
   app/              application code
-  resume/           seed data.json, locked template.tex, assets/
+  resume/           data.json + template.tex (Docker prewarm only), assets/
   dev.sh            local dev server
 frontend/           Next.js app (App Router, TypeScript, Tailwind, shadcn/ui)
   app/              routes: / landing, (app) signed-in screens, (auth) sign-in pages
@@ -82,13 +81,11 @@ Other frontend commands: `npm run typecheck`, `npm run lint`, `npm run build` (s
 Variables set in the shell override `.env`, so these work even when `.env` points at real services:
 
 ```bash
-MONGODB_URI= LLM_PROVIDER=stub ./backend/dev.sh      # demo mode, fake LLM, no network
-
 docker compose up -d mongo                            # local MongoDB
 MONGODB_URI=mongodb://localhost:27017 LLM_PROVIDER=stub ./backend/dev.sh
 ```
 
-`LLM_PROVIDER=stub` swaps in a deterministic offline client (output prefixed `[stub]`). In multi-user mode you still pick a provider and save a key in Settings; the stub simply never uses it.
+`LLM_PROVIDER=stub` swaps in a deterministic offline client (output prefixed `[stub]`). You still pick a provider and save a key in Settings; the stub simply never uses it.
 
 ### Verifying a change
 
@@ -102,7 +99,7 @@ Set these in `.env` locally or in your host's secret store — never in code or 
 
 | Name | Default | Notes |
 |---|---|---|
-| `MONGODB_URI` | — | Unset → demo mode |
+| `MONGODB_URI` | — | Required; the server refuses to start without it |
 | `MONGODB_DB` | `jd_resume_builder` | |
 | `APP_SECRET_KEY` | random per boot | Set a long random value: it encrypts stored provider keys and keys the sign-up-code hashes. If unset, stored keys become unreadable after a restart |
 | `SESSION_TTL_DAYS` | `30` | 1–90 |
@@ -131,9 +128,9 @@ Set these in `.env` locally or in your host's secret store — never in code or 
 
 | Name | Default | Notes |
 |---|---|---|
-| `LLM_PROVIDER` | — | `groq`, `cerebras`, `gemini`, `openrouter`, `mistral`, `openai`, `anthropic`, `grid`, `custom` — or `stub` for the offline client. Used in demo mode and as the fallback |
+| `LLM_PROVIDER` | — | `groq`, `cerebras`, `gemini`, `openrouter`, `mistral`, `openai`, `anthropic`, `grid`, `custom` — or `stub` for the offline client. Otherwise only `/api/health` reads it; each run uses the provider the user picks |
 | `LLM_MODEL` | provider default | |
-| `${PROVIDER}_API_KEY` | — | e.g. `GROQ_API_KEY`; `LLM_API_KEY` is the generic fallback. Used in demo mode, and in multi-user mode only with `ALLOW_ENV_KEY_FALLBACK` |
+| `${PROVIDER}_API_KEY` | — | e.g. `GROQ_API_KEY`; `LLM_API_KEY` is the generic fallback. Used for runs only with `ALLOW_ENV_KEY_FALLBACK` |
 | `${PROVIDER}_MODEL` | — | Beats `LLM_MODEL`; required for `grid` |
 | `${PROVIDER}_BASE_URL` | provider endpoint | `LLM_BASE_URL` for `custom` |
 | `${PROVIDER}_VISION` | registry flag | Whether the provider can read page images |
@@ -160,7 +157,7 @@ Set these in `.env` locally or in your host's secret store — never in code or 
 | `MAX_IMPORT_PDF_PAGES` | `3` | 1–20 |
 | `PDF_EXTRACT_TIMEOUT_SECONDS` | `30` | 10–120 |
 | `PDFTOTEXT_BIN`, `PDFINFO_BIN`, `PDFTOPPM_BIN`, `PDFTOHTML_BIN` | tool name | Poppler binaries |
-| `RESUME_DATA_PATH` / `RESUME_TEMPLATE_PATH` / `RESUME_ASSETS_DIR` | `backend/resume/…` | Seed resume files |
+| `RESUME_ASSETS_DIR` | `backend/resume/assets` | Approved files copied into every compile |
 | `FRONTEND_DIR` | `frontend/out` | Where the static frontend is served from |
 | `TECTONIC_UNTRUSTED_MODE`, `TECTONIC_CACHE_DIR` | set in the image | Tectonic's own settings |
 
@@ -179,19 +176,12 @@ Set these in `.env` locally or in your host's secret store — never in code or 
 | `MAX_VERSIONS_PER_JD` | `20` | 1–100; oldest pruned |
 | `MAX_RUNS_PER_USER` | `200` | 10–2000; oldest pruned |
 
-## Customizing the seed resume
-
-1. Edit only true facts in `backend/resume/data.json`, keeping every `id` unchanged — the model refers to them.
-2. Contact details stay under `identity`; they're never sent to the model.
-3. Put only approved files in `backend/resume/assets/`.
-4. After adding a LaTeX package or asset, rebuild the image so the cache prewarm picks it up.
-
 ## Docker
 
 ```bash
 docker build --platform linux/amd64 -t roletex .     # x86-64 only, also on Apple Silicon
 docker run --rm --platform linux/amd64 -p 7860:7860 \
-  -e LLM_PROVIDER=groq -e GROQ_API_KEY roletex         # demo mode
+  -e MONGODB_URI -e APP_SECRET_KEY roletex
 ```
 
 The image pins Tectonic 0.16.9 (SHA-256 verified) and runs as UID 1000. The build needs network access once, to prewarm Tectonic's cache by compiling the seed resume plus one document per font size. At runtime compiles are `--only-cached`, so package, font or formatting changes need a rebuild.
@@ -204,8 +194,7 @@ The Dockerfile has no Node stage, so the image serves the API only and answers `
 
 1. Create a **private** Docker Space on CPU Basic and push this repository. The front matter at the top of this README sets port 7860.
 2. In **Settings → Variables and secrets**:
-   - **Demo mode:** `LLM_PROVIDER` (variable) and the provider key, e.g. `GROQ_API_KEY` (secret).
-   - **Multi-user mode:** add secrets `MONGODB_URI`, `APP_SECRET_KEY` and `SMTP_PASSWORD`, and variables `SMTP_HOST`, `SMTP_USERNAME`, `MAIL_FROM` and `PUBLIC_BASE_URL` (the Space's URL). Sign-up needs working email, so without SMTP nobody can register.
+   - Add secrets `MONGODB_URI`, `APP_SECRET_KEY` and `SMTP_PASSWORD`, and variables `SMTP_HOST`, `SMTP_USERNAME`, `MAIL_FROM` and `PUBLIC_BASE_URL` (the Space's URL). Sign-up needs working email, so without SMTP nobody can register.
 3. Wait for the build, check `/api/health`, then run one full tailoring flow.
 
 Keep the Space private (see [rules.md M-3](docs/rules.md)). Space disk is ephemeral; everything durable lives in MongoDB.

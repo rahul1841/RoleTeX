@@ -4,12 +4,6 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "cn";
-import { LockIcon } from "lucide-react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { NAV_ITEMS, isNavItemActive, type NavItem } from "./nav";
 
 const ITEM_BASE =
@@ -32,10 +26,6 @@ const ORIENTATION = {
 } as const;
 
 type Orientation = keyof typeof ORIENTATION;
-
-/** Explains, in the user's terms, why a storage-backed route is unavailable. */
-export const DEMO_DISABLED_REASON =
-  "Unavailable in demo mode: this server has no database, so nothing can be saved.";
 
 function NavItemLink({
   item,
@@ -79,64 +69,7 @@ function NavItemLink({
   );
 }
 
-function NavItemDisabled({
-  item,
-  orientation,
-}: {
-  item: NavItem;
-  orientation: Orientation;
-}) {
-  const Icon = item.icon;
-  const vertical = orientation === "vertical";
-  return (
-    <Tooltip>
-      {/* Rendered as a span, not a link: there is nothing to navigate to. It
-          keeps tabIndex 0 so keyboard users can reach it and hear the reason —
-          a plain `disabled` control would be skipped and the demo-mode
-          limitation would be invisible to them. */}
-      <TooltipTrigger
-        render={<span />}
-        tabIndex={0}
-        // `aria-disabled` is only honoured on elements with a widget role. On a
-        // bare span (implicit role `generic`) assistive tech ignores it and
-        // announces plain focusable text, so the disabled state never reaches
-        // the user. An explicit role makes it a widget and the state real.
-        role="link"
-        aria-disabled="true"
-        className={cn(
-          ITEM_BASE,
-          ORIENTATION[orientation].item,
-          // Not dimmer than /80: these items are deliberately focusable and are
-          // the only on-screen explanation of what demo mode removes, so they
-          // have to clear the 4.5:1 contrast floor rather than lean on the
-          // WCAG exemption for inactive controls.
-          "text-muted-foreground/80 cursor-not-allowed select-none",
-        )}
-      >
-        {vertical ? <Icon aria-hidden="true" className="size-4 shrink-0" /> : null}
-        <span className="truncate">{item.label}</span>
-        <LockIcon
-          aria-hidden="true"
-          className={cn("size-3.5 shrink-0", vertical && "ml-auto")}
-        />
-        {/* The tooltip's aria-describedby only fires on hover/focus of a
-            pointer-capable trigger; this guarantees the reason is announced. */}
-        <span className="sr-only">{DEMO_DISABLED_REASON}</span>
-      </TooltipTrigger>
-      <TooltipContent side={vertical ? "right" : "bottom"} className="max-w-56">
-        {DEMO_DISABLED_REASON}
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
 export interface AppNavProps {
-  /**
-   * False in demo mode. Items marked `requiresStorage` are then shown disabled
-   * with an explanation rather than hidden — the product still has those
-   * features, this deployment just cannot offer them.
-   */
-  storageAvailable: boolean;
   /** Closes the mobile drawer once a destination is chosen. */
   onNavigate?: () => void;
   className?: string;
@@ -147,7 +80,6 @@ export interface AppNavProps {
 }
 
 export function AppNav({
-  storageAvailable,
   onNavigate,
   className,
   label = "Main",
@@ -161,23 +93,16 @@ export function AppNav({
       className={cn(orientation === "vertical" && "w-full", className)}
     >
       <ul className={ORIENTATION[orientation].list}>
-        {NAV_ITEMS.map((item) => {
-          const disabled = item.requiresStorage && !storageAvailable;
-          return (
-            <li key={item.href} className="relative">
-              {disabled ? (
-                <NavItemDisabled item={item} orientation={orientation} />
-              ) : (
-                <NavItemLink
-                  item={item}
-                  active={isNavItemActive(pathname, item.href)}
-                  orientation={orientation}
-                  onNavigate={onNavigate}
-                />
-              )}
-            </li>
-          );
-        })}
+        {NAV_ITEMS.map((item) => (
+          <li key={item.href} className="relative">
+            <NavItemLink
+              item={item}
+              active={isNavItemActive(pathname, item.href)}
+              orientation={orientation}
+              onNavigate={onNavigate}
+            />
+          </li>
+        ))}
       </ul>
     </nav>
   );

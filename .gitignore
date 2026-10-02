@@ -15,10 +15,6 @@ venv/
 !.env.example
 .claude/settings.local.json
 
-# Per-user imported resume profiles (contain PII; created at runtime)
-data/*
-!data/.gitkeep
-
 # LaTeX and generated output
 *.aux
 *.log

@@ -10,8 +10,8 @@ Security rationale:
   every read because Mongo's TTL monitor is lazy (typically a 60s sweep).
 - API-key documents hold Fernet ciphertext plus a display hint — never the
   plaintext key.
-- ``from_env`` returns None when ``MONGODB_URI`` is unset so the app can boot
-  in demo mode with no database at all.
+- ``from_env`` refuses to start without ``MONGODB_URI``: every feature is
+  per-user, so there is nothing useful to serve without a database.
 
 All timestamps are timezone-aware UTC datetimes. The motor client is created
 with ``tz_aware=True``; ``_as_utc`` defensively normalizes naive values from
@@ -137,35 +137,15 @@ class SessionStore:
     def __init__(self, collection: Any) -> None:
         self._collection = collection
 
-    async def create(
-        self,
-        user_id: str,
-        token_hash: str,
-        expires_at: datetime,
-        user_agent: str = "",
-        client_ip: str = "",
-    ) -> str:
-        """Open a session and return its document id (for "this device" marking).
-
-        ``user_agent``/``client_ip`` exist only so a signed-in user can recognize
-        their own sessions in the revocation UI; both are truncated and neither
-        is ever used for authorization.
-        """
-
-        session_id = _new_id()
+    async def create(self, user_id: str, token_hash: str, expires_at: datetime) -> None:
         await self._collection.insert_one(
             {
-                "_id": session_id,
+                "_id": _new_id(),
                 "user_id": user_id,
                 "token_hash": token_hash,
-                "user_agent": (user_agent or "")[:200],
-                "client_ip": (client_ip or "")[:64],
-                "created_at": _utc_now(),
-                "last_seen_at": _utc_now(),
                 "expires_at": expires_at,
             }
         )
-        return session_id
 
     async def get(self, token_hash: str) -> Optional[Dict[str, Any]]:
         doc = await self._collection.find_one({"token_hash": token_hash})
@@ -179,33 +159,8 @@ class SessionStore:
     async def touch(self, token_hash: str, expires_at: datetime) -> None:
         await self._collection.update_one(
             {"token_hash": token_hash},
-            {"$set": {"expires_at": expires_at, "last_seen_at": _utc_now()}},
+            {"$set": {"expires_at": expires_at}},
         )
-
-    async def list_for_user(self, user_id: str) -> List[Dict[str, Any]]:
-        """Unexpired sessions for one user, newest first.
-
-        Expiry is filtered in code as well as in the query because the TTL
-        monitor is lazy and mongomock does not run one at all.
-        """
-
-        cursor = self._collection.find({"user_id": user_id}).sort("created_at", -1)
-        docs = await cursor.to_list(length=500)
-        now = _utc_now()
-        live = []
-        for doc in docs:
-            expires_at = _as_utc(doc.get("expires_at"))
-            if expires_at is not None and expires_at > now:
-                live.append(doc)
-        return live
-
-    async def delete_by_id(self, user_id: str, session_id: str) -> bool:
-        """Revoke one session, scoped by owner so an id guess cannot cross users."""
-
-        result = await self._collection.delete_one(
-            {"_id": session_id, "user_id": user_id}
-        )
-        return bool(getattr(result, "deleted_count", 0))
 
     async def delete_for_user_except(self, user_id: str, keep_token_hash: str) -> int:
         """Revoke every session for a user except the one making the request."""
@@ -742,12 +697,15 @@ class Database:
         self.runs = RunStore(motor_db["runs"])
 
     @classmethod
-    def from_env(cls) -> "Optional[Database]":
-        """Build from ``MONGODB_URI``/``MONGODB_DB``; None → demo mode."""
+    def from_env(cls) -> "Database":
+        """Build from ``MONGODB_URI``/``MONGODB_DB``."""
 
         uri = os.getenv("MONGODB_URI", "").strip()
         if not uri:
-            return None
+            raise RuntimeError(
+                "MONGODB_URI is not set. RoleTeX stores every account, resume and "
+                "run in MongoDB and cannot start without it."
+            )
         from motor.motor_asyncio import AsyncIOMotorClient
 
         client = AsyncIOMotorClient(

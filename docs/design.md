@@ -11,12 +11,12 @@ Every model derives from `StrictModel` (`extra="forbid"`): unknown fields are re
 | Field | Constraints |
 |---|---|
 | `job_description` | 50–20,000 chars; exactly one of this or `jd_id` (else `422 jd_required`) |
-| `jd_id` | a saved JD (multi-user) |
-| `resume_id` | required in multi-user mode (an owned resume); omitted in demo mode → seed |
+| `jd_id` | a saved JD |
+| `resume_id` | required; an owned resume |
 | `provider` / `model` | optional override, resolved against the user's stored keys |
 | `compile` | default `true`; `false` returns everything except the PDF |
 | `require_one_page` | default `true`; enables the shortening repair |
-| `save_run` | default `true`; stores the run in history (multi-user) |
+| `save_run` | default `true`; stores the run in history |
 
 **Response** (`TailorResponse`): `proposal`, `changes[]` (`{field_id, before, after}`), `unified_diff`, `latex_source`, `pdf_base64`, `page_count`, `filename`, `provider`, `model`, `repaired`, `warnings[]`, `compiler` (attempted, success, page count, text preview, warnings, log), `run_id`.
 
@@ -32,7 +32,7 @@ Every model derives from `StrictModel` (`extra="forbid"`): unknown fields are re
 }
 ```
 
-At most 6 rewrites; `skills_order` capped at 300. The parser tolerates wrappers (a JSON object inside a markdown fence or prose is extracted) but nothing else.
+At most 30 rewrites, a server-side ceiling the prompt never states; `skills_order` capped at 300. The parser tolerates wrappers (a JSON object inside a markdown fence or prose is extracted) but nothing else.
 
 **Providers** (`llm.py`): one `OpenAICompatibleLLM` for `anthropic, groq, cerebras, grid, gemini, openrouter, mistral, openai, custom`. Each has a base URL, key env var, default model and a vision flag (Groq, Cerebras and Grid are text-only by default; `${PROVIDER}_VISION` overrides). Env resolution: `${PROVIDER}_API_KEY` then `LLM_API_KEY`; `${PROVIDER}_MODEL` beats `LLM_MODEL`; `${PROVIDER}_BASE_URL` overrides the endpoint (`LLM_BASE_URL` for `custom`). HTTPS is required unless `ALLOW_INSECURE_LLM_BASE_URL=true`. Retries on 429/5xx; JSON mode falls back to plain completion when a provider rejects it.
 
@@ -61,7 +61,7 @@ The fabrication guard only catches numbers (memory G-5).
 - Each of the 7 tokens is replaced exactly once (plus optional `@@CUSTOM@@`); any leftover token aborts the render.
 - `escape_latex` escapes all ten specials (`\ { } $ & % # _ ~ ^`), strips NUL and collapses newlines — applied to every model string.
 - URLs: only `http(s)` without control characters, and they come from stored data — the model can't add or change one.
-- **Sectioned mode** (user resumes): each section carries its own heading, so empty sections disappear. The seed uses the classic layout.
+- **Sectioned rendering** (every user resume): each section carries its own heading, so empty sections disappear. Only the Docker prewarm's seed render still uses the classic layout.
 - Identity renders into `@@CONTACT@@` from stored data only.
 
 ## 5. Import (`importer.py`, `pdftext.py`)
@@ -91,7 +91,7 @@ The fabrication guard only catches numbers (memory G-5).
 
 Next.js App Router, React, TypeScript, Tailwind, shadcn/ui on Base UI — built to a static export and served by FastAPI. Client-rendered: every screen sits behind the HttpOnly session cookie.
 
-- **Routes:** `/` (landing), `/tailor`, `/resumes`, `/jds`, `/history`, `/settings`; signed-out `/sign-in`, `/register`, `/forgot-password`, `/reset-password`, `/verify-email`; anything else is `404.html`. `GET /api/health` decides the mode; in multi-user mode a signed-out visitor is sent to `/sign-in`.
+- **Routes:** `/` (landing), `/tailor`, `/resumes`, `/jds`, `/history`, `/settings`; signed-out `/sign-in`, `/register`, `/forgot-password`, `/reset-password`, `/verify-email`; anything else is `404.html`. A signed-out visitor is sent to `/sign-in`.
 - **Selection is a query parameter** (`/resumes?id=…`, `/history?run=…`, `/tailor?resume=…&jd=…`) — a static export can't prerender per-user `[id]` routes.
 - **API layer:** `lib/api/client.ts` is the only `fetch`, same-origin with the cookie, so no CORS and no `SameSite=None`. `schema.d.ts` is generated from OpenAPI (`npm run gen:api`); `mappers.ts` converts between read models (`ResumeData`, with IDs) and write models (`ResumeDraft`, without).
 - **Server state:** TanStack Query, keys in `lib/api/query-keys.ts`. Mutations never auto-retry; queries never retry a 4xx or a timeout.

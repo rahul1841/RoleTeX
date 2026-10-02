@@ -15,8 +15,8 @@ const LINK = "text-foreground font-medium underline underline-offset-3";
  * Every address the app has no page for.
  *
  * Under `output: "export"` this becomes 404.html, which FastAPI's StaticFiles
- * serves for any unknown path — so it has to make sense to a signed-in user, a
- * signed-out visitor and a demo server alike. It borrows the signed-out
+ * serves for any unknown path — so it has to make sense to a signed-in user and
+ * a signed-out visitor alike. It borrows the signed-out
  * screens' frame: one column, one card, one way out, with the theme control
  * still in reach.
  */

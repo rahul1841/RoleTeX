@@ -133,7 +133,6 @@ Security and truthfulness rules:
 - Reword, shorten, emphasize, and reorder only. Do not add contact information.
 - Return plain text fields, never LaTeX, Markdown, commentary, or a code fence.
 - Rewrite only bullets whose stable IDs are supplied. Omitted bullets remain unchanged.
-- Rewrite at most 6 of the most JD-relevant bullets; leave all other bullets unchanged.
 - Every numeric claim in a rewritten bullet must already occur in that same source bullet.
 - skills_order must be an exact permutation of the supplied skills, preserving spelling and duplicates.
 - The summary is a single-line resume headline: keep it at most 12 words and 120 characters.

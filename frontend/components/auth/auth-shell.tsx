@@ -7,7 +7,6 @@ import * as React from "react";
 import { RouteFocusProvider } from "@/components/layout/route-focus";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Wordmark } from "@/components/layout/wordmark";
-import { useHealth } from "@/hooks/use-session";
 import { RegistrationStatusProvider } from "./registration-status";
 
 /**
@@ -59,32 +58,10 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
               <div className="bg-card ring-foreground/10 rounded-xl p-6 ring-1 sm:p-7">
                 {children}
               </div>
-
-              <ServerFootnote />
             </div>
           </main>
         </div>
       </RegistrationStatusProvider>
     </RouteFocusProvider>
-  );
-}
-
-/**
- * What this deployment is, in one mono line.
- *
- * RoleTeX is self-hosted, so "which server am I actually looking at" is a real
- * question at the sign-in screen — a stray tab pointed at a colleague's
- * instance looks identical otherwise. Rendered only once health resolves;
- * `useHealth` is cached with `staleTime: Infinity`, so this costs nothing that
- * the page was not already fetching.
- */
-function ServerFootnote() {
-  const health = useHealth();
-  if (!health.data) return null;
-
-  return (
-    <p className="text-muted-foreground text-center font-mono text-[0.6875rem]">
-      {health.data.mode} · v{health.data.version} · {health.data.provider}
-    </p>
   );
 }

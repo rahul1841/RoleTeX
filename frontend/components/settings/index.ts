@@ -12,6 +12,5 @@ export { ProviderKeys } from "./provider-keys";
 export { DefaultProviderForm } from "./default-provider-form";
 export { ProfileForm } from "./profile-form";
 export { PasswordForm } from "./password-form";
-export { SessionsPanel } from "./sessions-panel";
 export { AppearanceControl } from "./appearance";
 export { DangerZone } from "./danger-zone";

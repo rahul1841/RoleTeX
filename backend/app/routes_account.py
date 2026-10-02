@@ -1,4 +1,4 @@
-"""Account-lifecycle routes: password change/reset, email verification, sessions.
+"""Account-lifecycle routes: password change/reset and email verification.
 
 Security rationale:
 - **No account oracle.** ``POST /api/auth/password/forgot`` returns the same
@@ -56,9 +56,6 @@ from .schemas import (
     MailDispatchResponse,
     OkResponse,
     ResetPasswordRequest,
-    RevokedResponse,
-    SessionInfo,
-    SessionListResponse,
     SignupCodeRequest,
     UserResponse,
     VerifyEmailRequest,
@@ -215,16 +212,7 @@ def _already_registered_email() -> Tuple[str, str]:
 
 
 def register_account_routes(app: FastAPI, services: Any) -> None:
-    """Attach password, verification, and session-management routes."""
-
-    def _database_or_503() -> Any:
-        if services.database is None:
-            raise _api_error(
-                503,
-                "database_not_configured",
-                "This deployment is running in demo mode without a database.",
-            )
-        return services.database
+    """Attach password and verification routes."""
 
     async def _current_token_hash(request: Request) -> Optional[str]:
         context = await resolve_session(request, services)
@@ -242,7 +230,7 @@ def register_account_routes(app: FastAPI, services: Any) -> None:
         account" email instead), so it can't be used to check who is registered.
         """
 
-        database = _database_or_503()
+        database = services.database
         if not services.config.allow_registration:
             raise _api_error(
                 403, "registration_disabled", "Registration is disabled on this server."
@@ -313,7 +301,7 @@ def register_account_routes(app: FastAPI, services: Any) -> None:
     async def forgot_password(
         payload: ForgotPasswordRequest, request: Request
     ) -> MailDispatchResponse:
-        database = _database_or_503()
+        database = services.database
         email = security.normalize_email(payload.email)
         client_ip = _client_ip(request, services.config)
         _check_email_budget(services, client_ip, email or "invalid")
@@ -345,7 +333,7 @@ def register_account_routes(app: FastAPI, services: Any) -> None:
     async def reset_password(
         payload: ResetPasswordRequest, request: Request, response: Response
     ) -> OkResponse:
-        database = _database_or_503()
+        database = services.database
         policy_error = security.password_policy_error(payload.new_password)
         if policy_error is not None:
             raise _api_error(400, "weak_password", policy_error)
@@ -412,7 +400,7 @@ def register_account_routes(app: FastAPI, services: Any) -> None:
     async def confirm_verification(payload: VerifyEmailRequest) -> OkResponse:
         # Deliberately unauthenticated: the link is often opened in a different
         # browser from the one that requested it. The token itself is the proof.
-        database = _database_or_503()
+        database = services.database
         record = await database.auth_tokens.consume(
             AuthTokenStore.PURPOSE_EMAIL_VERIFY, security.hash_token(payload.token)
         )
@@ -432,46 +420,3 @@ def register_account_routes(app: FastAPI, services: Any) -> None:
             user_id, {"email_verified": True, "email_verified_at": _utc_now()}
         )
         return OkResponse()
-
-    # -- Sessions ----------------------------------------------------------
-
-    @app.get("/api/sessions", response_model=SessionListResponse)
-    async def list_sessions(request: Request) -> SessionListResponse:
-        user = await require_user(request, services, allow_unverified=True)
-        current_hash = await _current_token_hash(request)
-        records = await services.database.sessions.list_for_user(user["_id"])
-        return SessionListResponse(
-            sessions=[
-                SessionInfo(
-                    id=record.get("_id", ""),
-                    created_at=record.get("created_at"),
-                    last_seen_at=record.get("last_seen_at"),
-                    expires_at=record.get("expires_at"),
-                    user_agent=record.get("user_agent", "") or "",
-                    client_ip=record.get("client_ip", "") or "",
-                    current=bool(
-                        current_hash and record.get("token_hash") == current_hash
-                    ),
-                )
-                for record in records
-            ]
-        )
-
-    @app.delete("/api/sessions/{session_id}", response_model=OkResponse)
-    async def revoke_session(session_id: str, request: Request) -> OkResponse:
-        user = await require_user(request, services, allow_unverified=True)
-        deleted = await services.database.sessions.delete_by_id(
-            user["_id"], session_id
-        )
-        if not deleted:
-            raise _api_error(404, "session_not_found", "No such active session.")
-        return OkResponse()
-
-    @app.delete("/api/sessions", response_model=RevokedResponse)
-    async def revoke_other_sessions(request: Request) -> RevokedResponse:
-        user = await require_user(request, services, allow_unverified=True)
-        keep = await _current_token_hash(request)
-        revoked = await services.database.sessions.delete_for_user_except(
-            user["_id"], keep or ""
-        )
-        return RevokedResponse(revoked=revoked)

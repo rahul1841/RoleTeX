@@ -24,6 +24,7 @@
 | D-26 | Every sign-up needs a 6-digit code mailed to the address (10 min, 5 guesses, stored as an HMAC keyed by `APP_SECRET_KEY`); the code endpoint answers the same for registered addresses. New passwords need 8–128 chars, lower/upper/digit/symbol, not a common password, not the email name — checked when set, never at sign-in | Every account starts verified; no registration oracle; existing accounts keep working |
 | D-27 | No automated test suite; verification follows rules.md §4 | Deliberate — don't recreate `tests/` |
 | D-28 | Users choose the model per provider (`provider_models`); the registry's model names are only fallbacks. Grid is left as is — no model picker, still configured by `GRID_BASE_URL` / `GRID_MODEL` | Model catalogues change faster than releases. Grid is a temporary exception the owner will remove |
+| D-29 | MongoDB is required: the server refuses to start without `MONGODB_URI`, and tailoring always needs an owned `resume_id` | Every feature is per-user, so there is nothing to serve without a database |
 
 ## 2. Open gaps
 
@@ -36,11 +37,10 @@
 | G-19 | 🟠 | `SmtpMailer` has never talked to a real SMTP server — and sign-up now depends on it |
 | G-5 | 🟠 | The fabrication guard only catches new numbers; an invented employer, tool or credential passes |
 | G-12 | 🟠 | Rate-limit state is per process; multiple replicas would need a shared store |
-| G-14 | 🟠 | Demo mode spends the operator's env LLM key with no `ALLOW_ENV_KEY_FALLBACK` gate |
 | G-11 | 🟡 | Not built: evaluation harness, provider failover, cover letters |
 | G-13 | 🟡 | Rotating `APP_SECRET_KEY` makes every stored user key unreadable; no re-encryption tool |
 | G-17 | 🟡 | PDF imports keep the extracted text, not the original PDF |
-| G-18 | 🟡 | `default_provider` can be set to `custom`, which has no storable key; public `/api/health` shows mode, provider, model and version |
+| G-18 | 🟡 | `default_provider` can be set to `custom`, which has no storable key; public `/api/health` shows provider, model and version |
 | G-20 | 🟡 | No admin UI for disabling an account — edit the user document in MongoDB |
 | G-21 | 🟡 | The builder requires a phone number and location (shared `ResumeIdentity` schema) |
 | G-22 | 🟡 | Editing a resume in the app drops per-bullet links; only the seed resume has any |
@@ -57,4 +57,3 @@
 2. G-19 — send real mail through SMTP; no deployment can sign users up without it.
 3. G-4 — build the image with a frontend stage, verify a private deployment, add a lockfile.
 4. G-5 — extend the fabrication guard beyond numbers.
-5. G-14 — gate demo-mode env-key use, or document it as private-demo only.

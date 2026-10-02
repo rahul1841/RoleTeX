@@ -6,7 +6,7 @@
 
 Tailoring a resume to each job is valuable but tedious, and doing it naively with an LLM is risky: models invent facts, break LaTeX, and need your contact details. RoleTeX constrains the model to plain-text edits of fields that already exist, validates every edit on the server, renders into a locked LaTeX template, and compiles the PDF itself in a sandbox.
 
-**In one line:** paste a job description → the model proposes a new headline, up to 6 bullet rewrites and a skill order → the server validates, renders and compiles a one-page PDF → you review every change and download.
+**In one line:** paste a job description → the model proposes a new headline, bullet rewrites and a skill order → the server validates, renders and compiles a one-page PDF → you review every change and download.
 
 ## 2. Goals
 
@@ -28,10 +28,9 @@ Tailoring a resume to each job is valuable but tedious, and doing it naively wit
 - A real ATS score (keyword checks are heuristics).
 - Storing PDFs — runs keep the LaTeX and recompile on demand.
 
-## 4. Modes and users
+## 4. Users
 
-- **Demo mode** (no `MONGODB_URI`): no accounts; tailors the repository's seed resume with the operator's LLM key.
-- **Multi-user mode:** email + password accounts. Each user has private resume and job-description libraries, tailoring history, and their own provider keys (encrypted at rest).
+Email + password accounts, stored in MongoDB (`MONGODB_URI` is required). Each user has private resume and job-description libraries, tailoring history, and their own provider keys (encrypted at rest).
 
 ## 5. Flows
 
@@ -41,7 +40,7 @@ Tailoring a resume to each job is valuable but tedious, and doing it naively wit
 - **Save job descriptions** — a library with version history.
 - **Tailor** — pick a resume and a job description (saved or pasted) → the model proposes edits → the server validates, renders and compiles → the review shows every change beside the PDF, unified diff and LaTeX (R-14). Runs are saved to history.
 - **History** — reopen any run, re-read its changes, and recompile its PDF without an LLM call.
-- **Account** — change password, reset by email, verify email, list and revoke sessions, delete the account.
+- **Account** — change password, reset by email, verify email, delete the account.
 
 ## 6. Requirements
 

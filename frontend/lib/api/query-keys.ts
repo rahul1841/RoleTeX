@@ -9,12 +9,9 @@
  * queryKeys.resumes.all })` clears the list and every individual resume.
  */
 export const queryKeys = {
-  health: ["health"] as const,
-
   session: {
     all: ["session"] as const,
     me: ["session", "me"] as const,
-    list: ["session", "list"] as const,
   },
 
   providers: ["providers"] as const,

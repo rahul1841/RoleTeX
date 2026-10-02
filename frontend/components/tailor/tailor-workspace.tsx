@@ -22,12 +22,6 @@ import { TailorError } from "./tailor-error";
 /**
  * The tailoring workspace: setup, running, review.
  *
- * Two deployment shapes, one screen. In `multi_user` the run names a saved
- * resume and either a saved or a pasted job description; in `demo` there is no
- * database, so the server tailors its built-in sample resume against pasted
- * text. That is why this page is NOT wrapped in <RequiresStorage>: unlike the
- * list screens, it genuinely works without storage.
- *
  * The setup form stays mounted (just hidden) so "Edit inputs" keeps its values.
  *
  * The last request is kept so "Run again" and "Run again without compiling"
@@ -44,8 +38,6 @@ const UNKNOWN_LABELS: RunLabels = {
 export function TailorWorkspace() {
   const session = useSession();
   const searchParams = useSearchParams();
-
-  const storage = session.mode === "multi_user";
 
   const [editing, setEditing] = React.useState(true);
   const [confirmRerun, setConfirmRerun] = React.useState(false);
@@ -109,7 +101,7 @@ export function TailorWorkspace() {
     });
   }, [run]);
 
-  if (session.mode === null) {
+  if (session.isLoading) {
     return (
       <LoadingState label="Loading the tailoring workspace…">
         <CardSkeleton />
@@ -139,12 +131,12 @@ export function TailorWorkspace() {
                 <ArrowLeftIcon data-icon="inline-start" />
                 Back to review
               </Button>
-            ) : storage ? (
+            ) : (
               <ButtonLink href="/history" variant="outline" className="h-10 rounded-xl px-4">
                 <HistoryIcon data-icon="inline-start" />
                 Past runs
               </ButtonLink>
-            ) : null
+            )
           }
         />
 
@@ -159,7 +151,6 @@ export function TailorWorkspace() {
         ) : null}
 
         <SetupPanel
-          storage={storage}
           user={session.user}
           initialResumeId={searchParams.get("resume") ?? undefined}
           initialJdId={searchParams.get("jd") ?? undefined}

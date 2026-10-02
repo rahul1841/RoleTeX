@@ -1,4 +1,4 @@
-# Local development stack for RoleTeX multi-user mode.
+# Local development stack for RoleTeX.
 #
 # Start MongoDB:
 #   docker compose up -d mongo

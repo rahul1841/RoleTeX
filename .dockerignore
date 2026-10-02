@@ -17,7 +17,6 @@ __pycache__
 *.xdv
 output
 docs
-data
 .claude
 .DS_Store
 .idea

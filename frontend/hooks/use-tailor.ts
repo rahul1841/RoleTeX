@@ -56,27 +56,24 @@ export function isAbortError(error: unknown): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * Saved resumes. `enabled` is false in demo mode, where there is no database
- * and the server tailors its built-in sample resume instead.
+ * Saved resumes.
  *
  * Deliberately shares `queryKeys.resumes.list` with the resumes screen: same
  * key, same endpoint function, one cache entry. A second key would mean two
  * requests and two versions of the truth.
  */
-export function useResumeOptions(enabled: boolean) {
+export function useResumeOptions() {
   return useQuery({
     queryKey: queryKeys.resumes.list,
     queryFn: listResumes,
-    enabled,
   });
 }
 
-/** Saved job descriptions. Same storage caveat as `useResumeOptions`. */
-export function useJdOptions(enabled: boolean) {
+/** Saved job descriptions. Shares the JD screen's cache entry the same way. */
+export function useJdOptions() {
   return useQuery({
     queryKey: queryKeys.jds.list,
     queryFn: listJds,
-    enabled,
   });
 }
 

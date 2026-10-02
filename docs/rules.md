@@ -14,13 +14,13 @@
 - **R-7 · The JD is data, never instructions.** Prompts frame it as reference data; the strict schema (`extra="forbid"`) and server-side validation are the enforcement. Never relax `StrictModel`.
 - **R-8 · No fabrication passes validation.** `validate_proposal` must keep rejecting unknown/duplicate bullet IDs, any `skills_order` that isn't an exact permutation of existing skills, new numeric claims, and over-limit text. Extend, never weaken.
 - **R-9 · Secrets stay server-side.** Only in env or the host's secret store — never in code, `backend/resume/data.json`, frontend JS, Docker build args or Git. Users' own provider keys are Fernet-encrypted at rest and never returned (masked hint only).
-- **R-10 · Resume data is PII.** It lives only in MongoDB. Never log it, and never echo submitted values in errors — describe the field, not its content. `data/` stays git- and docker-ignored.
+- **R-10 · Resume data is PII.** It lives only in MongoDB. Never log it, and never echo submitted values in errors — describe the field, not its content.
 - **R-11 · One LLM repair per request.** The shared budget (semantic OR compile OR page-shortening) is enforced in `backend/app/main.py`. Don't add a second repair path.
 
 ## 2. Product contracts
 
 - **R-12 · Stable IDs are forever.** Seed IDs and backend-assigned import IDs are the contract between validation, rendering and the model. Never regenerate or reorder them for existing data.
-- **R-13 · The seed resume is demo-only.** In demo mode `POST /api/tailor` without `resume_id` tailors the seed. In multi-user mode it requires an owned `resume_id` and never serves the seed.
+- **R-13 · Tailoring needs an owned resume.** `POST /api/tailor` requires a `resume_id` the caller owns; the server has no fallback resume and never serves the seed.
 - **R-14 · The user reviews before using.** The API returns the change list and unified diff with the PDF; the UI always shows the changes alongside the document. Never auto-apply.
 - **R-15 · Bounded style hints only.** Paper is always A4; font size from a whitelist (10/11/12pt); margin clamped to 1.0–3.0 cm (schema outer bound 0.5–4.0); optional 6-hex accent. A new style hint needs its own whitelist or clamp.
 
@@ -46,6 +46,6 @@ There is no automated test suite.
 
 - **M-1 · Template or package changes need a Docker rebuild** — runtime is `--only-cached`, so the prewarm must cover every package and font.
 - **M-2 · Tectonic upgrades change both** `TECTONIC_URL` and `TECTONIC_SHA256` in the Dockerfile, from the matching official release.
-- **M-3 · Keep deployments private for now.** Demo mode serves the seed resume (the owner's contact details) and spends the operator's LLM key with no per-user gate, and a real deployment hasn't been verified end to end.
-- **M-4 · Never commit** API keys, `.env*` (except `.env.example`), generated PDFs, or anything under `data/`.
+- **M-3 · Keep deployments private for now.** The repository's seed resume holds the owner's contact details, and a real deployment hasn't been verified end to end.
+- **M-4 · Never commit** API keys, `.env*` (except `.env.example`), or generated PDFs.
 - **M-5 · Keep [memory.md](memory.md) current** — significant decisions and open gaps.

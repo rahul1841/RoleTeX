@@ -25,7 +25,7 @@ import { AppNav } from "./app-nav";
  * `onNavigate`, otherwise the drawer would sit open over the page it just
  * navigated to.
  */
-export function MobileNav({ storageAvailable }: { storageAvailable: boolean }) {
+export function MobileNav() {
   const [open, setOpen] = React.useState(false);
 
   return (
@@ -45,10 +45,7 @@ export function MobileNav({ storageAvailable }: { storageAvailable: boolean }) {
           </SheetDescription>
         </SheetHeader>
         <div className="px-3 pb-4">
-          <AppNav
-            storageAvailable={storageAvailable}
-            onNavigate={() => setOpen(false)}
-          />
+          <AppNav onNavigate={() => setOpen(false)} />
         </div>
       </SheetContent>
     </Sheet>

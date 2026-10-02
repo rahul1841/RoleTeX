@@ -24,7 +24,7 @@ import { RouteFocusProvider } from "./route-focus";
  *
  *   booting          skeleton nav + skeleton content
  *   boot failed      no nav, a recoverable error with a refetching retry
- *   signed out       no nav, redirect to /sign-in (multi-user servers only)
+ *   signed out       no nav, redirect to /sign-in
  *   ready            the real nav and the page
  *
  * NOTE FOR THE AUTH WORK: this shell deliberately does not call
@@ -37,12 +37,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  // Storage exists only where a database does. This is the single fact the nav
-  // and every list screen gate on.
-  const storageAvailable = session.mode === "multi_user";
-
   const mustSignIn =
-    session.mode === "multi_user" &&
     !session.isLoading &&
     !session.bootError &&
     !session.isAuthenticated;
@@ -55,13 +50,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [mustSignIn, router]);
 
   const retryBoot = React.useCallback(
-    () =>
-      // refetch, not invalidate: health is `staleTime: Infinity`, so marking it
-      // stale would not actually send a request.
-      Promise.all([
-        queryClient.refetchQueries({ queryKey: queryKeys.health }),
-        queryClient.refetchQueries({ queryKey: queryKeys.session.me }),
-      ]),
+    () => queryClient.refetchQueries({ queryKey: queryKeys.session.me }),
     [queryClient],
   );
 
@@ -85,8 +74,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <RouteFocusProvider>
       <div className="flex min-h-svh flex-1 flex-col">
         <AppHeader
-          mode={session.mode}
-          storageAvailable={storageAvailable}
           user={ready ? session.user : null}
           needsEmailVerification={session.needsEmailVerification}
           showNav={ready}
@@ -94,10 +81,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         />
 
         {ready ? (
-          <GlobalBanners
-            mode={session.mode}
-            needsEmailVerification={session.needsEmailVerification}
-          />
+          <GlobalBanners needsEmailVerification={session.needsEmailVerification} />
         ) : null}
 
         <div className="flex flex-1">

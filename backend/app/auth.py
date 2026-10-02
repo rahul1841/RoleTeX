@@ -8,8 +8,8 @@ Security rationale:
   returns the same ``invalid_credentials`` error for unknown emails and wrong
   passwords, so accounts cannot be enumerated.
 - Every DB-backed route funnels through :func:`require_user`, which returns a
-  structured 503 in demo mode (no database) and 401 without a valid session —
-  handlers never see an unauthenticated request.
+  structured 401 without a valid session — handlers never see an
+  unauthenticated request.
 - :func:`resolve_llm_selection` is the single place where a user's stored
   provider key is decrypted; the plaintext key only ever lives in the request
   scope and is never logged, echoed, or persisted.
@@ -83,7 +83,7 @@ async def resolve_session(
 ) -> Optional[Tuple[Dict[str, Any], Dict[str, Any], str]]:
     """Resolve ``(user, session, token_hash)`` for a request, with caching.
 
-    Returns None when there is no database, no token, or no live session.
+    Returns None when there is no token or no live session.
     The result is cached on ``request.state`` so the rate-limit middleware and
     the route dependency share one lookup per request.
     """
@@ -96,9 +96,7 @@ async def resolve_session(
 
     request.state.auth_context_resolved = True
     request.state.auth_context = None
-    database = getattr(services, "database", None)
-    if database is None:
-        return None
+    database = services.database
     token = extract_session_token(request)
     if not token:
         return None
@@ -117,7 +115,7 @@ async def resolve_session(
 async def require_user(
     request: Request, services: Any, allow_unverified: bool = False
 ) -> Dict[str, Any]:
-    """Session dependency for DB-backed routes (503 in demo mode, 401 unauthenticated).
+    """Session dependency for DB-backed routes (401 unauthenticated).
 
     Two account-state gates run after the session resolves:
 
@@ -130,12 +128,6 @@ async def require_user(
       requesting a new verification mail, confirming one, and signing out.
     """
 
-    if getattr(services, "database", None) is None:
-        raise _api_error(
-            503,
-            "database_not_configured",
-            "This deployment is running in demo mode without a database.",
-        )
     context = await resolve_session(request, services)
     if context is None:
         raise _api_error(401, "not_authenticated", "Sign in to use this feature.")
@@ -384,15 +376,6 @@ def register_auth_routes(app: FastAPI, services: Any) -> None:
             ),
         )
 
-    def _database_or_503() -> Any:
-        if services.database is None:
-            raise _api_error(
-                503,
-                "database_not_configured",
-                "This deployment is running in demo mode without a database.",
-            )
-        return services.database
-
     async def _open_session(
         request: Request, response: Response, user_id: str
     ) -> None:
@@ -401,8 +384,6 @@ def register_auth_routes(app: FastAPI, services: Any) -> None:
             user_id,
             security.hash_token(token),
             _session_expiry(services.config.session_ttl_seconds),
-            user_agent=request.headers.get("user-agent", ""),
-            client_ip=_client_ip(request, services.config),
         )
         set_session_cookie(response, request, token, services.config)
 
@@ -412,7 +393,7 @@ def register_auth_routes(app: FastAPI, services: Any) -> None:
     async def register(
         payload: RegisterRequest, request: Request, response: Response
     ) -> UserResponse:
-        database = _database_or_503()
+        database = services.database
         if not services.config.allow_registration:
             raise _api_error(
                 403, "registration_disabled", "Registration is disabled on this server."
@@ -454,7 +435,7 @@ def register_auth_routes(app: FastAPI, services: Any) -> None:
     async def login(
         payload: LoginRequest, request: Request, response: Response
     ) -> UserResponse:
-        database = _database_or_503()
+        database = services.database
         client_ip = _client_ip(request, services.config)
         email = security.normalize_email(payload.email) or payload.email.strip().lower()
 
@@ -504,7 +485,7 @@ def register_auth_routes(app: FastAPI, services: Any) -> None:
 
     @app.post("/api/auth/logout", response_model=OkResponse)
     async def logout(request: Request, response: Response) -> OkResponse:
-        database = _database_or_503()
+        database = services.database
         token = extract_session_token(request)
         if token:
             await database.sessions.delete(security.hash_token(token))
