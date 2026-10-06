@@ -34,4 +34,15 @@ export const queryKeys = {
     list: ["runs", "list"] as const,
     detail: (id: string) => ["runs", "detail", id] as const,
   },
+
+  jobPrefs: ["job-prefs"] as const,
+  companies: ["companies"] as const,
+
+  jobs: {
+    all: ["jobs"] as const,
+    list: (state: "all" | "saved") => ["jobs", "list", state] as const,
+    detail: (id: string) => ["jobs", "detail", id] as const,
+  },
+
+  telegram: ["telegram"] as const,
 } as const;

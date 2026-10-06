@@ -571,6 +571,8 @@ def register_auth_routes(app: FastAPI, services: Any) -> None:
         await database.resumes.delete_for_user(user_id)
         await database.jds.delete_for_user(user_id)
         await database.runs.delete_for_user(user_id)
+        await database.watchlist.delete_for_user(user_id)
+        await database.job_matches.delete_for_user(user_id)
         await database.users.delete(user_id)
         clear_session_cookie(response, request, services.config)
         return OkResponse()

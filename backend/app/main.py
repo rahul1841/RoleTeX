@@ -39,6 +39,9 @@ from .auth import (
 )
 from .compiler import CompileService
 from .config import AppConfig, load_config
+from .crawler.company_list import MAX_COMPANY_PDF_PAGES
+from .crawler.service import CrawlerService
+from .crawler.telegram import Notifier, optional_notifier
 from .db import Database
 from .llm import (
     LLMClient,
@@ -60,9 +63,12 @@ from .resume import (
 )
 from .mailer import Mailer, optional_mailer
 from .routes_account import register_account_routes
+from .routes_companies import register_companies_routes
 from .routes_jds import register_jds_routes
+from .routes_jobs import register_jobs_routes
 from .routes_keys import register_keys_routes
 from .routes_resumes import register_resumes_routes
+from .routes_telegram import register_telegram_routes
 from .routes_runs import (
     compile_report as _compile_report,
     compiler_failure as _compiler_failure,
@@ -94,6 +100,7 @@ MAX_RUN_DIFF_CHARACTERS = 100_000
 RUN_JD_EXCERPT_CHARACTERS = 300
 
 _PDF_UPLOAD_PATH = re.compile(r"^/api/resumes/pdf$")
+_COMPANY_IMPORT_PATH = re.compile(r"^/api/companies/import$")
 _LATEX_IMPORT_PATH = re.compile(r"^/api/resumes$")
 # A whole resume authored in the editor arrives as one JSON document, so these
 # routes need the import ceiling rather than the 64KB API default.
@@ -127,6 +134,14 @@ class ApplicationServices:
     #: Recovers hyperlink targets, which live in annotations rather than text.
     pdf_link_extractor: Callable[[bytes], List[Dict[str, str]]]
     mailer: Mailer
+    #: Telegram delivery for job digests (console log when no bot is configured).
+    notifier: Notifier
+    #: Reads, matches and notifies; owns the crawl schedule and the bot poller.
+    crawler: CrawlerService
+    #: "Refresh now" on the company list: once per 30 minutes per user.
+    refresh_limiter: security.RateLimiter
+    #: Text and link targets of a company list uploaded as PDF.
+    company_pdf_reader: Callable[[bytes], Tuple[str, List[Dict[str, str]]]]
 
 
 def _validation_issue(exc: Exception) -> str:
@@ -180,6 +195,8 @@ async def _generate_valid_proposal(
 def _body_size_limit(path: str, config: AppConfig) -> int:
     if _PDF_UPLOAD_PATH.match(path):
         return config.max_pdf_upload_bytes + MULTIPART_OVERHEAD_BYTES
+    if _COMPANY_IMPORT_PATH.match(path):
+        return config.max_company_import_bytes + MULTIPART_OVERHEAD_BYTES
     if _LATEX_IMPORT_PATH.match(path) or _STRUCTURED_RESUME_PATH.match(path):
         return MAX_IMPORT_BODY_BYTES
     return MAX_HTTP_BODY_BYTES
@@ -388,8 +405,16 @@ def create_app(
     pdf_renderer: Optional[Callable[[bytes], List[bytes]]] = None,
     pdf_link_extractor: Optional[Callable[[bytes], List[Dict[str, str]]]] = None,
     mailer: Optional[Mailer] = None,
+    notifier: Optional[Notifier] = None,
+    job_fetcher_factory: Optional[Callable[[], Any]] = None,
+    company_pdf_reader: Optional[Callable[[bytes], Tuple[str, List[Dict[str, str]]]]] = None,
 ) -> FastAPI:
-    """Create an app with injectable filesystem, LLM, compiler, and DB dependencies."""
+    """Create an app with injectable filesystem, LLM, compiler, and DB dependencies.
+
+    ``job_fetcher_factory`` builds the crawler's HTTP client per cycle and
+    ``notifier`` delivers Telegram digests; both are replaceable so the job
+    watch runs offline against fixtures.
+    """
 
     @asynccontextmanager
     async def lifespan(instance: FastAPI) -> AsyncIterator[None]:
@@ -404,9 +429,14 @@ def create_app(
         index_task = asyncio.create_task(_ensure_indexes_with_retry(database))
         # Exposed so a caller can await or inspect the background work.
         instance.state.index_task = index_task
+        # The crawl schedule (when enabled) and the Telegram poller (when a bot
+        # is configured) are background tasks of this process, behind Mongo
+        # leases so a second process never doubles them.
+        instance.state.services.crawler.start()
         try:
             yield
         finally:
+            await instance.state.services.crawler.stop()
             if not index_task.done():
                 index_task.cancel()
             # Release the motor pool and its monitor threads; a reload that
@@ -420,11 +450,35 @@ def create_app(
         lifespan=lifespan,
     )
     app_config = config or load_config()
+    app_database = database if database is not None else Database.from_env()
+    app_notifier = optional_notifier(notifier, app_config)
+
+    def _read_company_pdf(pdf_bytes: bytes) -> Tuple[str, List[Dict[str, str]]]:
+        text = pdftext.extract_pdf_text(
+            pdf_bytes,
+            bin_path=app_config.pdftotext_bin,
+            timeout_seconds=app_config.pdf_extract_timeout_seconds,
+            max_bytes=app_config.max_company_import_bytes,
+            max_pages=MAX_COMPANY_PDF_PAGES,
+            pdfinfo_bin=app_config.pdfinfo_bin,
+            # A short list is still a list; only a page with no text at all
+            # (a scan) is refused.
+            min_characters=1,
+        )
+        links = pdftext.extract_pdf_links(
+            pdf_bytes,
+            bin_path=app_config.pdftohtml_bin,
+            timeout_seconds=app_config.pdf_extract_timeout_seconds,
+            max_bytes=app_config.max_company_import_bytes,
+            max_links=1_000,
+        )
+        return text, links
+
     services = ApplicationServices(
         repository=repository or ResumeRepository(),
         llm=llm_client or _default_llm_client(),
         compiler=compiler or CompileService(),
-        database=database if database is not None else Database.from_env(),
+        database=app_database,
         config=app_config,
         rate_limiter_llm=security.RateLimiter(
             app_config.rate_limit_llm_calls, app_config.rate_limit_llm_window_seconds
@@ -453,6 +507,12 @@ def create_app(
             app_config.login_max_attempts, app_config.login_window_seconds
         ),
         mailer=optional_mailer(mailer, app_config),
+        notifier=app_notifier,
+        crawler=CrawlerService(
+            app_database, app_config, app_notifier, fetcher_factory=job_fetcher_factory
+        ),
+        refresh_limiter=security.RateLimiter(1, 1_800),
+        company_pdf_reader=company_pdf_reader or _read_company_pdf,
         pdf_extractor=pdf_extractor
         or (
             lambda pdf_bytes: pdftext.extract_pdf_text(
@@ -661,6 +721,14 @@ def create_app(
             "ok"
             if pdftext.is_pdftohtml_available(services.config.pdftohtml_bin)
             else "not_found"
+        )
+        # Job watch: neither affects the overall status — crawling on demand
+        # and a console notifier are both valid configurations.
+        checks["crawler"] = (
+            "scheduled" if services.config.crawler_enabled else "on_demand"
+        )
+        checks["telegram"] = (
+            "ok" if services.notifier.configured else "not_configured"
         )
 
         status = (
@@ -907,6 +975,9 @@ def create_app(
     register_resumes_routes(application, services)
     register_jds_routes(application, services)
     register_runs_routes(application, services)
+    register_companies_routes(application, services)
+    register_jobs_routes(application, services)
+    register_telegram_routes(application, services)
 
     serve_frontend = (chosen_static_dir / "index.html").is_file()
     if not serve_frontend:

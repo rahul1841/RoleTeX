@@ -502,6 +502,181 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/job-prefs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Job Prefs */
+        get: operations["get_job_prefs_api_job_prefs_get"];
+        /** Put Job Prefs */
+        put: operations["put_job_prefs_api_job_prefs_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Companies */
+        get: operations["list_companies_api_companies_get"];
+        put?: never;
+        /** Create Company */
+        post: operations["create_company_api_companies_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import Companies */
+        post: operations["import_companies_api_companies_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/companies/{company_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Company */
+        delete: operations["delete_company_api_companies__company_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Company */
+        patch: operations["update_company_api_companies__company_id__patch"];
+        trace?: never;
+    };
+    "/api/companies/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refresh Companies */
+        post: operations["refresh_companies_api_companies_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Jobs */
+        get: operations["list_jobs_api_jobs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/jobs/{match_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Job */
+        get: operations["get_job_api_jobs__match_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Job */
+        patch: operations["update_job_api_jobs__match_id__patch"];
+        trace?: never;
+    };
+    "/api/jobs/{match_id}/jd": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save Job As Jd */
+        post: operations["save_job_as_jd_api_jobs__match_id__jd_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/telegram": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Telegram Status */
+        get: operations["telegram_status_api_telegram_get"];
+        put?: never;
+        post?: never;
+        /** Telegram Unlink */
+        delete: operations["telegram_unlink_api_telegram_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/telegram/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Telegram Link */
+        post: operations["telegram_link_api_telegram_link_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -517,6 +692,11 @@ export interface components {
             /** Model */
             model?: string | null;
         };
+        /** Body_import_companies_api_companies_import_post */
+        Body_import_companies_api_companies_import_post: {
+            /** File */
+            file: string;
+        };
         /** BulletRewrite */
         BulletRewrite: {
             /** Id */
@@ -530,6 +710,78 @@ export interface components {
             current_password: string;
             /** New Password */
             new_password: string;
+        };
+        /** CompanyCreateRequest */
+        CompanyCreateRequest: {
+            /** Link */
+            link: string;
+            /** Name */
+            name?: string | null;
+        };
+        /** CompanyImportResponse */
+        CompanyImportResponse: {
+            /** Added */
+            added: number;
+            /** Duplicates */
+            duplicates: number;
+            /** Skipped */
+            skipped?: components["schemas"]["CompanyImportSkip"][];
+        };
+        /** CompanyImportSkip */
+        CompanyImportSkip: {
+            /** Row */
+            row: number;
+            /** Reason */
+            reason: string;
+        };
+        /** CompanyListResponse */
+        CompanyListResponse: {
+            /** Companies */
+            companies?: components["schemas"]["CompanyOut"][];
+        };
+        /** CompanyOut */
+        CompanyOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Link */
+            link: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "checking" | "ready" | "unsupported" | "error";
+            /**
+             * Source
+             * @default
+             */
+            source: string;
+            /**
+             * Open Jobs
+             * @default 0
+             */
+            open_jobs: number;
+            /** Last Crawled At */
+            last_crawled_at?: string | null;
+            /** Created At */
+            created_at?: string | null;
+        };
+        /** CompanyRefreshResponse */
+        CompanyRefreshResponse: {
+            /** Queued */
+            queued: number;
+        };
+        /** CompanyResponse */
+        CompanyResponse: {
+            company: components["schemas"]["CompanyOut"];
+        };
+        /** CompanyUpdateRequest */
+        CompanyUpdateRequest: {
+            /** Link */
+            link?: string | null;
+            /** Name */
+            name?: string | null;
         };
         /** CompilerReport */
         CompilerReport: {
@@ -635,6 +887,168 @@ export interface components {
             title?: string | null;
             /** Content */
             content?: string | null;
+        };
+        /** JobCategory */
+        JobCategory: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+        };
+        /** JobMatchDetail */
+        JobMatchDetail: {
+            /** Id */
+            id: string;
+            /** Company */
+            company: string;
+            /** Title */
+            title: string;
+            /**
+             * Location
+             * @default
+             */
+            location: string;
+            /** Remote */
+            remote?: boolean | null;
+            /** Url */
+            url: string;
+            /**
+             * Label
+             * @enum {string}
+             */
+            label: "fits" | "stretch" | "unstated";
+            /**
+             * Experience
+             * @default
+             */
+            experience: string;
+            /**
+             * Experience Basis
+             * @default none
+             */
+            experience_basis: string;
+            /** Categories */
+            categories?: string[];
+            /** Posted At */
+            posted_at?: string | null;
+            /** First Seen At */
+            first_seen_at?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "new" | "seen" | "saved" | "dismissed";
+            /**
+             * Closed
+             * @default false
+             */
+            closed: boolean;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+        };
+        /** JobMatchListResponse */
+        JobMatchListResponse: {
+            /** Jobs */
+            jobs?: components["schemas"]["JobMatchOut"][];
+        };
+        /** JobMatchOut */
+        JobMatchOut: {
+            /** Id */
+            id: string;
+            /** Company */
+            company: string;
+            /** Title */
+            title: string;
+            /**
+             * Location
+             * @default
+             */
+            location: string;
+            /** Remote */
+            remote?: boolean | null;
+            /** Url */
+            url: string;
+            /**
+             * Label
+             * @enum {string}
+             */
+            label: "fits" | "stretch" | "unstated";
+            /**
+             * Experience
+             * @default
+             */
+            experience: string;
+            /**
+             * Experience Basis
+             * @default none
+             */
+            experience_basis: string;
+            /** Categories */
+            categories?: string[];
+            /** Posted At */
+            posted_at?: string | null;
+            /** First Seen At */
+            first_seen_at?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "new" | "seen" | "saved" | "dismissed";
+            /**
+             * Closed
+             * @default false
+             */
+            closed: boolean;
+        };
+        /** JobMatchResponse */
+        JobMatchResponse: {
+            job: components["schemas"]["JobMatchDetail"];
+        };
+        /** JobMatchUpdateRequest */
+        JobMatchUpdateRequest: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "new" | "seen" | "saved" | "dismissed";
+        };
+        /**
+         * JobPrefs
+         * @description What a user wants to hear about. Semantics live in ``crawler.match``.
+         */
+        JobPrefs: {
+            /** Categories */
+            categories: string[];
+            /** Exp From Years */
+            exp_from_years: number;
+            /** Exp To Years */
+            exp_to_years: number;
+            /**
+             * Margin Months
+             * @default 6
+             */
+            margin_months: number;
+            /** Locations */
+            locations?: string[];
+            /**
+             * Include Remote
+             * @default false
+             */
+            include_remote: boolean;
+        };
+        /** JobPrefsResponse */
+        JobPrefsResponse: {
+            prefs?: components["schemas"]["JobPrefs"] | null;
+            /** Categories */
+            categories?: components["schemas"]["JobCategory"][];
+        };
+        /** JobSaveJdResponse */
+        JobSaveJdResponse: {
+            /** Jd Id */
+            jd_id: string;
         };
         /** KeyInfo */
         KeyInfo: {
@@ -1438,6 +1852,30 @@ export interface components {
             mode: "new" | "overwrite";
             /** Name */
             name?: string | null;
+        };
+        /** TelegramLinkResponse */
+        TelegramLinkResponse: {
+            /** Url */
+            url: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+        };
+        /** TelegramStatus */
+        TelegramStatus: {
+            /** Available */
+            available: boolean;
+            /** Linked */
+            linked: boolean;
+            /** Linked At */
+            linked_at?: string | null;
+            /**
+             * Bot Username
+             * @default
+             */
+            bot_username: string;
         };
         /** UpdateMeRequest */
         UpdateMeRequest: {
@@ -2610,6 +3048,419 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_job_prefs_api_job_prefs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobPrefsResponse"];
+                };
+            };
+        };
+    };
+    put_job_prefs_api_job_prefs_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobPrefs"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobPrefsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_companies_api_companies_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyListResponse"];
+                };
+            };
+        };
+    };
+    create_company_api_companies_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompanyCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_companies_api_companies_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_companies_api_companies_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyImportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_company_api_companies__company_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_company_api_companies__company_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompanyUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_companies_api_companies_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyRefreshResponse"];
+                };
+            };
+        };
+    };
+    list_jobs_api_jobs_get: {
+        parameters: {
+            query?: {
+                state?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobMatchListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_job_api_jobs__match_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                match_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobMatchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_job_api_jobs__match_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                match_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobMatchUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobMatchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_job_as_jd_api_jobs__match_id__jd_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                match_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobSaveJdResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    telegram_status_api_telegram_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TelegramStatus"];
+                };
+            };
+        };
+    };
+    telegram_unlink_api_telegram_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+        };
+    };
+    telegram_link_api_telegram_link_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TelegramLinkResponse"];
                 };
             };
         };

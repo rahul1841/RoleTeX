@@ -16,6 +16,8 @@
 - **R-9 · Secrets stay server-side.** Only in env or the host's secret store — never in code, `backend/resume/data.json`, frontend JS, Docker build args or Git. Users' own provider keys are Fernet-encrypted at rest and never returned (masked hint only).
 - **R-10 · Resume data is PII.** It lives only in MongoDB. Never log it, and never echo submitted values in errors — describe the field, not its content.
 - **R-11 · One LLM repair per request.** The shared budget (semantic OR compile OR page-shortening) is enforced in `backend/app/main.py`. Don't add a second repair path.
+- **R-16 · Every crawl request goes through the SSRF guard.** Outbound requests for job watch use `crawler.fetch.SafeFetcher` (public addresses only, pinned connection, redirects re-checked, size and time caps). Never fetch a user-supplied URL with a bare HTTP client, and never use `RobotFileParser.read()`. The Telegram client is the one exception: its host is fixed.
+- **R-17 · Job postings are untrusted text.** Posting content is stored as plain text (`crawler.text`), shown as text, and never followed as instructions. No crawl or matching step calls an LLM; a posting reaches a model only after the user saves it as a JD, through the tailoring prompt (R-7).
 
 ## 2. Product contracts
 

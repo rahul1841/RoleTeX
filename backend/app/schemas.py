@@ -558,3 +558,129 @@ class RunCompileResponse(StrictModel):
     page_count: Optional[int] = None
     filename: str = "tailored-resume.pdf"
     compiler: CompilerReport
+
+
+# ---------------------------------------------------------------------------
+# Job watch: preferences, companies, matched jobs, Telegram
+# ---------------------------------------------------------------------------
+
+
+class JobCategory(StrictModel):
+    id: str
+    label: str
+
+
+class JobPrefs(StrictModel):
+    """What a user wants to hear about. Semantics live in ``crawler.match``."""
+
+    categories: List[str] = Field(..., max_length=20)
+    exp_from_years: float = Field(..., ge=0, le=30)
+    exp_to_years: float = Field(..., ge=0, le=30)
+    margin_months: int = Field(default=6, ge=0, le=24)
+    #: Cities or regions; empty (with ``include_remote`` off) means anywhere.
+    locations: List[str] = Field(default_factory=list, max_length=10)
+    include_remote: bool = False
+
+
+class JobPrefsResponse(StrictModel):
+    #: None until the user saves preferences; nothing is matched before that.
+    prefs: Optional[JobPrefs] = None
+    categories: List[JobCategory] = Field(default_factory=list)
+
+
+class CompanyOut(StrictModel):
+    id: str
+    name: str
+    link: str
+    status: Literal["checking", "ready", "unsupported", "error"]
+    #: Where jobs are read from: "Greenhouse", "Workday", "Careers page", …
+    source: str = ""
+    open_jobs: int = 0
+    last_crawled_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
+
+class CompanyListResponse(StrictModel):
+    companies: List[CompanyOut] = Field(default_factory=list)
+
+
+class CompanyResponse(StrictModel):
+    company: CompanyOut
+
+
+class CompanyCreateRequest(StrictModel):
+    link: str = Field(..., min_length=1, max_length=500)
+    name: Optional[str] = Field(default=None, max_length=120)
+
+
+class CompanyUpdateRequest(StrictModel):
+    link: Optional[str] = Field(default=None, min_length=1, max_length=500)
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+
+
+class CompanyImportSkip(StrictModel):
+    #: 1-based row (or line) in the file; 0 for a PDF link with no line.
+    row: int
+    reason: str
+
+
+class CompanyImportResponse(StrictModel):
+    added: int
+    duplicates: int
+    skipped: List[CompanyImportSkip] = Field(default_factory=list)
+
+
+class CompanyRefreshResponse(StrictModel):
+    queued: int
+
+
+class JobMatchOut(StrictModel):
+    id: str
+    company: str
+    title: str
+    location: str = ""
+    remote: Optional[bool] = None
+    url: str
+    label: Literal["fits", "stretch", "unstated"]
+    #: Display form of the requirement, e.g. "2–4 yrs"; empty when unknown.
+    experience: str = ""
+    #: structured | text | title | none — "title" means estimated from the title.
+    experience_basis: str = "none"
+    categories: List[str] = Field(default_factory=list)
+    posted_at: Optional[datetime] = None
+    first_seen_at: Optional[datetime] = None
+    state: Literal["new", "seen", "saved", "dismissed"]
+    closed: bool = False
+
+
+class JobMatchDetail(JobMatchOut):
+    description: str = ""
+
+
+class JobMatchListResponse(StrictModel):
+    jobs: List[JobMatchOut] = Field(default_factory=list)
+
+
+class JobMatchResponse(StrictModel):
+    job: JobMatchDetail
+
+
+class JobMatchUpdateRequest(StrictModel):
+    state: Literal["new", "seen", "saved", "dismissed"]
+
+
+class JobSaveJdResponse(StrictModel):
+    jd_id: str
+
+
+class TelegramStatus(StrictModel):
+    #: False when the server has no bot configured.
+    available: bool
+    linked: bool
+    linked_at: Optional[datetime] = None
+    bot_username: str = ""
+
+
+class TelegramLinkResponse(StrictModel):
+    url: str
+    expires_at: datetime

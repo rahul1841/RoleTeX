@@ -9,6 +9,7 @@ import {
   ProviderKeys,
   SettingsNav,
   SettingsSection,
+  TelegramSection,
   type SettingsNavItem,
 } from "@/components/settings";
 
@@ -26,7 +27,7 @@ import {
  *     meaningful next to "which providers have a key", and the warning that
  *     joins them (a default with no key stored) spans both. Tabs would put a
  *     scroll between a cause and its effect.
- *  3. There are six of them and they are short. Tab strips are for content
+ *  3. There are seven of them and they are short. Tab strips are for content
  *     too large to coexist; this is a page you read down once when you set the
  *     product up, and search with Ctrl+F afterwards.
  *
@@ -39,6 +40,7 @@ import {
 const SECTIONS: readonly SettingsNavItem[] = [
   { id: "providers", label: "Providers & keys" },
   { id: "defaults", label: "Tailoring defaults" },
+  { id: "telegram", label: "Telegram" },
   { id: "account", label: "Account" },
   { id: "password", label: "Password" },
   { id: "appearance", label: "Appearance" },
@@ -73,6 +75,15 @@ export function SettingsScreen() {
           description="The provider a tailoring run uses when it doesn't name one. Each provider's model is set in the list above."
         >
           <DefaultProviderForm />
+        </SettingsSection>
+
+        <SettingsSection
+          id="telegram"
+          number={number("telegram")}
+          title="Telegram"
+          description="New job matches are sent here when each crawl finishes."
+        >
+          <TelegramSection />
         </SettingsSection>
 
         <SettingsSection

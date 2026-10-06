@@ -10,6 +10,7 @@ export { SettingsSection, SettingsPanel } from "./section";
 export { SettingsNav, type SettingsNavItem } from "./settings-nav";
 export { ProviderKeys } from "./provider-keys";
 export { DefaultProviderForm } from "./default-provider-form";
+export { TelegramSection } from "./telegram-section";
 export { ProfileForm } from "./profile-form";
 export { PasswordForm } from "./password-form";
 export { AppearanceControl } from "./appearance";

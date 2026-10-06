@@ -1,7 +1,9 @@
 import {
   BriefcaseIcon,
+  BuildingIcon,
   FileTextIcon,
   HistoryIcon,
+  RadarIcon,
   SettingsIcon,
   SparklesIcon,
   type LucideIcon,
@@ -12,8 +14,9 @@ import {
  *
  * The sidebar and the mobile drawer both read this array, so adding a route
  * means editing one place. Keep it ordered the way the work
- * flows: tailor first, the things you tailor from next, the record of what you
- * tailored after that, configuration last.
+ * flows: tailor first, the openings to tailor for next (jobs, then where they
+ * come from), the things you tailor from, the record of what you tailored after
+ * that, configuration last.
  */
 export interface NavItem {
   /** Written without a trailing slash; `trailingSlash: true` adds it. */
@@ -29,6 +32,18 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: "Tailor",
     icon: SparklesIcon,
     description: "Match a resume to a job description and review every change.",
+  },
+  {
+    href: "/jobs",
+    label: "Jobs",
+    icon: RadarIcon,
+    description: "Openings from your companies that match your job preferences.",
+  },
+  {
+    href: "/companies",
+    label: "Companies",
+    icon: BuildingIcon,
+    description: "The careers pages the crawler reads, and your job preferences.",
   },
   {
     href: "/resumes",

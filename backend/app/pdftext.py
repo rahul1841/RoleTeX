@@ -207,8 +207,14 @@ def extract_pdf_text(
     max_bytes: int = 10_000_000,
     max_pages: int = DEFAULT_MAX_PAGES,
     pdfinfo_bin: str = "pdfinfo",
+    min_characters: int = MIN_MEANINGFUL_CHARACTERS,
 ) -> str:
-    """Extract bounded plain text from an uploaded PDF (sync; run in executor)."""
+    """Extract bounded plain text from an uploaded PDF (sync; run in executor).
+
+    ``min_characters`` is the scan heuristic: below it the PDF is treated as
+    having no text layer. A company list can legitimately be shorter than a
+    resume, so its importer passes a lower floor.
+    """
 
     if not isinstance(pdf_bytes, (bytes, bytearray)) or bytes(pdf_bytes[:5]) != PDF_MAGIC:
         raise PdfExtractionError("The uploaded file is not a PDF document", "invalid_pdf")
@@ -275,7 +281,7 @@ def extract_pdf_text(
 
     text = _clean_text(raw)
     meaningful = len("".join(text.split()))
-    if meaningful < MIN_MEANINGFUL_CHARACTERS:
+    if meaningful < min_characters:
         raise PdfExtractionError(
             "The PDF contains almost no extractable text; it looks like a "
             "scanned/image PDF",

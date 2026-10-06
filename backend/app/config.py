@@ -112,6 +112,18 @@ class AppConfig:
     pdftoppm_bin: str
     pdftohtml_bin: str
     pdf_extract_timeout_seconds: int
+    # Job watch: the crawler, the company list and Telegram alerts.
+    crawler_enabled: bool
+    crawl_interval_hours: int
+    crawl_concurrency: int
+    crawl_timeout_seconds: int
+    crawl_max_response_bytes: int
+    max_companies_per_user: int
+    max_company_import_bytes: int
+    job_retention_days: int
+    telegram_bot_token: str
+    telegram_bot_username: str
+    telegram_link_ttl_minutes: int
 
     @property
     def session_ttl_seconds(self) -> int:
@@ -183,4 +195,22 @@ def load_config() -> AppConfig:
         pdftoppm_bin=os.getenv("PDFTOPPM_BIN", "pdftoppm").strip() or "pdftoppm",
         pdftohtml_bin=os.getenv("PDFTOHTML_BIN", "pdftohtml").strip() or "pdftohtml",
         pdf_extract_timeout_seconds=_bounded_int("PDF_EXTRACT_TIMEOUT_SECONDS", 30, 10, 120),
+        # Off by default so a development server never crawls on a schedule;
+        # adding a company or pressing refresh still crawls on demand.
+        crawler_enabled=_env_bool("CRAWLER_ENABLED", False),
+        crawl_interval_hours=_bounded_int("CRAWL_INTERVAL_HOURS", 6, 1, 48),
+        crawl_concurrency=_bounded_int("CRAWL_CONCURRENCY", 8, 1, 32),
+        crawl_timeout_seconds=_bounded_int("CRAWL_TIMEOUT_SECONDS", 15, 5, 60),
+        # Public job-board feeds are large: one Ashby board returns ~14 MB.
+        crawl_max_response_bytes=_bounded_int(
+            "CRAWL_MAX_RESPONSE_BYTES", 20_000_000, 1_000_000, 50_000_000
+        ),
+        max_companies_per_user=_bounded_int("MAX_COMPANIES_PER_USER", 100, 1, 500),
+        max_company_import_bytes=_bounded_int(
+            "MAX_COMPANY_IMPORT_BYTES", 2_000_000, 100_000, 5_000_000
+        ),
+        job_retention_days=_bounded_int("JOB_RETENTION_DAYS", 30, 7, 180),
+        telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN", "").strip(),
+        telegram_bot_username=os.getenv("TELEGRAM_BOT_USERNAME", "").strip().lstrip("@"),
+        telegram_link_ttl_minutes=_bounded_int("TELEGRAM_LINK_TTL_MINUTES", 10, 5, 60),
     )

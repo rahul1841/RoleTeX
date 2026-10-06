@@ -10,6 +10,8 @@ app_port: 7860
 
 Accounts, private resume and job-description libraries, tailoring history, and per-user encrypted provider keys, all stored in MongoDB. The server won't start without `MONGODB_URI`.
 
+**Job watch:** upload your companies with their careers links (CSV, Excel or PDF), choose job types, an experience range and a margin above it, and optionally locations. A crawler reads each company's job board, matches openings against those preferences, shows them on the Jobs page, and sends one Telegram digest when each crawl finishes. A matched posting becomes a job description to tailor against in one click.
+
 > `backend/resume/data.json` holds the owner's real contact details; only the Docker build's cache prewarm reads it. Keep the repository private.
 
 Docs: [prd](docs/prd.md) · [architecture](docs/architecture.md) · [design](docs/design.md) · [rules](docs/rules.md) · [memory](docs/memory.md)
@@ -21,6 +23,7 @@ Docs: [prd](docs/prd.md) · [architecture](docs/architecture.md) · [design](doc
 - Unknown IDs, invented skills, new numbers and over-long text are rejected.
 - Every compile runs in its own temp directory with Tectonic's untrusted, cached-only mode and a timeout.
 - The UI shows every proposed change beside the PDF.
+- **Crawling is SSRF-guarded:** users type the careers links the server fetches, so every crawl request resolves the host, refuses private, loopback, link-local and reserved addresses, connects to the address it checked, and re-checks every redirect. Posting text is stored and shown as plain text only. No crawl step calls an LLM.
 - **Import is the one exception:** importing a resume (LaTeX paste or PDF) sends the whole document, contact details included, to the model, because you're importing your own document. Imports are re-rendered into a server-controlled template; your original LaTeX is stored but never compiled.
 
 ## Accounts
@@ -35,6 +38,7 @@ Docs: [prd](docs/prd.md) · [architecture](docs/architecture.md) · [design](doc
 ```text
 backend/            FastAPI service (see docs/architecture.md for modules)
   app/              application code
+  app/crawler/      job watch: fetcher, job-board adapters, matching, Telegram
   resume/           data.json + template.tex (Docker prewarm only), assets/
   dev.sh            local dev server
 frontend/           Next.js app (App Router, TypeScript, Tailwind, shadcn/ui)
@@ -160,6 +164,24 @@ Set these in `.env` locally or in your host's secret store — never in code or 
 | `RESUME_ASSETS_DIR` | `backend/resume/assets` | Approved files copied into every compile |
 | `FRONTEND_DIR` | `frontend/out` | Where the static frontend is served from |
 | `TECTONIC_UNTRUSTED_MODE`, `TECTONIC_CACHE_DIR` | set in the image | Tectonic's own settings |
+
+**Job watch** (crawler and Telegram)
+
+| Name | Default | Notes |
+|---|---|---|
+| `CRAWLER_ENABLED` | `false` | Crawl every watched company on a schedule. Off, adding a company or pressing "Refresh now" still crawls on demand |
+| `CRAWL_INTERVAL_HOURS` | `6` | 1–48 |
+| `CRAWL_CONCURRENCY` | `8` | Sources crawled at once; 1–32. Requests to one host are always one at a time, a second apart |
+| `CRAWL_TIMEOUT_SECONDS` | `15` | Per request; 5–60 |
+| `CRAWL_MAX_RESPONSE_BYTES` | `20000000` | 1–50 MB; one large Ashby board is ~14 MB |
+| `MAX_COMPANIES_PER_USER` | `100` | 1–500 |
+| `MAX_COMPANY_IMPORT_BYTES` | `2000000` | Uploaded company list; 0.1–5 MB |
+| `JOB_RETENTION_DAYS` | `30` | Closed postings are deleted after this; 7–180 |
+| `TELEGRAM_BOT_TOKEN` | — | From @BotFather. Unset → digests are written to the server log |
+| `TELEGRAM_BOT_USERNAME` | — | The bot's username, for the `t.me` link; required with the token |
+| `TELEGRAM_LINK_TTL_MINUTES` | `10` | How long a Connect link works; 5–60 |
+
+The bot reads its messages by long polling, so it needs no public URL (a private Space cannot receive webhooks). Only one process polls at a time; don't run a local dev server with the production bot token.
 
 **Rate limits and quotas**
 

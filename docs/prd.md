@@ -20,6 +20,7 @@ Tailoring a resume to each job is valuable but tedious, and doing it naively wit
 | G6 | Run at ~$0: free-tier LLMs, Tectonic, free MongoDB tier, a private Hugging Face Space |
 | G7 | Import an existing resume (LaTeX or PDF) into a private library |
 | G8 | Write a resume in the app and get a PDF with no AI key |
+| G9 | Watch the companies you choose and get openings that fit your job type, experience and location — on the site and in Telegram — with no AI key |
 
 ## 3. Non-goals
 
@@ -41,12 +42,15 @@ Email + password accounts, stored in MongoDB (`MONGODB_URI` is required). Each u
 - **Tailor** — pick a resume and a job description (saved or pasted) → the model proposes edits → the server validates, renders and compiles → the review shows every change beside the PDF, unified diff and LaTeX (R-14). Runs are saved to history, and the result can be saved as a new resume or over the original.
 - **History** — reopen any run, re-read its changes, and recompile its PDF without an LLM call.
 - **Account** — change password, reset by email, verify email, delete the account.
+- **Job watch** — on `/companies`, set job types (dropdown), an experience range in years, an extra margin in months (default 6) and optional cities / remote; upload companies with their careers links (CSV, Excel or PDF; the link is required, the name optional) or add one at a time. A crawler reads each link — a Greenhouse, Lever, Ashby, Workable, SmartRecruiters or Workday board, or a careers page that embeds one or publishes JobPosting data — and shows each company's status. `/jobs` lists matching openings (fits / stretch / experience not stated), each with Open, Save, Dismiss and **Tailor**, which saves the posting as a job description and opens the tailor screen. Settings → Telegram links a chat; when a crawl finishes, each user gets one digest of new matches.
 
 ## 6. Requirements
 
 **Built:** everything in §5; provider keys for Groq, Cerebras, Gemini, OpenRouter, Mistral, OpenAI, Anthropic, Grid and a custom endpoint; per-user and per-IP rate limits, a login throttle and a CSRF origin check; quotas on resumes, job descriptions and runs; an offline stub LLM for development.
 
-**Not built:** evaluation harness, automatic provider failover, cover letters, an admin UI for disabling accounts.
+Job watch: preferences, company import, six job-board adapters plus JSON-LD pages, scheduled and on-demand crawls, matching, the Jobs screen, Telegram linking and end-of-crawl digests.
+
+**Not built:** evaluation harness, automatic provider failover, cover letters, an admin UI for disabling accounts; for job watch, careers sites that render jobs only with JavaScript (no board, no JSON-LD), Keka/Recruitee/Darwinbox boards, model-based ranking, email digests.
 
 ## 7. Non-functional requirements
 
@@ -54,6 +58,7 @@ Email + password accounts, stored in MongoDB (`MONGODB_URI` is required). Each u
 |---|---|
 | Privacy | No contact details in tailoring prompts; compiler logs redacted before any repair prompt; resume data lives only in MongoDB |
 | Injection | The job description is untrusted data; strict response schema; all model text escaped |
+| Crawling | Every crawl request goes through an SSRF guard (public addresses only, pinned connection, redirects re-checked, size and time caps); robots.txt honoured for pages; job aggregators refused; posting text stored as plain text |
 | Sandbox | Temp dir per compile, `tectonic --untrusted --only-cached`, 10–180 s timeout, POSIX resource limits, 1–4 concurrent compiles |
 | Robustness | Structured JSON errors; health reports `degraded` rather than failing; request bodies capped (64 KB API, 260 KB import, 5 MB + overhead PDF) |
 | Cost | Free tiers; one Docker container |

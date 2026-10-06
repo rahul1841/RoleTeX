@@ -129,6 +129,33 @@ export type RunCompileResponse = S["RunCompileResponse"];
 export type CompilerReport = S["CompilerReport"];
 
 // ---------------------------------------------------------------------------
+// Job watch: preferences, companies, matched jobs, Telegram
+// ---------------------------------------------------------------------------
+
+export type JobCategory = S["JobCategory"];
+export type JobPrefs = S["JobPrefs"];
+export type JobPrefsResponse = S["JobPrefsResponse"];
+
+export type Company = S["CompanyOut"];
+export type CompanyListResponse = S["CompanyListResponse"];
+export type CompanyResponse = S["CompanyResponse"];
+export type CompanyCreateRequest = S["CompanyCreateRequest"];
+export type CompanyUpdateRequest = S["CompanyUpdateRequest"];
+export type CompanyImportResponse = S["CompanyImportResponse"];
+export type CompanyRefreshResponse = S["CompanyRefreshResponse"];
+
+/** One matched opening; `id` is the match id, not the posting's. */
+export type JobMatch = S["JobMatchOut"];
+export type JobMatchDetail = S["JobMatchDetail"];
+export type JobMatchListResponse = S["JobMatchListResponse"];
+export type JobMatchResponse = S["JobMatchResponse"];
+export type JobMatchUpdateRequest = S["JobMatchUpdateRequest"];
+export type JobSaveJdResponse = S["JobSaveJdResponse"];
+
+export type TelegramStatus = S["TelegramStatus"];
+export type TelegramLinkResponse = S["TelegramLinkResponse"];
+
+// ---------------------------------------------------------------------------
 // Generic envelopes
 // ---------------------------------------------------------------------------
 

@@ -18,7 +18,8 @@ FastAPI app (backend/app/main.py, create_app() factory)
   ├── Importer/Builder  importer.py, builder.py   normalize extracted or hand-written resumes
   ├── PDF tools         pdftext.py     bounded poppler: text, page images, link targets
   ├── Compiler          compiler.py    Tectonic in a per-job sandbox
-  └── Mailer            mailer.py      SMTP, or the server log when SMTP_HOST is unset
+  ├── Mailer            mailer.py      SMTP, or the server log when SMTP_HOST is unset
+  └── Job watch         crawler/       SSRF-safe fetcher, job-board adapters, matching, Telegram bot
 ```
 
 ## 2. Modules
@@ -35,7 +36,9 @@ FastAPI app (backend/app/main.py, create_app() factory)
 | `llm.py` | Provider registry, env resolution, retries, JSON mode, `generate` / `repair` / `extract_resume` |
 | `compiler.py` | Temp dir per compile, `tectonic -X compile --untrusted [--only-cached]`, timeout, rlimits, semaphore, page count, text check |
 | `pdftext.py` | `%PDF-` check and size/page/timeout caps; `pdftotext`, `pdfinfo`, `pdftoppm`, `pdftohtml`; no shell |
-| `db.py` | Stores: `users`, `sessions`, `auth_tokens`, `signup_codes`, `api_keys`, `resumes`, `jds`, `runs` |
+| `db.py` | Stores: `users`, `sessions`, `auth_tokens`, `signup_codes`, `api_keys`, `resumes`, `jds`, `runs`, and for job watch `watchlist`, `career_sources`, `jobs`, `job_matches`, `system_state` |
+| `crawler/` | Job watch, no FastAPI inside: `fetch` (SSRF-safe HTTP), `sources` (what a link is), `ats` (one adapter per job board), `jsonld` (JobPosting pages), `text` (HTML → plain text), `classify` (category, experience, location), `match` (preferences vs job), `company_list` (CSV/XLSX/PDF), `telegram` (bot client, digests), `service` (`CrawlerService`: cycle, schedule, matching, poller) |
+| `routes_companies.py` · `routes_jobs.py` · `routes_telegram.py` | Preferences and company list · matched jobs and "save as JD" · Telegram link/unlink |
 | `security.py` · `config.py` · `schemas.py` | Crypto and limits · env config with clamped bounds · all Pydantic models (`StrictModel`, `extra="forbid"`) |
 | `frontend/` | App Router UI; `lib/api/` is the only code that calls the API (`schema.d.ts` is generated); `hooks/` holds TanStack Query hooks |
 | `backend/resume/` | `assets/` (approved compile files); `data.json` + `template.tex`, read only by the Docker cache prewarm |
@@ -52,6 +55,7 @@ FastAPI app (backend/app/main.py, create_app() factory)
 | Resumes | `GET/POST /api/resumes`, `POST /api/resumes/pdf`, `/manual`, `/preview` · `GET/PATCH/DELETE /api/resumes/{id}`, `PUT …/content` (overwrite), `POST …/tailored` (save a tailoring result as a new resume or over this one) |
 | JDs | `GET/POST /api/jds` · `GET/PUT/DELETE /api/jds/{id}` (PUT overwrites) |
 | Runs | `GET /api/runs` · `GET/DELETE /api/runs/{id}`, `POST …/compile` |
+| Job watch | `GET/PUT /api/job-prefs` · `GET/POST /api/companies`, `POST /api/companies/import` (multipart), `POST /api/companies/refresh`, `PATCH/DELETE /api/companies/{id}` · `GET /api/jobs?state=` (`all` or `saved`), `GET/PATCH /api/jobs/{id}`, `POST /api/jobs/{id}/jd` · `GET/DELETE /api/telegram`, `POST /api/telegram/link` |
 | Frontend | `GET /` and `/*` — the static export from `frontend/out` (`FRONTEND_DIR` overrides), mounted last so `/api/*` always wins |
 
 Sessions use an HttpOnly `rt_session` cookie (or `Authorization: Bearer`).
@@ -93,6 +97,24 @@ POST /api/resumes (LaTeX)            POST /api/resumes/pdf
 
 `POST /api/resumes/manual`, `PUT /api/resumes/{id}/content` and `POST /api/resumes/preview` take a structured draft instead: `builder.validate_draft` (field-addressed errors) → the same normalization and template assembly → create (manual) or overwrite (content) the resume, or compile and return the PDF without storing (preview). No LLM is involved, so no provider key is needed.
 
+## 5a. Job watch flow
+
+```text
+/companies: preferences (job types, years from–to, margin months, cities, remote) → users.job_prefs
+            CSV / XLSX / PDF or one link → normalize (http(s), public host, no aggregators)
+            → career_sources (shared; key = board, e.g. greenhouse:acme, or the page URL) + watchlist row
+CrawlerService.run_cycle  (Mongo lease "crawler"; on demand, and every CRAWL_INTERVAL_HOURS when enabled)
+  1. careers pages still "checking": fetch once → embedded board (repoint watchers) | JobPosting page | unsupported
+  2. due sources: adapter → RawJob rows → jobs upsert (new / seen / closed), category + experience + location computed once
+     Workday / SmartRecruiters: per-posting detail only for postings some watcher could want (budget per source)
+  3. new complete jobs × each watcher's preferences → job_matches (label fits | stretch | unstated)
+  4. prune closed jobs and unwatched sources
+  5. after everything: one Telegram digest per user of matches with notified_at = null
+Telegram: Settings → POST /api/telegram/link → t.me/<bot>?start=<token> → bot long-polls getUpdates → /start binds the chat
+```
+
+A first crawl of a company and any recompute (preferences saved, company added) create matches already notified, so they show on the site without a Telegram flood. The fetcher, notifier and PDF reader are `create_app` parameters (C-3), so the whole flow runs offline against fixtures.
+
 ## 6. Trust boundaries
 
 Private deployment; user data isolated by `user_id` in every query.
@@ -102,11 +124,13 @@ Private deployment; user data isolated by `user_id` in every query.
 3. **Sandboxed compilation** — see R-6.
 4. **No fabrication** — ID existence and uniqueness, exact skill permutation, numeric-claim guard, length caps (the guard is numbers-only; see memory G-5).
 5. **JD is data** — prompt framing plus the strict schema; a hostile JD can't change the output contract.
+6. **Crawled pages are hostile input** — SSRF guard on every fetch (R-16); postings become plain text (R-17); no model reads them unless the user saves one as a JD.
 
 ## 7. Data model
 
 - **Resume:** `ResumeData` (identity, summary, experience, projects, education, skills, achievements, custom sections) with stable IDs on every editable node.
 - **MongoDB:** one `resumes` document per resume holds `{name, data, template_tex, source_type, style, provider, model}`; saving overwrites it in place. `source_type` is one of `latex`, `pdf`, `pdf_scanned`, `manual`, `tailored`. `jds` hold title and text; editing overwrites them. `runs` keep LaTeX, diff and a JD excerpt (oldest pruned). `auth_tokens` and `signup_codes` store only hashes, with TTL indexes. `api_keys` are Fernet-encrypted.
+- **Job watch:** `watchlist` (per user: name, link, source) points at shared `career_sources` (one per board or page, crawled once for everyone); `jobs` are shared per source; `job_matches` are per user (`label`, `state` new/seen/saved/dismissed, `notified_at`); `users.job_prefs` and `users.telegram`; `system_state` holds leases and the Telegram update offset. Telegram link tokens are `auth_tokens` with purpose `telegram_link`.
 
 ## 8. Errors
 
@@ -116,13 +140,13 @@ Every failure is JSON: `{"detail": {"code", "message", …}}` (C-4). Common code
 |---|---|
 | 400 | `code_required`, `invalid_code`, `weak_password`, `invalid_token`, `provider_required`, `llm_key_required` |
 | 401 / 403 | `not_authenticated`, `invalid_credentials`, `account_disabled`, `email_verification_required`, `registration_disabled` |
-| 404 | `resume_not_found`, `jd_not_found`, `run_not_found`, `key_not_found` |
-| 409 | `email_taken`, `already_verified`, `resume_quota_exceeded`, `jd_quota_exceeded`, `resume_changed` |
-| 413 | body over the cap, `pdf_too_large` |
-| 422 | `invalid_llm_proposal`, `invalid_extraction`, `incomplete_resume`, `invalid_pdf`, `jd_required`, `preview_target_required`, `latex_compile_failed`, `unknown_provider`, `invalid_model` |
-| 429 / 502 | rate limits (`too_many_requests`, `too_many_attempts`), `llm_provider_error` |
+| 404 | `resume_not_found`, `jd_not_found`, `run_not_found`, `key_not_found`, `company_not_found`, `job_not_found` |
+| 409 | `email_taken`, `already_verified`, `resume_quota_exceeded`, `jd_quota_exceeded`, `resume_changed`, `company_exists`, `company_quota_exceeded` |
+| 413 | body over the cap, `pdf_too_large`, `file_too_large` |
+| 422 | `invalid_llm_proposal`, `invalid_extraction`, `incomplete_resume`, `invalid_pdf`, `jd_required`, `preview_target_required`, `latex_compile_failed`, `unknown_provider`, `invalid_model`, `invalid_job_prefs`, `invalid_link`, `invalid_company_file`, `job_description_too_short` |
+| 429 / 502 | rate limits (`too_many_requests`, `too_many_attempts`, `refresh_too_soon`), `llm_provider_error` |
 | 500 | `render_failed`, `resume_configuration_error`, `key_decrypt_failed` |
-| 503 / 504 | `database_unavailable`, `llm_not_configured`, `mail_not_configured`, `compiler_not_found` / `compile_timeout` |
+| 503 / 504 | `database_unavailable`, `llm_not_configured`, `mail_not_configured`, `telegram_not_configured`, `compiler_not_found` / `compile_timeout` |
 
 ## 9. Resources
 

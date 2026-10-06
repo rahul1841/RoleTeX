@@ -26,6 +26,12 @@
 | D-28 | Users choose the model per provider (`provider_models`); the registry's model names are only fallbacks. Grid is left as is — no model picker, still configured by `GRID_BASE_URL` / `GRID_MODEL` | Model catalogues change faster than releases. Grid is a temporary exception the owner will remove |
 | D-29 | MongoDB is required: the server refuses to start without `MONGODB_URI`, and tailoring always needs an owned `resume_id` | Every feature is per-user, so there is nothing to serve without a database |
 | D-30 | Resumes and job descriptions are single documents with no version history. A resume: Save overwrites it, "Save as new resume" copies it, and a tailoring result can be kept either way (`POST /api/resumes/{id}/tailored`, re-validated server-side) | Old versions were only visible as raw LaTeX and could not be restored or tailored, so they cost a 20-save cap for no user value; runs keep their own LaTeX |
+| D-31 | Job watch takes every careers link from the user and never searches for one; job type, experience range, margin and location are typed by the user, not read from a resume | The owner's call: inputs the user controls are predictable, and guessing pages is costly and error-prone |
+| D-32 | Crawl public job-board feeds (Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Workday) and JSON-LD JobPosting pages only; aggregators are refused; no headless browser | Keyless, structured, permitted feeds; a browser would add hundreds of MB and CPU to a free Space |
+| D-33 | Sources and jobs are shared across users (keyed by board); watchlist rows and matches are per user | One crawl serves every watcher of a company |
+| D-34 | Matching is deterministic (keyword categories, pattern-parsed experience, location aliases); shown when `min ≤ to + margin` and `max ≥ from`; unknown experience is shown and ranked last | Explainable labels (fits / stretch / not stated) and $0 per match |
+| D-35 | One Telegram digest per user when a whole crawl cycle finishes; first crawls and recomputes create matches already sent and are summarized in one line | The owner asked for results when the crawl finishes; adding 100 companies must not flood a chat |
+| D-36 | The crawler and the bot poller run inside the app process behind Mongo leases; Telegram uses long polling | Fits the one-container deployment; a private Space cannot receive webhooks |
 
 ## 2. Open gaps
 
@@ -45,6 +51,11 @@
 | G-21 | 🟡 | The builder requires a phone number and location (shared `ResumeIdentity` schema) |
 | G-22 | 🟡 | Editing a resume in the app drops per-bullet links; only the seed resume has any |
 | G-24 | 🟡 | `RLIMIT_AS` is Linux-only, so compiles have no memory cap on macOS |
+| G-25 | 🟠 | The Telegram bot has only run against a fake notifier and a fake token; no real bot has sent a digest |
+| G-26 | 🟠 | On a free Space the app sleeps after 48 h without visits, and scheduled crawls stop until someone opens it |
+| G-27 | 🟡 | Careers sites that render jobs only with JavaScript (no board, no JSON-LD) are `unsupported`; Keka, Recruitee and Darwinbox have no adapter |
+| G-28 | 🟡 | Experience and category are heuristics; many postings state no experience and show as "not stated" |
+| G-29 | 🟡 | Big Workday boards take minutes per crawl (2,000 postings in pages of 20) and stop at 2,000 |
 
 ## 3. Rejected
 
