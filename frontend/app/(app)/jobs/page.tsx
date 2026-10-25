@@ -11,4 +11,4 @@ export const metadata: Metadata = {
 
 export default function JobsPage() {
   return <JobsScreen />;
-}
+} 
